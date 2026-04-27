@@ -1,6 +1,7 @@
 <ion-content [fullscreen]="true">
 
-  <div *ngIf="!showModal && !showPaymentList" class="page-container">
+  <!-- HOME -->
+  <div *ngIf="currentView==='home'" class="page-container">
     <div class="top-bar">
       <ion-button fill="clear" class="back-btn" (click)="goBack()">
         <ion-icon name="chevron-back-outline"></ion-icon> Back
@@ -9,12 +10,10 @@
         <ion-icon name="ellipsis-horizontal"></ion-icon>
       </ion-button>
     </div>
-
     <div class="header">
       <p class="section-label">DAILY ACTIONS</p>
       <h1>Hello there,<br>What do you need <strong>to bill?</strong></h1>
     </div>
-
     <div class="cards-grid">
       <div class="card card-wide card-pink" (click)="goTo('pages/invoices')">
         <div class="card-content">
@@ -22,14 +21,12 @@
           <ion-icon name="receipt-outline" class="card-icon-bg"></ion-icon>
         </div>
       </div>
-
-      <div class="card card-half card-blue" (click)="goTo('pages/invoices')">
+      <div class="card card-half card-blue" (click)="openNewCN()">
         <div class="card-content">
           <span class="card-title">New<br>C. N.</span>
           <ion-icon name="document-outline" class="card-icon-bg"></ion-icon>
         </div>
       </div>
-
       <div class="card card-half card-beige" (click)="openNewPayment()">
         <div class="card-content">
           <span class="card-title">New<br>Payment</span>
@@ -37,14 +34,13 @@
         </div>
       </div>
     </div>
-
     <div class="section-title">Reports Log</div>
     <div class="report-list">
       <div class="report-item" (click)="goTo('pages/invoices')">
         <span>Invoice Report</span>
         <ion-icon name="arrow-forward-outline"></ion-icon>
       </div>
-      <div class="report-item" (click)="goTo('pages/invoices')">
+      <div class="report-item" (click)="openCNList()">
         <span>C.N. Report</span>
         <ion-icon name="arrow-forward-outline"></ion-icon>
       </div>
@@ -55,10 +51,10 @@
     </div>
   </div>
 
-  <!-- NEW PAYMENT FORM -->
-  <div *ngIf="showModal" class="page-container">
+  <!-- NEW PAYMENT -->
+  <div *ngIf="currentView==='newPayment'" class="page-container">
     <div class="top-bar">
-      <ion-button fill="clear" class="back-btn" (click)="closeModal()">
+      <ion-button fill="clear" class="back-btn" (click)="goHome()">
         <ion-icon name="chevron-back-outline"></ion-icon> Back
       </ion-button>
       <span class="page-title">New Payment</span>
@@ -66,47 +62,75 @@
         <ion-icon name="save-outline"></ion-icon>
       </ion-button>
     </div>
-
     <div class="form-card" style="background:#E8D5D0;">
       <div class="form-group">
         <label>CUSTOMER *</label>
-        <select [(ngModel)]="form.customerId" class="form-select" (change)="onCustomerChange()">
+        <select [(ngModel)]="paymentForm.customerId" class="form-select" (change)="onCustomerChange()">
           <option *ngFor="let c of customers" [value]="c.id">{{ c.name }}</option>
         </select>
       </div>
       <div class="form-group">
         <label>INVOICE *</label>
-        <select [(ngModel)]="form.invoiceId" class="form-select">
+        <select [(ngModel)]="paymentForm.invoiceId" class="form-select">
           <option value="0">Select Invoice</option>
-          <option *ngFor="let inv of invoices" [value]="inv.id">{{ inv.invoiceNumber }} (RM {{ inv.totalAmount || 0 | number:'1.2-2' }})</option>
+          <option *ngFor="let inv of invoices" [value]="inv.id">{{ inv.invoiceNumber }} (RM {{ inv.totalAmount | number:'1.2-2' }}) - {{ inv.status }}</option>
         </select>
       </div>
     </div>
-
     <div class="form-card" style="background:#C5C8E0;">
       <div class="form-group">
         <label>AMOUNT (RM) *</label>
-        <input type="number" [(ngModel)]="form.amount" placeholder="0.00" class="form-input"/>
+        <input type="number" [(ngModel)]="paymentForm.amount" placeholder="0.00" class="form-input"/>
       </div>
       <div class="form-group">
         <label>PAYMENT METHOD</label>
-        <select [(ngModel)]="form.method" class="form-select">
+        <select [(ngModel)]="paymentForm.method" class="form-select">
           <option *ngFor="let m of paymentMethods" [value]="m">{{ m }}</option>
         </select>
       </div>
       <div class="form-group">
         <label>REFERENCE NO</label>
-        <input type="text" [(ngModel)]="form.referenceNo" placeholder="Enter reference number" class="form-input"/>
+        <input type="text" [(ngModel)]="paymentForm.referenceNo" placeholder="Enter reference number" class="form-input"/>
       </div>
     </div>
-
     <button class="save-btn" (click)="savePayment()">CREATE PAYMENT</button>
   </div>
 
-  <!-- PAYMENT LIST -->
-  <div *ngIf="showPaymentList" class="page-container">
+  <!-- NEW CREDIT NOTE -->
+  <div *ngIf="currentView==='newCN'" class="page-container">
     <div class="top-bar">
-      <ion-button fill="clear" class="back-btn" (click)="closePaymentList()">
+      <ion-button fill="clear" class="back-btn" (click)="goHome()">
+        <ion-icon name="chevron-back-outline"></ion-icon> Back
+      </ion-button>
+      <span class="page-title">New Credit Note</span>
+      <ion-button fill="clear" class="icon-btn" (click)="saveCreditNote()">
+        <ion-icon name="save-outline"></ion-icon>
+      </ion-button>
+    </div>
+    <div class="form-card" style="background:#C5C8E0;">
+      <div class="form-group">
+        <label>INVOICE *</label>
+        <select [(ngModel)]="cnForm.invoiceId" class="form-select">
+          <option value="0">Select Invoice</option>
+          <option *ngFor="let inv of invoices" [value]="inv.id">{{ inv.invoiceNumber }} - {{ inv.customerName }} (RM {{ inv.totalAmount | number:'1.2-2' }})</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>AMOUNT (RM) *</label>
+        <input type="number" [(ngModel)]="cnForm.amount" placeholder="0.00" class="form-input"/>
+      </div>
+      <div class="form-group">
+        <label>REASON *</label>
+        <textarea [(ngModel)]="cnForm.reason" placeholder="Enter reason for credit note..." class="form-textarea"></textarea>
+      </div>
+    </div>
+    <button class="save-btn" (click)="saveCreditNote()">CREATE CREDIT NOTE</button>
+  </div>
+
+  <!-- PAYMENT LIST -->
+  <div *ngIf="currentView==='paymentList'" class="page-container">
+    <div class="top-bar">
+      <ion-button fill="clear" class="back-btn" (click)="goHome()">
         <ion-icon name="chevron-back-outline"></ion-icon> Back
       </ion-button>
       <span class="page-title">Payment Report</span>
@@ -114,11 +138,9 @@
         <ion-icon name="add-outline"></ion-icon>
       </ion-button>
     </div>
-
     <div *ngIf="isLoading" style="display:flex;justify-content:center;padding:60px;">
       <ion-spinner name="crescent"></ion-spinner>
     </div>
-
     <div *ngIf="!isLoading">
       <div *ngFor="let payment of payments" class="list-item">
         <div class="item-info">
@@ -127,14 +149,13 @@
             <div class="item-name">{{ payment.customerName }}</div>
             <div class="item-sub">{{ payment.invoiceNumber }}</div>
             <div class="item-sub">RM {{ payment.amount | number:'1.2-2' }} | {{ payment.method }}</div>
-            <div class="item-sub">{{ payment.paymentDate | date:'dd/MM/yyyy HH:mm' }} | Ref: {{ payment.referenceNo || '-' }}</div>
+            <div class="item-sub">{{ payment.paymentDate | date:'dd/MM/yyyy HH:mm' }}</div>
           </div>
         </div>
-        <ion-button fill="clear" style="--color:#e57373;" (click)="confirmDelete(payment)">
+        <ion-button fill="clear" style="--color:#e57373;" (click)="confirmDeletePayment(payment)">
           <ion-icon name="trash-outline"></ion-icon>
         </ion-button>
       </div>
-
       <div *ngIf="payments.length===0" class="empty-state">
         <ion-icon name="wallet-outline"></ion-icon>
         <p>No payments found</p>
@@ -143,7 +164,45 @@
     </div>
   </div>
 
-  <div *ngIf="!showModal && !showPaymentList" class="bottom-nav">
+  <!-- CN LIST -->
+  <div *ngIf="currentView==='cnList'" class="page-container">
+    <div class="top-bar">
+      <ion-button fill="clear" class="back-btn" (click)="goHome()">
+        <ion-icon name="chevron-back-outline"></ion-icon> Back
+      </ion-button>
+      <span class="page-title">C.N. Report</span>
+      <ion-button fill="clear" class="icon-btn" (click)="openNewCN()">
+        <ion-icon name="add-outline"></ion-icon>
+      </ion-button>
+    </div>
+    <div *ngIf="isLoading" style="display:flex;justify-content:center;padding:60px;">
+      <ion-spinner name="crescent"></ion-spinner>
+    </div>
+    <div *ngIf="!isLoading">
+      <div *ngFor="let cn of creditNotes" class="list-item">
+        <div class="item-info">
+          <div class="item-avatar"><ion-icon name="document-outline"></ion-icon></div>
+          <div>
+            <div class="item-name">{{ cn.cnNumber || 'CN-' + cn.id }}</div>
+            <div class="item-sub">RM {{ cn.amount | number:'1.2-2' }}</div>
+            <div class="item-sub">{{ cn.reason }}</div>
+            <div class="item-sub">{{ cn.createdAt | date:'dd/MM/yyyy HH:mm' }}</div>
+          </div>
+        </div>
+        <ion-button fill="clear" style="--color:#e57373;" (click)="confirmDeleteCN(cn)">
+          <ion-icon name="trash-outline"></ion-icon>
+        </ion-button>
+      </div>
+      <div *ngIf="creditNotes.length===0" class="empty-state">
+        <ion-icon name="document-outline"></ion-icon>
+        <p>No credit notes found</p>
+        <button class="save-btn" (click)="openNewCN()">New Credit Note</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- BOTTOM NAV -->
+  <div *ngIf="currentView==='home'" class="bottom-nav">
     <ion-button fill="clear" class="nav-btn" (click)="goTo('pages/home')">
       <ion-icon name="home-outline"></ion-icon>
     </ion-button>
@@ -155,7 +214,8 @@
     </ion-button>
   </div>
 
-  <ion-alert [isOpen]="showDeleteAlert" header="Delete Payment" message="Are you sure?" [buttons]="deleteButtons" (didDismiss)="showDeleteAlert=false"></ion-alert>
+  <ion-alert [isOpen]="showDeletePaymentAlert" header="Delete Payment" message="Are you sure?" [buttons]="deletePaymentButtons" (didDismiss)="showDeletePaymentAlert=false"></ion-alert>
+  <ion-alert [isOpen]="showDeleteCNAlert" header="Delete Credit Note" message="Are you sure?" [buttons]="deleteCNButtons" (didDismiss)="showDeleteCNAlert=false"></ion-alert>
   <ion-toast [isOpen]="showToast" [message]="toastMessage" duration="2000" position="bottom" (didDismiss)="showToast=false"></ion-toast>
 
 </ion-content>

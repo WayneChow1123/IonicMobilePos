@@ -13,6 +13,7 @@ ion-content { --background: #F0EBE3; }
 .amount-row { display:flex; align-items:center; gap:8px; margin-top:4px; }
 .item-amount { font-size:13px; font-weight:700; color:#1a1a1a; }
 .paid-amount { font-size:11px; color:#27ae60; font-weight:600; }
+.cn-badge { font-size:10px; font-weight:700; padding:2px 8px; border-radius:50px; background:#fff3cd; color:#e67e22; border:1px solid #f39c12; }
 .status-badge { font-size:10px; font-weight:700; padding:2px 8px; border-radius:50px; &.paid { background:#d4edda; color:#27ae60; } &.partial { background:#fff3cd; color:#f39c12; } &.unpaid { background:#f8d7da; color:#c0392b; } }
 .paid-banner { background:#d4edda; border-radius:16px; padding:12px 16px; display:flex; align-items:center; gap:10px; margin-bottom:12px; ion-icon { font-size:22px; color:#27ae60; } span { font-size:14px; font-weight:600; color:#27ae60; } }
 .partial-banner { background:#fff3cd; border-radius:16px; padding:12px 16px; display:flex; align-items:center; gap:10px; margin-bottom:12px; ion-icon { font-size:22px; color:#f39c12; } span { font-size:14px; font-weight:600; color:#f39c12; } }

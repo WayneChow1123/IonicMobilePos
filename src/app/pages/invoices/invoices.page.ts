@@ -24,17 +24,8 @@ export class InvoicesPage implements OnInit {
   showDeleteAlert = false;
   showToast = false;
   toastMessage = '';
-  form: any = {
-    customerId: 0,
-    invoiceDate: new Date().toISOString(),
-    remark: '',
-    items: [{ productId: 0, quantity: 1 }]
-  };
-  editForm: any = {
-    invoiceDate: new Date().toISOString(),
-    remark: '',
-    items: [{ productId: 0, quantity: 1, unitPrice: 0 }]
-  };
+  form: any = { customerId: 0, invoiceDate: new Date().toISOString(), remark: '', items: [{ productId: 0, quantity: 1 }] };
+  editForm: any = { invoiceDate: new Date().toISOString(), remark: '', items: [{ productId: 0, quantity: 1, unitPrice: 0 }] };
   deleteButtons = [
     { text: 'Cancel', role: 'cancel' },
     { text: 'Delete', role: 'destructive', handler: () => this.deleteInvoice() }
@@ -47,7 +38,7 @@ export class InvoicesPage implements OnInit {
   loadInvoices() {
     this.isLoading = true;
     this.api.getInvoices().subscribe({
-      next: (res) => { this.invoices = Array.isArray(res) ? res : []; this.filteredInvoices = [...this.invoices]; this.isLoading = false; },
+      next: (res) => { this.invoices = Array.isArray(res) ? res : []; this.invoices.forEach((inv: any) => { inv.hasCreditNote = inv.hasCreditNote || false; }); this.filteredInvoices = [...this.invoices]; console.log("invoices:", JSON.stringify(this.invoices.map((i:any) => ({id:i.id, hasCreditNote:i.hasCreditNote})))); this.isLoading = false; },
       error: () => { this.isLoading = false; this.showToastMsg('Failed to load invoices'); }
     });
   }
@@ -69,43 +60,31 @@ export class InvoicesPage implements OnInit {
   openAddModal() {
     this.isEditing = false;
     this.selectedInvoice = null;
-    this.form = {
-      customerId: this.customers.length > 0 ? this.customers[0].id : 0,
-      invoiceDate: new Date().toISOString(),
-      remark: '',
-      items: [{ productId: this.products.length > 0 ? this.products[0].id : 0, quantity: 1 }]
-    };
+    this.form = { customerId: this.customers.length > 0 ? this.customers[0].id : 0, invoiceDate: new Date().toISOString(), remark: '', items: [{ productId: this.products.length > 0 ? this.products[0].id : 0, quantity: 1 }] };
     this.showModal = true;
   }
 
   openEditModal(invoice: any) {
     this.isEditing = true;
-    this.selectedInvoice = invoice;
+    this.selectedInvoice = null;
     this.isLoading = true;
     this.api.getInvoiceDetails(invoice.id).subscribe({
       next: (res: any) => {
         this.isLoading = false;
-        const detail = res || invoice;
+        this.selectedInvoice = res;
         this.editForm = {
-          invoiceDate: detail.invoiceDate || new Date().toISOString(),
-          remark: detail.remark || '',
-          items: (detail.items && detail.items.length > 0)
-            ? detail.items.map((i: any) => ({
-                productId: i.productId || i.product?.id || 0,
-                quantity: i.quantity || 1,
-                unitPrice: i.unitPrice || i.price || 0
-              }))
+          invoiceDate: res.invoiceDate || new Date().toISOString(),
+          remark: res.remark || '',
+          items: (res.items && res.items.length > 0)
+            ? res.items.map((i: any) => ({ productId: i.productId || 0, quantity: i.quantity || 1, unitPrice: i.unitPrice || 0 }))
             : [{ productId: this.products.length > 0 ? this.products[0].id : 0, quantity: 1, unitPrice: 0 }]
         };
         this.showModal = true;
       },
       error: () => {
         this.isLoading = false;
-        this.editForm = {
-          invoiceDate: invoice.invoiceDate || new Date().toISOString(),
-          remark: invoice.remark || '',
-          items: [{ productId: this.products.length > 0 ? this.products[0].id : 0, quantity: 1, unitPrice: 0 }]
-        };
+        this.selectedInvoice = invoice;
+        this.editForm = { invoiceDate: invoice.invoiceDate || new Date().toISOString(), remark: invoice.remark || '', items: [{ productId: this.products.length > 0 ? this.products[0].id : 0, quantity: 1, unitPrice: 0 }] };
         this.showModal = true;
       }
     });
@@ -152,6 +131,11 @@ export class InvoicesPage implements OnInit {
       next: () => { this.showToastMsg('Invoice deleted!'); this.loadInvoices(); },
       error: (err: any) => this.showToastMsg('Failed: ' + (err.error?.message || err.message || 'error'))
     });
+  }
+
+  getTotalCN(): number {
+    if (!this.selectedInvoice?.creditNotes) return 0;
+    return this.selectedInvoice.creditNotes.reduce((sum: number, cn: any) => sum + (cn.amount || 0), 0);
   }
 
   getCustomerName(id: any) {
