@@ -1,0 +1,61 @@
+<ion-content [fullscreen]="true">
+  <div class="pref-container">
+
+    <div class="top-bar">
+      <ion-button fill="clear" class="back-btn" (click)="goBack()">
+        <ion-icon name="chevron-back-outline"></ion-icon> Back
+      </ion-button>
+      <ion-button fill="clear" class="more-btn">
+        <ion-icon name="ellipsis-horizontal"></ion-icon>
+      </ion-button>
+    </div>
+
+    <div class="header">
+      <p class="section-label">PREFERENCES</p>
+      <h1>Adjust settings based on<br><strong>your workflow</strong></h1>
+    </div>
+
+    <div class="cards-grid">
+      <div class="card card-half card-yellow" (click)="backupFull()">
+        <div class="card-content">
+          <span class="card-title">Backup<br>Database</span>
+          <ion-icon name="server-outline" class="card-icon-bg"></ion-icon>
+        </div>
+      </div>
+
+      <div class="card card-half card-blue" (click)="exportBills()">
+        <div class="card-content">
+          <span class="card-title">Export<br>Bills</span>
+          <ion-icon name="cloud-upload-outline" class="card-icon-bg"></ion-icon>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-title">System</div>
+    <div class="system-list">
+      <div class="system-item">
+        <div class="system-item-left">
+          <ion-icon name="settings-outline"></ion-icon>
+          <span>Setting</span>
+        </div>
+        <ion-icon name="arrow-forward-outline"></ion-icon>
+      </div>
+    </div>
+
+    <ion-toast [isOpen]="showToast" [message]="toastMessage" duration="2000" position="bottom" (didDismiss)="showToast=false"></ion-toast>
+
+  </div>
+
+  <div class="bottom-nav">
+    <ion-button fill="clear" class="nav-btn" (click)="goTo('pages/home')">
+      <ion-icon name="home-outline"></ion-icon>
+    </ion-button>
+    <ion-button fill="clear" class="nav-btn" (click)="goTo('pages/billing')">
+      <ion-icon name="swap-horizontal-outline"></ion-icon>
+    </ion-button>
+    <ion-button fill="clear" class="nav-btn active" (click)="goTo('pages/preferences')">
+      <ion-icon name="options-outline"></ion-icon>
+    </ion-button>
+  </div>
+
+</ion-content>

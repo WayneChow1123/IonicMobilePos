@@ -1,0 +1,139 @@
+<ion-content [fullscreen]="true">
+
+  <!-- MAIN LIST VIEW -->
+  <div *ngIf="!showModal" class="page-container">
+    <div class="top-bar">
+      <ion-button fill="clear" class="back-btn" (click)="goBack()">
+        <ion-icon name="chevron-back-outline"></ion-icon> Back
+      </ion-button>
+      <span class="page-title">Products</span>
+      <div class="top-right">
+        <ion-button fill="clear" class="icon-btn" (click)="toggleSearch()">
+          <ion-icon name="search-outline"></ion-icon>
+        </ion-button>
+        <ion-button fill="clear" class="icon-btn" (click)="openAddModal()">
+          <ion-icon name="add-outline"></ion-icon>
+        </ion-button>
+      </div>
+    </div>
+
+    <div *ngIf="showSearch" style="margin-bottom:12px;">
+      <ion-searchbar [(ngModel)]="searchTerm" (ionInput)="filterProducts()" placeholder="Search products..." style="--background:#fff;--border-radius:16px;--box-shadow:none;padding:0;"></ion-searchbar>
+    </div>
+
+    <div class="tab-row">
+      <button [class.tab-active]="activeTab==='ALL'" class="tab-btn" (click)="setTab('ALL')">ALL</button>
+      <button [class.tab-active]="activeTab==='DEFAULT'" class="tab-btn" (click)="setTab('DEFAULT')">DEFAULT</button>
+    </div>
+
+    <div *ngIf="isLoading" style="display:flex;justify-content:center;padding:60px;">
+      <ion-spinner name="crescent"></ion-spinner>
+    </div>
+
+    <div *ngIf="!isLoading">
+      <div *ngFor="let product of filteredProducts" class="list-item">
+        <div class="item-info" (click)="openEditModal(product)">
+          <div class="item-avatar"><ion-icon name="cube-outline"></ion-icon></div>
+          <div>
+            <div class="item-name">{{ product.name }}</div>
+            <div class="item-sub">{{ product.category }} | Stock: {{ product.stock }}</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:4px;">
+          <ion-button fill="clear" style="--color:#5c85d6;" (click)="openEditModal(product)">
+            <ion-icon name="create-outline"></ion-icon>
+          </ion-button>
+          <ion-button fill="clear" style="--color:#e57373;" (click)="confirmDelete(product)">
+            <ion-icon name="trash-outline"></ion-icon>
+          </ion-button>
+        </div>
+      </div>
+      <div *ngIf="filteredProducts.length===0" class="empty-state">
+        <ion-icon name="cube-outline"></ion-icon>
+        <p>No products found</p>
+        <button class="save-btn" (click)="openAddModal()">Add Product</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ADD/EDIT FORM -->
+  <div *ngIf="showModal" class="page-container">
+    <div class="top-bar">
+      <ion-button fill="clear" class="back-btn" (click)="closeModal()">
+        <ion-icon name="chevron-back-outline"></ion-icon> Back
+      </ion-button>
+      <span class="page-title">{{ isEditing ? 'Edit Product' : 'Add Product' }}</span>
+      <ion-button fill="clear" class="icon-btn" (click)="saveProduct()">
+        <ion-icon name="save-outline"></ion-icon>
+      </ion-button>
+    </div>
+
+    <div class="form-card" style="background:#fff;">
+      <div class="form-group">
+        <label>PRODUCT NAME *</label>
+        <input type="text" [(ngModel)]="form.name" placeholder="Enter product name" class="form-input"/>
+      </div>
+      <div class="form-group">
+        <label>CATEGORY</label>
+        <input type="text" [(ngModel)]="form.category" placeholder="e.g. DEFAULT" class="form-input"/>
+      </div>
+      <div class="form-group">
+        <label>BARCODE</label>
+        <input type="text" [(ngModel)]="form.barcode" placeholder="Enter barcode" class="form-input"/>
+      </div>
+      <div class="form-group">
+        <label>U.O.M</label>
+        <input type="text" [(ngModel)]="form.uom" placeholder="UNIT" class="form-input"/>
+      </div>
+    </div>
+
+    <div class="form-card" style="background:#E8D5D0;">
+      <div class="form-group">
+        <label>PRICE (RM)</label>
+        <input type="number" [(ngModel)]="form.price" placeholder="0.00" class="form-input"/>
+      </div>
+      <div class="form-group">
+        <label>RATE</label>
+        <input type="number" [(ngModel)]="form.rate" placeholder="1" class="form-input"/>
+      </div>
+      <div class="form-group">
+        <label>COST (RM)</label>
+        <input type="number" [(ngModel)]="form.cost" placeholder="0.00" class="form-input"/>
+      </div>
+      <div class="form-group">
+        <label>LOWEST PRICE (RM)</label>
+        <input type="number" [(ngModel)]="form.lowestPrice" placeholder="0.00" class="form-input"/>
+      </div>
+      <div class="form-group">
+        <label>STOCK</label>
+        <input type="number" [(ngModel)]="form.stock" placeholder="0" class="form-input"/>
+      </div>
+    </div>
+
+    <div class="form-card" style="background:#C5C8E0;">
+      <div class="form-group">
+        <label>DESCRIPTION</label>
+        <textarea [(ngModel)]="form.description" placeholder="Enter description..." class="form-textarea"></textarea>
+      </div>
+      <div class="form-group" style="display:flex;align-items:center;gap:10px;">
+        <label style="margin:0;">Include Tax</label>
+        <input type="checkbox" [(ngModel)]="form.includeTax" style="width:18px;height:18px;"/>
+      </div>
+    </div>
+
+    <button class="save-btn" (click)="saveProduct()">
+      {{ isEditing ? 'UPDATE PRODUCT' : 'CREATE PRODUCT' }}
+    </button>
+  </div>
+
+  <ion-alert
+    [isOpen]="showDeleteAlert"
+    header="Delete Product"
+    [message]="'Delete ' + (selectedProduct?.name || '') + '?'"
+    [buttons]="deleteButtons"
+    (didDismiss)="showDeleteAlert=false">
+  </ion-alert>
+
+  <ion-toast [isOpen]="showToast" [message]="toastMessage" duration="2000" position="bottom" (didDismiss)="showToast=false"></ion-toast>
+
+</ion-content>

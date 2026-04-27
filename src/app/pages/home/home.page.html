@@ -1,0 +1,67 @@
+<ion-content [fullscreen]="true">
+  <div class="home-container">
+
+    <div class="top-bar">
+      <ion-button fill="clear" class="search-btn">
+        <ion-icon name="search-outline"></ion-icon>
+      </ion-button>
+    </div>
+
+    <div class="header">
+      <p class="section-label">BUSINESS</p>
+      <h1>Operations based on<br><strong>your records</strong></h1>
+    </div>
+
+    <div class="cards-grid">
+
+      <div class="card card-wide card-blue" (click)="goTo('pages/invoices')">
+        <div class="card-content">
+          <span class="card-title">Stock Report /<br>Stock Move</span>
+          <ion-icon name="cube-outline" class="card-icon-bg"></ion-icon>
+        </div>
+      </div>
+
+      <div class="card card-half card-pink" (click)="goTo('pages/products')">
+        <div class="card-content">
+          <span class="card-title">Item<br>Group</span>
+          <ion-icon name="layers-outline" class="card-icon-bg"></ion-icon>
+        </div>
+      </div>
+
+      <div class="card card-half card-yellow" (click)="goTo('pages/products')">
+        <div class="card-content">
+          <span class="card-title">Product</span>
+          <ion-icon name="cube-outline" class="card-icon-bg"></ion-icon>
+        </div>
+      </div>
+
+      <div class="card card-half card-purple" (click)="goTo('pages/customers')">
+        <div class="card-content">
+          <span class="card-title">Customer<br>Category</span>
+          <ion-icon name="people-outline" class="card-icon-bg"></ion-icon>
+        </div>
+      </div>
+
+      <div class="card card-half card-beige" (click)="goTo('pages/customers')">
+        <div class="card-content">
+          <span class="card-title">Customer</span>
+          <ion-icon name="person-outline" class="card-icon-bg"></ion-icon>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="bottom-nav">
+    <ion-button fill="clear" class="nav-btn active" (click)="goTo('pages/home')">
+      <ion-icon name="home"></ion-icon>
+    </ion-button>
+    <ion-button fill="clear" class="nav-btn" (click)="goTo('pages/billing')">
+      <ion-icon name="swap-horizontal-outline"></ion-icon>
+    </ion-button>
+    <ion-button fill="clear" class="nav-btn" (click)="goTo('pages/preferences')">
+      <ion-icon name="options-outline"></ion-icon>
+    </ion-button>
+  </div>
+
+</ion-content>

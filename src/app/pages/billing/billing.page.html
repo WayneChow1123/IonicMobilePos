@@ -1,0 +1,161 @@
+<ion-content [fullscreen]="true">
+
+  <div *ngIf="!showModal && !showPaymentList" class="page-container">
+    <div class="top-bar">
+      <ion-button fill="clear" class="back-btn" (click)="goBack()">
+        <ion-icon name="chevron-back-outline"></ion-icon> Back
+      </ion-button>
+      <ion-button fill="clear" class="more-btn">
+        <ion-icon name="ellipsis-horizontal"></ion-icon>
+      </ion-button>
+    </div>
+
+    <div class="header">
+      <p class="section-label">DAILY ACTIONS</p>
+      <h1>Hello there,<br>What do you need <strong>to bill?</strong></h1>
+    </div>
+
+    <div class="cards-grid">
+      <div class="card card-wide card-pink" (click)="goTo('pages/invoices')">
+        <div class="card-content">
+          <span class="card-title">New Invoice</span>
+          <ion-icon name="receipt-outline" class="card-icon-bg"></ion-icon>
+        </div>
+      </div>
+
+      <div class="card card-half card-blue" (click)="goTo('pages/invoices')">
+        <div class="card-content">
+          <span class="card-title">New<br>C. N.</span>
+          <ion-icon name="document-outline" class="card-icon-bg"></ion-icon>
+        </div>
+      </div>
+
+      <div class="card card-half card-beige" (click)="openNewPayment()">
+        <div class="card-content">
+          <span class="card-title">New<br>Payment</span>
+          <ion-icon name="wallet-outline" class="card-icon-bg"></ion-icon>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-title">Reports Log</div>
+    <div class="report-list">
+      <div class="report-item" (click)="goTo('pages/invoices')">
+        <span>Invoice Report</span>
+        <ion-icon name="arrow-forward-outline"></ion-icon>
+      </div>
+      <div class="report-item" (click)="goTo('pages/invoices')">
+        <span>C.N. Report</span>
+        <ion-icon name="arrow-forward-outline"></ion-icon>
+      </div>
+      <div class="report-item" (click)="openPaymentList()">
+        <span>Payment Report</span>
+        <ion-icon name="arrow-forward-outline"></ion-icon>
+      </div>
+    </div>
+  </div>
+
+  <!-- NEW PAYMENT FORM -->
+  <div *ngIf="showModal" class="page-container">
+    <div class="top-bar">
+      <ion-button fill="clear" class="back-btn" (click)="closeModal()">
+        <ion-icon name="chevron-back-outline"></ion-icon> Back
+      </ion-button>
+      <span class="page-title">New Payment</span>
+      <ion-button fill="clear" class="icon-btn" (click)="savePayment()">
+        <ion-icon name="save-outline"></ion-icon>
+      </ion-button>
+    </div>
+
+    <div class="form-card" style="background:#E8D5D0;">
+      <div class="form-group">
+        <label>CUSTOMER *</label>
+        <select [(ngModel)]="form.customerId" class="form-select" (change)="onCustomerChange()">
+          <option *ngFor="let c of customers" [value]="c.id">{{ c.name }}</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>INVOICE *</label>
+        <select [(ngModel)]="form.invoiceId" class="form-select">
+          <option value="0">Select Invoice</option>
+          <option *ngFor="let inv of invoices" [value]="inv.id">{{ inv.invoiceNumber }} (RM {{ inv.totalAmount || 0 | number:'1.2-2' }})</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="form-card" style="background:#C5C8E0;">
+      <div class="form-group">
+        <label>AMOUNT (RM) *</label>
+        <input type="number" [(ngModel)]="form.amount" placeholder="0.00" class="form-input"/>
+      </div>
+      <div class="form-group">
+        <label>PAYMENT METHOD</label>
+        <select [(ngModel)]="form.method" class="form-select">
+          <option *ngFor="let m of paymentMethods" [value]="m">{{ m }}</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>REFERENCE NO</label>
+        <input type="text" [(ngModel)]="form.referenceNo" placeholder="Enter reference number" class="form-input"/>
+      </div>
+    </div>
+
+    <button class="save-btn" (click)="savePayment()">CREATE PAYMENT</button>
+  </div>
+
+  <!-- PAYMENT LIST -->
+  <div *ngIf="showPaymentList" class="page-container">
+    <div class="top-bar">
+      <ion-button fill="clear" class="back-btn" (click)="closePaymentList()">
+        <ion-icon name="chevron-back-outline"></ion-icon> Back
+      </ion-button>
+      <span class="page-title">Payment Report</span>
+      <ion-button fill="clear" class="icon-btn" (click)="openNewPayment()">
+        <ion-icon name="add-outline"></ion-icon>
+      </ion-button>
+    </div>
+
+    <div *ngIf="isLoading" style="display:flex;justify-content:center;padding:60px;">
+      <ion-spinner name="crescent"></ion-spinner>
+    </div>
+
+    <div *ngIf="!isLoading">
+      <div *ngFor="let payment of payments" class="list-item">
+        <div class="item-info">
+          <div class="item-avatar"><ion-icon name="wallet-outline"></ion-icon></div>
+          <div>
+            <div class="item-name">{{ payment.customerName }}</div>
+            <div class="item-sub">{{ payment.invoiceNumber }}</div>
+            <div class="item-sub">RM {{ payment.amount | number:'1.2-2' }} | {{ payment.method }}</div>
+            <div class="item-sub">{{ payment.paymentDate | date:'dd/MM/yyyy HH:mm' }} | Ref: {{ payment.referenceNo || '-' }}</div>
+          </div>
+        </div>
+        <ion-button fill="clear" style="--color:#e57373;" (click)="confirmDelete(payment)">
+          <ion-icon name="trash-outline"></ion-icon>
+        </ion-button>
+      </div>
+
+      <div *ngIf="payments.length===0" class="empty-state">
+        <ion-icon name="wallet-outline"></ion-icon>
+        <p>No payments found</p>
+        <button class="save-btn" (click)="openNewPayment()">New Payment</button>
+      </div>
+    </div>
+  </div>
+
+  <div *ngIf="!showModal && !showPaymentList" class="bottom-nav">
+    <ion-button fill="clear" class="nav-btn" (click)="goTo('pages/home')">
+      <ion-icon name="home-outline"></ion-icon>
+    </ion-button>
+    <ion-button fill="clear" class="nav-btn active" (click)="goTo('pages/billing')">
+      <ion-icon name="swap-horizontal-outline"></ion-icon>
+    </ion-button>
+    <ion-button fill="clear" class="nav-btn" (click)="goTo('pages/preferences')">
+      <ion-icon name="options-outline"></ion-icon>
+    </ion-button>
+  </div>
+
+  <ion-alert [isOpen]="showDeleteAlert" header="Delete Payment" message="Are you sure?" [buttons]="deleteButtons" (didDismiss)="showDeleteAlert=false"></ion-alert>
+  <ion-toast [isOpen]="showToast" [message]="toastMessage" duration="2000" position="bottom" (didDismiss)="showToast=false"></ion-toast>
+
+</ion-content>

@@ -1,0 +1,23 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap');
+
+* {
+  font-family: 'DM Sans', sans-serif;
+  box-sizing: border-box;
+}
+
+ion-content {
+  --background: #F0EBE3;
+}
+
+ion-toolbar {
+  --background: #F0EBE3;
+  --border-width: 0;
+  box-shadow: none;
+}
+
+ion-header {
+  box-shadow: none;
+  &::after {
+    display: none;
+  }
+}

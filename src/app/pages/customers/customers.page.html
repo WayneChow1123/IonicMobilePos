@@ -1,0 +1,106 @@
+<ion-content [fullscreen]="true">
+
+  <!-- LIST VIEW -->
+  <div *ngIf="!showModal" class="page-container">
+    <div class="top-bar">
+      <ion-button fill="clear" class="back-btn" (click)="goBack()">
+        <ion-icon name="chevron-back-outline"></ion-icon> Back
+      </ion-button>
+      <span class="page-title">Customers</span>
+      <div class="top-right">
+        <ion-button fill="clear" class="icon-btn" (click)="toggleSearch()">
+          <ion-icon name="search-outline"></ion-icon>
+        </ion-button>
+        <ion-button fill="clear" class="icon-btn" (click)="openAddModal()">
+          <ion-icon name="add-outline"></ion-icon>
+        </ion-button>
+      </div>
+    </div>
+
+    <div *ngIf="showSearch" style="margin-bottom:12px;">
+      <ion-searchbar [(ngModel)]="searchTerm" (ionInput)="filterCustomers()" placeholder="Search customers..." style="--background:#fff;--border-radius:16px;--box-shadow:none;padding:0;"></ion-searchbar>
+    </div>
+
+    <div class="tab-row">
+      <button [class.tab-active]="activeTab==='ALL'" class="tab-btn" (click)="setTab('ALL')">ALL</button>
+      <button [class.tab-active]="activeTab==='DEFAULT'" class="tab-btn" (click)="setTab('DEFAULT')">DEFAULT</button>
+    </div>
+
+    <div *ngIf="isLoading" style="display:flex;justify-content:center;padding:60px;">
+      <ion-spinner name="crescent"></ion-spinner>
+    </div>
+
+    <div *ngIf="!isLoading">
+      <div *ngFor="let customer of filteredCustomers" class="list-item">
+        <div class="item-info" (click)="openEditModal(customer)">
+          <div class="item-avatar"><ion-icon name="person-outline"></ion-icon></div>
+          <div>
+            <div class="item-name">{{ customer.name }}</div>
+            <div class="item-sub">{{ customer.phone }} | {{ customer.email }}</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:4px;">
+          <ion-button fill="clear" style="--color:#5c85d6;" (click)="openEditModal(customer)">
+            <ion-icon name="create-outline"></ion-icon>
+          </ion-button>
+          <ion-button fill="clear" style="--color:#e57373;" (click)="confirmDelete(customer)">
+            <ion-icon name="trash-outline"></ion-icon>
+          </ion-button>
+        </div>
+      </div>
+
+      <div *ngIf="filteredCustomers.length===0" class="empty-state">
+        <ion-icon name="people-outline"></ion-icon>
+        <p>No customers found</p>
+        <button class="save-btn" (click)="openAddModal()">Add Customer</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ADD/EDIT FORM -->
+  <div *ngIf="showModal" class="page-container">
+    <div class="top-bar">
+      <ion-button fill="clear" class="back-btn" (click)="closeModal()">
+        <ion-icon name="chevron-back-outline"></ion-icon> Back
+      </ion-button>
+      <span class="page-title">{{ isEditing ? 'Edit Customer' : 'Add Customer' }}</span>
+      <ion-button fill="clear" class="icon-btn" (click)="saveCustomer()">
+        <ion-icon name="save-outline"></ion-icon>
+      </ion-button>
+    </div>
+
+    <div class="form-card" style="background:#E8D5D0;">
+      <div class="form-group">
+        <label>NAME *</label>
+        <input type="text" [(ngModel)]="form.name" placeholder="Enter customer name" class="form-input"/>
+      </div>
+      <div class="form-group">
+        <label>PHONE</label>
+        <input type="text" [(ngModel)]="form.phone" placeholder="Enter phone number" class="form-input"/>
+      </div>
+      <div class="form-group">
+        <label>EMAIL</label>
+        <input type="email" [(ngModel)]="form.email" placeholder="Enter email" class="form-input"/>
+      </div>
+      <div class="form-group">
+        <label>ADDRESS</label>
+        <textarea [(ngModel)]="form.address" placeholder="Enter address..." class="form-textarea"></textarea>
+      </div>
+    </div>
+
+    <button class="save-btn" (click)="saveCustomer()">
+      {{ isEditing ? 'UPDATE CUSTOMER' : 'CREATE CUSTOMER' }}
+    </button>
+  </div>
+
+  <ion-alert
+    [isOpen]="showDeleteAlert"
+    header="Delete Customer"
+    [message]="'Delete ' + (selectedCustomer?.name || '') + '?'"
+    [buttons]="deleteButtons"
+    (didDismiss)="showDeleteAlert=false">
+  </ion-alert>
+
+  <ion-toast [isOpen]="showToast" [message]="toastMessage" duration="2000" position="bottom" (didDismiss)="showToast=false"></ion-toast>
+
+</ion-content>

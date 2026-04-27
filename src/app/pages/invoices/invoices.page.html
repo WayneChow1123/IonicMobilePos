@@ -1,0 +1,188 @@
+<ion-content [fullscreen]="true">
+
+  <!-- LIST VIEW -->
+  <div *ngIf="!showModal" class="page-container">
+    <div class="top-bar">
+      <ion-button fill="clear" class="back-btn" (click)="goBack()">
+        <ion-icon name="chevron-back-outline"></ion-icon> Back
+      </ion-button>
+      <span class="page-title">Invoices</span>
+      <ion-button fill="clear" class="icon-btn" (click)="openAddModal()">
+        <ion-icon name="add-outline"></ion-icon>
+      </ion-button>
+    </div>
+
+    <div *ngIf="isLoading" style="display:flex;justify-content:center;padding:60px;">
+      <ion-spinner name="crescent"></ion-spinner>
+    </div>
+
+    <div *ngIf="!isLoading">
+      <div *ngFor="let invoice of filteredInvoices" class="list-item">
+        <div class="item-info" (click)="openEditModal(invoice)">
+          <div class="item-avatar" [class.paid]="invoice.status==='Paid'" [class.partial]="invoice.status==='Partial'">
+            <ion-icon name="receipt-outline"></ion-icon>
+          </div>
+          <div>
+            <div class="item-header">
+              <span class="item-name">{{ invoice.invoiceNumber || 'INV-' + invoice.id }}</span>
+              <span class="status-badge" [class.paid]="invoice.status==='Paid'" [class.partial]="invoice.status==='Partial'" [class.unpaid]="invoice.status==='Unpaid'">
+                {{ invoice.status || 'Unpaid' }}
+              </span>
+            </div>
+            <div class="item-sub">{{ invoice.customerName || getCustomerName(invoice.customerId) }}</div>
+            <div class="item-sub">{{ invoice.invoiceDate | date:'dd/MM/yyyy' }}</div>
+            <div class="amount-row">
+              <span class="item-amount">RM {{ invoice.totalAmount || 0 | number:'1.2-2' }}</span>
+              <span class="paid-amount" *ngIf="invoice.paidAmount > 0">Paid: RM {{ invoice.paidAmount | number:'1.2-2' }}</span>
+            </div>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px;align-items:center;">
+          <ion-button fill="clear" style="--color:#5c85d6;" (click)="openEditModal(invoice)">
+            <ion-icon name="create-outline"></ion-icon>
+          </ion-button>
+          <ion-button fill="clear" style="--color:#e57373;" (click)="confirmDelete(invoice)">
+            <ion-icon name="trash-outline"></ion-icon>
+          </ion-button>
+        </div>
+      </div>
+
+      <div *ngIf="filteredInvoices.length===0" class="empty-state">
+        <ion-icon name="receipt-outline"></ion-icon>
+        <p>No invoices found</p>
+        <button class="save-btn" (click)="openAddModal()">New Invoice</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ADD FORM -->
+  <div *ngIf="showModal && !isEditing" class="page-container">
+    <div class="top-bar">
+      <ion-button fill="clear" class="back-btn" (click)="closeModal()">
+        <ion-icon name="chevron-back-outline"></ion-icon> Back
+      </ion-button>
+      <span class="page-title">New Invoice</span>
+      <ion-button fill="clear" class="icon-btn" (click)="saveInvoice()">
+        <ion-icon name="save-outline"></ion-icon>
+      </ion-button>
+    </div>
+
+    <div class="form-card" style="background:#E8D5D0;">
+      <div class="form-group">
+        <label>CUSTOMER *</label>
+        <select [(ngModel)]="form.customerId" class="form-select">
+          <option *ngFor="let c of customers" [value]="c.id">{{ c.name }}</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>INVOICE DATE</label>
+        <input type="datetime-local" [(ngModel)]="form.invoiceDate" class="form-input"/>
+      </div>
+      <div class="form-group">
+        <label>REMARK</label>
+        <input type="text" [(ngModel)]="form.remark" placeholder="Enter remark" class="form-input"/>
+      </div>
+    </div>
+
+    <div class="section-title">
+      <span>Items</span>
+      <button class="add-item-btn" (click)="addItem()">+ Add Item</button>
+    </div>
+
+    <div *ngFor="let item of form.items; let i = index" class="form-card" style="background:#C5C8E0;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <span style="font-weight:700;font-size:13px;">Item {{ i + 1 }}</span>
+        <ion-button fill="clear" style="--color:#e57373;font-size:18px;" (click)="removeItem(i)">
+          <ion-icon name="trash-outline"></ion-icon>
+        </ion-button>
+      </div>
+      <div class="form-group">
+        <label>PRODUCT</label>
+        <select [(ngModel)]="item.productId" class="form-select">
+          <option *ngFor="let p of products" [value]="p.id">{{ p.name }}</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>QUANTITY</label>
+        <input type="number" [(ngModel)]="item.quantity" placeholder="1" class="form-input"/>
+      </div>
+    </div>
+
+    <button class="save-btn" (click)="saveInvoice()">CREATE INVOICE</button>
+  </div>
+
+  <!-- EDIT FORM -->
+  <div *ngIf="showModal && isEditing" class="page-container">
+    <div class="top-bar">
+      <ion-button fill="clear" class="back-btn" (click)="closeModal()">
+        <ion-icon name="chevron-back-outline"></ion-icon> Back
+      </ion-button>
+      <span class="page-title">Edit Invoice</span>
+      <ion-button fill="clear" class="icon-btn" (click)="saveInvoice()">
+        <ion-icon name="save-outline"></ion-icon>
+      </ion-button>
+    </div>
+
+    <!-- PAID BANNER -->
+    <div *ngIf="selectedInvoice?.status === 'Paid'" class="paid-banner">
+      <ion-icon name="checkmark-circle"></ion-icon>
+      <span>This invoice is fully paid</span>
+    </div>
+    <div *ngIf="selectedInvoice?.status === 'Partial'" class="partial-banner">
+      <ion-icon name="time"></ion-icon>
+      <span>Partially paid - RM {{ selectedInvoice?.paidAmount | number:'1.2-2' }} of RM {{ selectedInvoice?.totalAmount | number:'1.2-2' }}</span>
+    </div>
+
+    <div class="form-card" style="background:#E8D5D0;">
+      <div class="form-group">
+        <label>INVOICE DATE</label>
+        <input type="datetime-local" [(ngModel)]="editForm.invoiceDate" class="form-input"/>
+      </div>
+      <div class="form-group">
+        <label>REMARK</label>
+        <input type="text" [(ngModel)]="editForm.remark" placeholder="Enter remark" class="form-input"/>
+      </div>
+    </div>
+
+    <div class="section-title">
+      <span>Items</span>
+      <button class="add-item-btn" (click)="addItem()">+ Add Item</button>
+    </div>
+
+    <div *ngFor="let item of editForm.items; let i = index" class="form-card" style="background:#C5C8E0;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <span style="font-weight:700;font-size:13px;">Item {{ i + 1 }}</span>
+        <ion-button fill="clear" style="--color:#e57373;font-size:18px;" (click)="removeItem(i)">
+          <ion-icon name="trash-outline"></ion-icon>
+        </ion-button>
+      </div>
+      <div class="form-group">
+        <label>PRODUCT</label>
+        <select [(ngModel)]="item.productId" class="form-select">
+          <option *ngFor="let p of products" [value]="p.id">{{ p.name }}</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>QUANTITY</label>
+        <input type="number" [(ngModel)]="item.quantity" placeholder="1" class="form-input"/>
+      </div>
+      <div class="form-group">
+        <label>UNIT PRICE (RM)</label>
+        <input type="number" [(ngModel)]="item.unitPrice" placeholder="0.00" class="form-input"/>
+      </div>
+    </div>
+
+    <button class="save-btn" (click)="saveInvoice()">UPDATE INVOICE</button>
+  </div>
+
+  <ion-alert
+    [isOpen]="showDeleteAlert"
+    header="Delete Invoice"
+    [message]="'Delete ' + (selectedInvoice?.invoiceNumber || ('INV-' + selectedInvoice?.id)) + '?'"
+    [buttons]="deleteButtons"
+    (didDismiss)="showDeleteAlert=false">
+  </ion-alert>
+
+  <ion-toast [isOpen]="showToast" [message]="toastMessage" duration="2000" position="bottom" (didDismiss)="showToast=false"></ion-toast>
+
+</ion-content>
