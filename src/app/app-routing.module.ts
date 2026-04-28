@@ -11,6 +11,8 @@ const routes: Routes = [
   { path: 'pages/customers', loadComponent: () => import('./pages/customers/customers.page').then(m => m.CustomersPage) },
   { path: 'pages/customer-detail', loadComponent: () => import('./pages/customer-detail/customer-detail.page').then(m => m.CustomerDetailPage) },
   { path: 'pages/add-product', loadComponent: () => import('./pages/add-product/add-product.page').then(m => m.AddProductPage) },
+  { path: 'pages/setting', loadComponent: () => import('./pages/setting/setting.page').then(m => m.SettingPage) },
+  { path: 'pages/printer-setting', loadComponent: () => import('./pages/printer-setting/printer-setting.page').then(m => m.PrinterSettingPage) },
 ];
 
 @NgModule({

@@ -1,0 +1,125 @@
+<ion-content [fullscreen]="true">
+  <div class="setting-container">
+
+    <!-- Top Bar -->
+    <div class="top-bar">
+      <ion-button fill="clear" class="back-btn" (click)="goBack()">
+        <ion-icon name="chevron-back-outline"></ion-icon> Back
+      </ion-button>
+      <h2 class="page-title">Setting</h2>
+      <ion-button fill="clear" class="more-btn">
+        <ion-icon name="ellipsis-horizontal"></ion-icon>
+      </ion-button>
+    </div>
+
+    <!-- DEVICE CONTROL Section -->
+    <div class="section-label">DEVICE CONTROL</div>
+
+    <div class="list-section">
+
+      <!-- Device Auto-Blocking -->
+      <div class="list-item" [class.list-item--enabled]="deviceAutoBlocking" (click)="toggleDeviceAutoBlocking()">
+        <div class="list-item-left">
+          <div class="icon-wrap" [class.green]="deviceAutoBlocking">
+            <ion-icon name="lock-closed-outline"></ion-icon>
+          </div>
+          <div class="list-item-text">
+            <span class="list-item-title">Device Auto-Blocking</span>
+            <span class="list-item-sub">
+              STATUS: 
+              <span [class.status-enabled]="deviceAutoBlocking" [class.status-disabled]="!deviceAutoBlocking">
+                {{ deviceAutoBlocking ? 'ENABLED' : 'DISABLED' }}
+              </span>
+            </span>
+          </div>
+        </div>
+        <ion-icon name="chevron-forward-outline" class="chevron"></ion-icon>
+      </div>
+
+      <!-- Training Mode -->
+      <div class="list-item" [class.list-item--enabled]="trainingMode" (click)="toggleTrainingMode()">
+        <div class="list-item-left">
+          <div class="icon-wrap" [class.green]="trainingMode">
+            <ion-icon name="school-outline"></ion-icon>
+          </div>
+          <div class="list-item-text">
+            <span class="list-item-title">Training Mode</span>
+            <span class="list-item-sub">
+              STATUS:
+              <span [class.status-enabled]="trainingMode" [class.status-disabled]="!trainingMode">
+                {{ trainingMode ? 'ENABLED' : 'DISABLED' }}
+              </span>
+            </span>
+          </div>
+        </div>
+        <ion-icon name="chevron-forward-outline" class="chevron"></ion-icon>
+      </div>
+
+      <!-- Printer Setting -->
+      <div class="list-item" (click)="navigateTo('printer-setting')">
+        <div class="list-item-left">
+          <div class="icon-wrap orange">
+            <ion-icon name="print-outline"></ion-icon>
+          </div>
+          <div class="list-item-text">
+            <span class="list-item-title">Printer Setting</span>
+            <span class="list-item-sub orange-text">Configure output hardware</span>
+          </div>
+        </div>
+        <ion-icon name="chevron-forward-outline" class="chevron"></ion-icon>
+      </div>
+
+      <!-- POS Behavior -->
+      <div class="list-item" (click)="navigateTo('pos-behavior')">
+        <div class="list-item-left">
+          <div class="icon-wrap">
+            <ion-icon name="phone-portrait-outline"></ion-icon>
+          </div>
+          <div class="list-item-text">
+            <span class="list-item-title">POS Behavior</span>
+          </div>
+        </div>
+        <ion-icon name="chevron-forward-outline" class="chevron"></ion-icon>
+      </div>
+
+    </div>
+
+    <!-- SETTING Section (grid) -->
+    <div class="section-label" style="margin-top: 32px;">SETTING</div>
+
+    <div class="setting-grid">
+
+      <div class="setting-card" (click)="navigateTo('my-company')">
+        <ion-icon name="business-outline" class="setting-card-icon"></ion-icon>
+        <span class="setting-card-label">MY COMPANY</span>
+      </div>
+
+      <div class="setting-card" (click)="navigateTo('initial-customer')">
+        <span class="setting-card-icon percent-icon">%</span>
+        <span class="setting-card-label">INITIAL CUSTOMER</span>
+      </div>
+
+      <div class="setting-card" (click)="navigateTo('customers')">
+        <ion-icon name="people-outline" class="setting-card-icon"></ion-icon>
+        <span class="setting-card-label">CUSTOMERS</span>
+      </div>
+
+      <div class="setting-card" (click)="navigateTo('bill-constraints')">
+        <ion-icon name="document-text-outline" class="setting-card-icon"></ion-icon>
+        <span class="setting-card-label">BILL CONSTRAINTS</span>
+      </div>
+
+      <div class="setting-card" (click)="navigateTo('invoice-terms')">
+        <ion-icon name="clipboard-outline" class="setting-card-icon"></ion-icon>
+        <span class="setting-card-label">INVOICE TERMS</span>
+      </div>
+
+      <div class="setting-card" (click)="navigateTo('configuration')">
+        <ion-icon name="options-outline" class="setting-card-icon"></ion-icon>
+        <span class="setting-card-label">CONFIGURATION</span>
+      </div>
+
+    </div>
+
+  </div>
+</ion-content>
