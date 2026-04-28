@@ -1,11 +1,5 @@
-<ion-content [fullscreen]="true">
+﻿<ion-content [fullscreen]="true">
   <div class="home-container">
-
-    <div class="top-bar">
-      <ion-button fill="clear" class="search-btn">
-        <ion-icon name="search-outline"></ion-icon>
-      </ion-button>
-    </div>
 
     <div class="header">
       <p class="section-label">BUSINESS</p>
@@ -21,7 +15,7 @@
         </div>
       </div>
 
-      <div class="card card-half card-pink" (click)="goTo('pages/products')">
+      <div class="card card-half card-pink" (click)="goTo('pages/add-product')">
         <div class="card-content">
           <span class="card-title">Item<br>Group</span>
           <ion-icon name="layers-outline" class="card-icon-bg"></ion-icon>
@@ -35,7 +29,7 @@
         </div>
       </div>
 
-      <div class="card card-half card-purple" (click)="goTo('pages/customers')">
+      <div class="card card-half card-purple" (click)="goTo('pages/customer-detail')">
         <div class="card-content">
           <span class="card-title">Customer<br>Category</span>
           <ion-icon name="people-outline" class="card-icon-bg"></ion-icon>

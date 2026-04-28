@@ -1,13 +1,9 @@
-<ion-content [fullscreen]="true">
+﻿<ion-content [fullscreen]="true">
 
-  <!-- HOME -->
   <div *ngIf="currentView==='home'" class="page-container">
     <div class="top-bar">
       <ion-button fill="clear" class="back-btn" (click)="goBack()">
         <ion-icon name="chevron-back-outline"></ion-icon> Back
-      </ion-button>
-      <ion-button fill="clear" class="more-btn">
-        <ion-icon name="ellipsis-horizontal"></ion-icon>
       </ion-button>
     </div>
     <div class="header">
@@ -51,7 +47,6 @@
     </div>
   </div>
 
-  <!-- NEW PAYMENT -->
   <div *ngIf="currentView==='newPayment'" class="page-container">
     <div class="top-bar">
       <ion-button fill="clear" class="back-btn" (click)="goHome()">
@@ -96,7 +91,6 @@
     <button class="save-btn" (click)="savePayment()">CREATE PAYMENT</button>
   </div>
 
-  <!-- NEW CREDIT NOTE -->
   <div *ngIf="currentView==='newCN'" class="page-container">
     <div class="top-bar">
       <ion-button fill="clear" class="back-btn" (click)="goHome()">
@@ -127,7 +121,6 @@
     <button class="save-btn" (click)="saveCreditNote()">CREATE CREDIT NOTE</button>
   </div>
 
-  <!-- PAYMENT LIST -->
   <div *ngIf="currentView==='paymentList'" class="page-container">
     <div class="top-bar">
       <ion-button fill="clear" class="back-btn" (click)="goHome()">
@@ -164,7 +157,6 @@
     </div>
   </div>
 
-  <!-- CN LIST -->
   <div *ngIf="currentView==='cnList'" class="page-container">
     <div class="top-bar">
       <ion-button fill="clear" class="back-btn" (click)="goHome()">
@@ -184,6 +176,7 @@
           <div class="item-avatar"><ion-icon name="document-outline"></ion-icon></div>
           <div>
             <div class="item-name">{{ cn.cnNumber || 'CN-' + cn.id }}</div>
+            <div class="item-sub">{{ cn.invoiceNumber }}</div>
             <div class="item-sub">RM {{ cn.amount | number:'1.2-2' }}</div>
             <div class="item-sub">{{ cn.reason }}</div>
             <div class="item-sub">{{ cn.createdAt | date:'dd/MM/yyyy HH:mm' }}</div>
@@ -201,7 +194,6 @@
     </div>
   </div>
 
-  <!-- BOTTOM NAV -->
   <div *ngIf="currentView==='home'" class="bottom-nav">
     <ion-button fill="clear" class="nav-btn" (click)="goTo('pages/home')">
       <ion-icon name="home-outline"></ion-icon>

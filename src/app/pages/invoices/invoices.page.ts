@@ -19,6 +19,8 @@ export class InvoicesPage implements OnInit {
   products: any[] = [];
   isLoading = false;
   showModal = false;
+  showSearch = false;
+  searchTerm = '';
   isEditing = false;
   selectedInvoice: any = null;
   showDeleteAlert = false;
@@ -38,7 +40,11 @@ export class InvoicesPage implements OnInit {
   loadInvoices() {
     this.isLoading = true;
     this.api.getInvoices().subscribe({
-      next: (res) => { this.invoices = Array.isArray(res) ? res : []; this.invoices.forEach((inv: any) => { inv.hasCreditNote = inv.hasCreditNote || false; }); this.filteredInvoices = [...this.invoices]; console.log("invoices:", JSON.stringify(this.invoices.map((i:any) => ({id:i.id, hasCreditNote:i.hasCreditNote})))); this.isLoading = false; },
+      next: (res) => {
+        this.invoices = Array.isArray(res) ? res : [];
+        this.filteredInvoices = [...this.invoices];
+        this.isLoading = false;
+      },
       error: () => { this.isLoading = false; this.showToastMsg('Failed to load invoices'); }
     });
   }
@@ -55,6 +61,18 @@ export class InvoicesPage implements OnInit {
       next: (res) => { this.products = Array.isArray(res) ? res : []; },
       error: () => {}
     });
+  }
+
+  toggleSearch() {
+    this.showSearch = !this.showSearch;
+    if (!this.showSearch) { this.searchTerm = ''; this.filteredInvoices = [...this.invoices]; }
+  }
+
+  filterInvoices() {
+    this.filteredInvoices = this.invoices.filter(inv =>
+      (inv.invoiceNumber || '').toLowerCase().includes(this.searchTerm.toLowerCase()) ||
+      (inv.customerName || '').toLowerCase().includes(this.searchTerm.toLowerCase())
+    );
   }
 
   openAddModal() {

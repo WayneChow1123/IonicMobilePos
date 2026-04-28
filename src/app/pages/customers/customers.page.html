@@ -23,7 +23,7 @@
 
     <div class="tab-row">
       <button [class.tab-active]="activeTab==='ALL'" class="tab-btn" (click)="setTab('ALL')">ALL</button>
-      <button [class.tab-active]="activeTab==='DEFAULT'" class="tab-btn" (click)="setTab('DEFAULT')">DEFAULT</button>
+      
     </div>
 
     <div *ngIf="isLoading" style="display:flex;justify-content:center;padding:60px;">

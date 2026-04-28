@@ -1,0 +1,85 @@
+ion-content { --background: #F0EBE3; }
+.page-container { padding: 16px 20px 100px; }
+.top-bar { display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; }
+.back-btn { --color:#1a1a1a; --padding-start:0; font-size:15px; font-weight:600; }
+.page-title { font-size:17px; font-weight:700; color:#1a1a1a; }
+
+.customer-card {
+  background:#fff;
+  border-radius:20px;
+  padding:16px;
+  margin-bottom:12px;
+  cursor:pointer;
+
+  .customer-header {
+    display:flex;
+    align-items:center;
+    gap:12px;
+    margin-bottom:12px;
+
+    .customer-avatar {
+      width:44px;
+      height:44px;
+      background:#F0EBE3;
+      border-radius:12px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      flex-shrink:0;
+      ion-icon { font-size:22px; color:#888; }
+    }
+
+    .customer-info { flex:1; }
+    .customer-name { font-size:14px; font-weight:700; color:#1a1a1a; }
+    .customer-sub { font-size:12px; color:#888; margin-top:2px; }
+  }
+
+  .balance-row {
+    display:flex;
+    gap:8px;
+    background:#F0EBE3;
+    border-radius:12px;
+    padding:10px 12px;
+
+    .balance-item {
+      flex:1;
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      gap:4px;
+
+      .balance-label { font-size:10px; color:#888; font-weight:600; }
+      .balance-value { font-size:12px; font-weight:700; color:#1a1a1a; &.paid { color:#27ae60; } }
+    }
+  }
+}
+
+.summary-card {
+  background:#fff;
+  border-radius:20px;
+  padding:16px;
+  margin-bottom:16px;
+
+  .summary-row {
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-bottom:8px;
+    .summary-label { font-size:13px; color:#888; font-weight:600; }
+    .summary-value { font-size:14px; font-weight:700; color:#1a1a1a; &.paid { color:#27ae60; } }
+  }
+
+  .divider { height:1px; background:#F0EBE3; margin:8px 0; }
+}
+
+.section-title { font-size:16px; font-weight:700; color:#1a1a1a; margin-bottom:12px; }
+
+.list-item { background:#fff; border-radius:16px; padding:12px 16px; display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+.item-info { display:flex; align-items:center; gap:12px; flex:1; }
+.item-avatar { width:44px; height:44px; background:#F0EBE3; border-radius:12px; display:flex; align-items:center; justify-content:center; ion-icon { font-size:22px; color:#888; } &.paid { background:#d4edda; ion-icon { color:#27ae60; } } &.partial { background:#fff3cd; ion-icon { color:#f39c12; } } }
+.item-name { font-size:14px; font-weight:700; color:#1a1a1a; }
+.item-sub { font-size:12px; color:#888; margin-top:2px; }
+
+.status-badge { font-size:10px; font-weight:700; padding:3px 10px; border-radius:50px; &.paid { background:#d4edda; color:#27ae60; } &.partial { background:#fff3cd; color:#f39c12; } &.unpaid { background:#f8d7da; color:#c0392b; } }
+
+.empty-state { display:flex; flex-direction:column; align-items:center; padding:60px 20px; color:#aaa; ion-icon { font-size:48px; margin-bottom:12px; } p { font-size:14px; } }

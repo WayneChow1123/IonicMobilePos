@@ -16,6 +16,7 @@ export class ProductsPage implements OnInit {
   products: any[] = [];
   filteredProducts: any[] = [];
   categories: any[] = [];
+  categoryTabs: string[] = ['ALL', 'DEFAULT'];
   isLoading = false;
   showSearch = false;
   searchTerm = '';
@@ -26,19 +27,7 @@ export class ProductsPage implements OnInit {
   showDeleteAlert = false;
   showToast = false;
   toastMessage = '';
-  form: any = {
-    name: '',
-    description: '',
-    barcode: '',
-    category: '',
-    uom: 'UNIT',
-    price: 0,
-    rate: 1,
-    cost: 0,
-    lowestPrice: 0,
-    stock: 0,
-    includeTax: false
-  };
+  form: any = { name: '', description: '', barcode: '', category: 'DEFAULT', uom: 'UNIT', price: 0, rate: 1, cost: 0, lowestPrice: 0, stock: 0, includeTax: false };
   deleteButtons = [
     { text: 'Cancel', role: 'cancel' },
     { text: 'Delete', role: 'destructive', handler: () => this.deleteProduct() }
@@ -58,32 +47,43 @@ export class ProductsPage implements OnInit {
 
   loadCategories() {
     this.api.getCategories().subscribe({
-      next: (res) => { this.categories = Array.isArray(res) ? res : []; },
+      next: (res) => {
+        this.categories = Array.isArray(res) ? res : [];
+        const catNames = this.categories.map((c: any) => c.categoryName || c.name).filter(c => c && c !== 'DEFAULT');
+        this.categoryTabs = ['ALL', 'DEFAULT', ...catNames];
+      },
       error: () => {}
     });
   }
 
   filterProducts() {
-    this.filteredProducts = this.products.filter(p =>
-      (p.name || '').toLowerCase().includes(this.searchTerm.toLowerCase()) ||
-      (p.barcode || '').toLowerCase().includes(this.searchTerm.toLowerCase())
-    );
+    let filtered = [...this.products];
+    if (this.activeTab !== 'ALL') {
+      filtered = filtered.filter(p => (p.category || 'DEFAULT') === this.activeTab);
+    }
+    if (this.searchTerm) {
+      filtered = filtered.filter(p =>
+        (p.name || '').toLowerCase().includes(this.searchTerm.toLowerCase()) ||
+        (p.barcode || '').toLowerCase().includes(this.searchTerm.toLowerCase())
+      );
+    }
+    this.filteredProducts = filtered;
   }
 
   setTab(tab: string) {
     this.activeTab = tab;
-    this.filteredProducts = tab === 'ALL' ? [...this.products] : this.products.filter(p => p.category === 'DEFAULT' || !p.category);
+    this.filterProducts();
   }
 
   toggleSearch() {
     this.showSearch = !this.showSearch;
-    if (!this.showSearch) { this.searchTerm = ''; this.filteredProducts = [...this.products]; }
+    if (!this.showSearch) { this.searchTerm = ''; this.filterProducts(); }
   }
 
   openAddModal() {
     this.isEditing = false;
     this.selectedProduct = null;
-    this.form = { name: '', description: '', barcode: '', category: '', uom: 'UNIT', price: 0, rate: 1, cost: 0, lowestPrice: 0, stock: 0, includeTax: false };
+    this.form = { name: '', description: '', barcode: '', category: 'DEFAULT', uom: 'UNIT', price: 0, rate: 1, cost: 0, lowestPrice: 0, stock: 0, includeTax: false };
     this.showModal = true;
   }
 
@@ -94,7 +94,7 @@ export class ProductsPage implements OnInit {
       name: product.name || '',
       description: product.description || '',
       barcode: product.barcode || '',
-      category: product.category || '',
+      category: product.category || 'DEFAULT',
       uom: product.uom || 'UNIT',
       price: product.price || 0,
       rate: product.rate || 1,
@@ -110,6 +110,7 @@ export class ProductsPage implements OnInit {
 
   saveProduct() {
     if (!this.form.name) { this.showToastMsg('Product name is required'); return; }
+    if (!this.form.category) this.form.category = 'DEFAULT';
     if (this.isEditing && this.selectedProduct) {
       this.api.editProduct(this.selectedProduct.id, this.form).subscribe({
         next: () => { this.showToastMsg('Product updated!'); this.closeModal(); this.loadProducts(); },

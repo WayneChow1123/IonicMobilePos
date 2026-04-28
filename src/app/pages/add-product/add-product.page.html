@@ -1,13 +1,76 @@
-<ion-header [translucent]="true">
-  <ion-toolbar>
-    <ion-title>add-product</ion-title>
-  </ion-toolbar>
-</ion-header>
-
 <ion-content [fullscreen]="true">
-  <ion-header collapse="condense">
-    <ion-toolbar>
-      <ion-title size="large">add-product</ion-title>
-    </ion-toolbar>
-  </ion-header>
+
+  <div *ngIf="!showModal" class="page-container">
+    <div class="top-bar">
+      <ion-button fill="clear" class="back-btn" (click)="goBack()">
+        <ion-icon name="chevron-back-outline"></ion-icon> Back
+      </ion-button>
+      <span class="page-title">Item Group</span>
+      <ion-button fill="clear" class="icon-btn" (click)="openAddModal()">
+        <ion-icon name="add-outline"></ion-icon>
+      </ion-button>
+    </div>
+
+    <div *ngIf="isLoading" style="display:flex;justify-content:center;padding:60px;">
+      <ion-spinner name="crescent"></ion-spinner>
+    </div>
+
+    <div *ngIf="!isLoading">
+      <div *ngFor="let category of categories" class="list-item">
+        <div class="item-info" (click)="openEditModal(category)">
+          <div class="item-avatar"><ion-icon name="layers-outline"></ion-icon></div>
+          <div>
+            <div class="item-name">{{ category.categoryName || category.name }}</div>
+            <div class="item-sub">Code: {{ category.code || '-' }}</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:4px;">
+          <ion-button fill="clear" style="--color:#5c85d6;" (click)="openEditModal(category)">
+            <ion-icon name="create-outline"></ion-icon>
+          </ion-button>
+          <ion-button fill="clear" style="--color:#e57373;" (click)="confirmDelete(category)">
+            <ion-icon name="trash-outline"></ion-icon>
+          </ion-button>
+        </div>
+      </div>
+
+      <div *ngIf="categories.length===0" class="empty-state">
+        <ion-icon name="layers-outline"></ion-icon>
+        <p>No categories found</p>
+        <button class="save-btn" (click)="openAddModal()">Add Category</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ADD/EDIT FORM -->
+  <div *ngIf="showModal" class="page-container">
+    <div class="top-bar">
+      <ion-button fill="clear" class="back-btn" (click)="closeModal()">
+        <ion-icon name="chevron-back-outline"></ion-icon> Back
+      </ion-button>
+      <span class="page-title">{{ isEditing ? 'Edit Category' : 'Add Category' }}</span>
+      <ion-button fill="clear" class="icon-btn" (click)="saveCategory()">
+        <ion-icon name="save-outline"></ion-icon>
+      </ion-button>
+    </div>
+
+    <div class="form-card" style="background:#E8D5D0;">
+      <div class="form-group">
+        <label>CATEGORY NAME *</label>
+        <input type="text" [(ngModel)]="form.categoryName" placeholder="Enter category name" class="form-input"/>
+      </div>
+      <div class="form-group">
+        <label>CODE</label>
+        <input type="text" [(ngModel)]="form.code" placeholder="Enter code" class="form-input"/>
+      </div>
+    </div>
+
+    <button class="save-btn" (click)="saveCategory()">
+      {{ isEditing ? 'UPDATE CATEGORY' : 'CREATE CATEGORY' }}
+    </button>
+  </div>
+
+  <ion-alert [isOpen]="showDeleteAlert" header="Delete Category" message="Are you sure?" [buttons]="deleteButtons" (didDismiss)="showDeleteAlert=false"></ion-alert>
+  <ion-toast [isOpen]="showToast" [message]="toastMessage" duration="2000" position="bottom" (didDismiss)="showToast=false"></ion-toast>
+
 </ion-content>
