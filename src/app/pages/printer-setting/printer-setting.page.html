@@ -1,0 +1,97 @@
+<ion-content [fullscreen]="true">
+  <div class="ps-container">
+
+    <!-- Top Bar -->
+    <div class="top-bar">
+      <ion-button fill="clear" class="back-btn" (click)="goBack()">
+        <ion-icon name="chevron-back-outline"></ion-icon> Back
+      </ion-button>
+      <ion-button class="save-btn" (click)="saveSettings()">
+        SAVE SETTINGS
+      </ion-button>
+    </div>
+
+    <!-- PRINTER PREFERENCES -->
+    <div class="section-label">PRINTER PREFERENCES</div>
+
+    <div class="pref-row">
+      <!-- Paper Width Card -->
+      <div class="paper-width-card" (click)="togglePaperWidth()">
+        <span class="pw-label">PAPER WIDTH</span>
+        <span class="pw-value">{{ paperWidth }} mm <span class="pw-dot">●</span></span>
+        <span class="pw-hint">Click to switch 58/80mm</span>
+      </div>
+
+      <!-- Bottom Empty Line -->
+      <div class="empty-line-card">
+        <span class="el-label">BOTTOM EMPTY LINE</span>
+        <input type="number" class="el-input" [(ngModel)]="bottomEmptyLine" />
+      </div>
+    </div>
+
+    <!-- HARDWARE & CONNECTION -->
+    <div class="section-label" style="margin-top: 28px;">HARDWARE & CONNECTION</div>
+
+    <div class="hw-card">
+      <!-- Printer Interface -->
+      <span class="hw-sub-label">PRINTER INTERFACE</span>
+      <div class="interface-btns">
+        <button
+          *ngFor="let iface of interfaces"
+          class="iface-btn"
+          [class.active]="printerInterface === iface"
+          (click)="printerInterface = iface">
+          {{ iface }}
+        </button>
+      </div>
+
+      <!-- Printer Type / Connection Type -->
+      <div class="type-row">
+        <div class="type-col">
+          <span class="hw-sub-label">PRINTER TYPE</span>
+          <div class="type-value">{{ printerType }}</div>
+        </div>
+        <div class="type-col">
+          <span class="hw-sub-label">CONNECTION TYPE</span>
+          <div class="type-value">{{ connectionType }}</div>
+        </div>
+      </div>
+
+      <!-- MAC Address -->
+      <div class="mac-section">
+        <span class="mac-label">MAC ADDRESS</span>
+        <div class="mac-row">
+          <span class="mac-value">{{ macAddress }}</span>
+          <ion-button fill="clear" class="mac-refresh" (click)="refreshMac()">
+            <ion-icon name="sync-outline"></ion-icon>
+          </ion-button>
+        </div>
+      </div>
+    </div>
+
+    <!-- CONTENT OPTIONS -->
+    <div class="content-options-header">
+      <span class="section-label" style="margin-bottom: 0;">CONTENT OPTIONS</span>
+      <div class="format-selector">
+        <span class="format-label">FORMAT:</span>
+        <select class="format-select" [(ngModel)]="selectedFormat" (change)="onFormatChange()">
+          <option *ngFor="let f of formats" [value]="f">{{ f }}</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="toggles-card">
+      <div class="toggle-row" *ngFor="let opt of contentOptions">
+        <div class="toggle-left">
+          <span class="toggle-dot" [class.on]="opt.enabled"></span>
+          <span class="toggle-name">{{ opt.name }}</span>
+        </div>
+        <label class="switch">
+          <input type="checkbox" [(ngModel)]="opt.enabled" />
+          <span class="slider"></span>
+        </label>
+      </div>
+    </div>
+
+  </div>
+</ion-content>
