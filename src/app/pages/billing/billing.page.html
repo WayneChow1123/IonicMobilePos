@@ -75,7 +75,7 @@
     <div class="form-card" style="background:#C5C8E0;">
       <div class="form-group">
         <label>AMOUNT (RM) *</label>
-        <input type="number" [(ngModel)]="paymentForm.amount" placeholder="0.00" class="form-input"/>
+        <input type="number" [(ngModel)]="paymentForm.amount" placeholder="0.00" class="form-input" min="0"/>
       </div>
       <div class="form-group">
         <label>PAYMENT METHOD</label>
@@ -111,7 +111,7 @@
       </div>
       <div class="form-group">
         <label>AMOUNT (RM) *</label>
-        <input type="number" [(ngModel)]="cnForm.amount" placeholder="0.00" class="form-input"/>
+        <input type="number" [(ngModel)]="cnForm.amount" placeholder="0.00" class="form-input" min="0"/>
       </div>
       <div class="form-group">
         <label>REASON *</label>
@@ -131,11 +131,12 @@
         <ion-icon name="add-outline"></ion-icon>
       </ion-button>
     </div>
+    <ion-searchbar [(ngModel)]="paymentSearchTerm" (ionInput)="filterPayments()" placeholder="Search customer / invoice / ref..." style="--background:#fff;--border-radius:16px;--box-shadow:none;padding:0;margin-bottom:12px;"></ion-searchbar>
     <div *ngIf="isLoading" style="display:flex;justify-content:center;padding:60px;">
       <ion-spinner name="crescent"></ion-spinner>
     </div>
     <div *ngIf="!isLoading">
-      <div *ngFor="let payment of payments" class="list-item">
+      <div *ngFor="let payment of filteredPayments" class="list-item">
         <div class="item-info">
           <div class="item-avatar"><ion-icon name="wallet-outline"></ion-icon></div>
           <div>
@@ -149,7 +150,7 @@
           <ion-icon name="trash-outline"></ion-icon>
         </ion-button>
       </div>
-      <div *ngIf="payments.length===0" class="empty-state">
+      <div *ngIf="filteredPayments.length===0" class="empty-state">
         <ion-icon name="wallet-outline"></ion-icon>
         <p>No payments found</p>
         <button class="save-btn" (click)="openNewPayment()">New Payment</button>
@@ -167,16 +168,18 @@
         <ion-icon name="add-outline"></ion-icon>
       </ion-button>
     </div>
+    <ion-searchbar [(ngModel)]="cnSearchTerm" (ionInput)="filterCreditNotes()" placeholder="Search CN / invoice / customer..." style="--background:#fff;--border-radius:16px;--box-shadow:none;padding:0;margin-bottom:12px;"></ion-searchbar>
     <div *ngIf="isLoading" style="display:flex;justify-content:center;padding:60px;">
       <ion-spinner name="crescent"></ion-spinner>
     </div>
     <div *ngIf="!isLoading">
-      <div *ngFor="let cn of creditNotes" class="list-item">
+      <div *ngFor="let cn of filteredCreditNotes" class="list-item">
         <div class="item-info">
           <div class="item-avatar"><ion-icon name="document-outline"></ion-icon></div>
           <div>
             <div class="item-name">{{ cn.cnNumber || 'CN-' + cn.id }}</div>
             <div class="item-sub">{{ cn.invoiceNumber }}</div>
+            <div class="item-sub">{{ cn.customerName }}</div>
             <div class="item-sub">RM {{ cn.amount | number:'1.2-2' }}</div>
             <div class="item-sub">{{ cn.reason }}</div>
             <div class="item-sub">{{ cn.createdAt | date:'dd/MM/yyyy HH:mm' }}</div>
@@ -186,7 +189,7 @@
           <ion-icon name="trash-outline"></ion-icon>
         </ion-button>
       </div>
-      <div *ngIf="creditNotes.length===0" class="empty-state">
+      <div *ngIf="filteredCreditNotes.length===0" class="empty-state">
         <ion-icon name="document-outline"></ion-icon>
         <p>No credit notes found</p>
         <button class="save-btn" (click)="openNewCN()">New Credit Note</button>

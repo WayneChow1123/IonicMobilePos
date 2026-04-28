@@ -127,6 +127,12 @@ export class InvoicesPage implements OnInit {
   }
 
   saveInvoice() {
+    // Validate items
+    const items = this.isEditing ? this.editForm.items : this.form.items;
+    for (const item of items) {
+      if (!item.quantity || item.quantity <= 0) { this.showToastMsg("Quantity must be greater than 0"); return; }
+      if (this.isEditing && item.unitPrice !== undefined && item.unitPrice <= 0) { this.showToastMsg("Unit price must be greater than 0"); return; }
+    }
     if (this.isEditing && this.selectedInvoice) {
       this.api.updateInvoice(this.selectedInvoice.id, this.editForm).subscribe({
         next: () => { this.showToastMsg('Invoice updated!'); this.closeModal(); this.loadInvoices(); },

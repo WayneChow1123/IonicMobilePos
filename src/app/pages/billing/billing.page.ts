@@ -14,7 +14,9 @@ import { ApiService } from '../../services/api.service';
 })
 export class BillingPage implements OnInit {
   payments: any[] = [];
+  filteredPayments: any[] = [];
   creditNotes: any[] = [];
+  filteredCreditNotes: any[] = [];
   customers: any[] = [];
   invoices: any[] = [];
   isLoading = false;
@@ -25,6 +27,8 @@ export class BillingPage implements OnInit {
   toastMessage = '';
   selectedPayment: any = null;
   selectedCN: any = null;
+  paymentSearchTerm = '';
+  cnSearchTerm = '';
   paymentForm: any = { customerId: 0, invoiceId: 0, amount: 0, method: 'Cash', referenceNo: '' };
   cnForm: any = { invoiceId: 0, amount: 0, reason: '' };
   paymentMethods = ['Cash', 'Card', 'Online Transfer', 'Cheque'];
@@ -66,7 +70,11 @@ export class BillingPage implements OnInit {
   loadPayments() {
     this.isLoading = true;
     this.api.getPayments().subscribe({
-      next: (res) => { this.payments = Array.isArray(res) ? res : []; this.isLoading = false; },
+      next: (res) => {
+        this.payments = Array.isArray(res) ? res : [];
+        this.filteredPayments = [...this.payments];
+        this.isLoading = false;
+      },
       error: () => { this.isLoading = false; }
     });
   }
@@ -74,9 +82,30 @@ export class BillingPage implements OnInit {
   loadCreditNotes() {
     this.isLoading = true;
     this.api.getAllCreditNotes().subscribe({
-      next: (res) => { this.creditNotes = Array.isArray(res) ? res : []; this.isLoading = false; },
+      next: (res) => {
+        this.creditNotes = Array.isArray(res) ? res : [];
+        this.filteredCreditNotes = [...this.creditNotes];
+        this.isLoading = false;
+      },
       error: () => { this.isLoading = false; }
     });
+  }
+
+  filterPayments() {
+    this.filteredPayments = this.payments.filter(p =>
+      (p.customerName || '').toLowerCase().includes(this.paymentSearchTerm.toLowerCase()) ||
+      (p.invoiceNumber || '').toLowerCase().includes(this.paymentSearchTerm.toLowerCase()) ||
+      (p.referenceNo || '').toLowerCase().includes(this.paymentSearchTerm.toLowerCase())
+    );
+  }
+
+  filterCreditNotes() {
+    this.filteredCreditNotes = this.creditNotes.filter(cn =>
+      (cn.cnNumber || '').toLowerCase().includes(this.cnSearchTerm.toLowerCase()) ||
+      (cn.invoiceNumber || '').toLowerCase().includes(this.cnSearchTerm.toLowerCase()) ||
+      (cn.customerName || '').toLowerCase().includes(this.cnSearchTerm.toLowerCase()) ||
+      (cn.reason || '').toLowerCase().includes(this.cnSearchTerm.toLowerCase())
+    );
   }
 
   goHome() { this.currentView = 'home'; }
@@ -93,8 +122,8 @@ export class BillingPage implements OnInit {
     this.currentView = 'newCN';
   }
 
-  openPaymentList() { this.loadPayments(); this.currentView = 'paymentList'; }
-  openCNList() { this.loadCreditNotes(); this.currentView = 'cnList'; }
+  openPaymentList() { this.paymentSearchTerm = ''; this.loadPayments(); this.currentView = 'paymentList'; }
+  openCNList() { this.cnSearchTerm = ''; this.loadCreditNotes(); this.currentView = 'cnList'; }
 
   onCustomerChange() {
     if (this.paymentForm.customerId) {
@@ -105,7 +134,7 @@ export class BillingPage implements OnInit {
   savePayment() {
     if (!this.paymentForm.customerId) { this.showToastMsg('Please select a customer'); return; }
     if (!this.paymentForm.invoiceId || this.paymentForm.invoiceId == 0) { this.showToastMsg('Please select an invoice'); return; }
-    if (!this.paymentForm.amount || this.paymentForm.amount <= 0) { this.showToastMsg('Please enter valid amount'); return; }
+    if (!this.paymentForm.amount || this.paymentForm.amount <= 0 || isNaN(this.paymentForm.amount)) { this.showToastMsg('Amount must be greater than 0'); return; }
     const payload = {
       customerId: Number(this.paymentForm.customerId),
       invoiceId: Number(this.paymentForm.invoiceId),
@@ -121,7 +150,7 @@ export class BillingPage implements OnInit {
 
   saveCreditNote() {
     if (!this.cnForm.invoiceId || this.cnForm.invoiceId == 0) { this.showToastMsg('Please select an invoice'); return; }
-    if (!this.cnForm.amount || this.cnForm.amount <= 0) { this.showToastMsg('Please enter valid amount'); return; }
+    if (!this.cnForm.amount || this.cnForm.amount <= 0 || isNaN(this.cnForm.amount)) { this.showToastMsg('Amount must be greater than 0'); return; }
     if (!this.cnForm.reason) { this.showToastMsg('Please enter reason'); return; }
     const payload = { amount: Number(this.cnForm.amount), reason: this.cnForm.reason };
     this.api.createCreditNote(Number(this.cnForm.invoiceId), payload).subscribe({

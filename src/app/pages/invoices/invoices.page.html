@@ -121,6 +121,10 @@
 
   <!-- EDIT FORM -->
   <div *ngIf="showModal && isEditing" class="page-container">
+    <div *ngIf="selectedInvoice?.status==='Paid'" style="background:#f8d7da;border-radius:16px;padding:14px 16px;margin-bottom:12px;display:flex;align-items:center;gap:10px;">
+      <ion-icon name="lock-closed-outline" style="font-size:20px;color:#c0392b;"></ion-icon>
+      <span style="font-size:14px;font-weight:700;color:#c0392b;">This invoice is fully paid and cannot be edited</span>
+    </div>
     <div class="top-bar">
       <ion-button fill="clear" class="back-btn" (click)="closeModal()">
         <ion-icon name="chevron-back-outline"></ion-icon> Back
