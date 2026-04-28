@@ -144,6 +144,7 @@
             <div class="item-sub">{{ payment.invoiceNumber }}</div>
             <div class="item-sub">RM {{ payment.amount | number:'1.2-2' }} | {{ payment.method }}</div>
             <div class="item-sub">{{ payment.paymentDate | date:'dd/MM/yyyy HH:mm' }}</div>
+            <div class="item-sub" *ngIf="payment.referenceNo">Ref: {{ payment.referenceNo }}</div>
           </div>
         </div>
         <ion-button fill="clear" style="--color:#e57373;" (click)="confirmDeletePayment(payment)">

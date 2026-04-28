@@ -1,12 +1,9 @@
-<ion-content [fullscreen]="true">
-  <div class="pref-container">
+﻿<ion-content [fullscreen]="true">
 
+  <div *ngIf="!showExportModal" class="pref-container">
     <div class="top-bar">
       <ion-button fill="clear" class="back-btn" (click)="goBack()">
         <ion-icon name="chevron-back-outline"></ion-icon> Back
-      </ion-button>
-      <ion-button fill="clear" class="more-btn">
-        <ion-icon name="ellipsis-horizontal"></ion-icon>
       </ion-button>
     </div>
 
@@ -22,8 +19,7 @@
           <ion-icon name="server-outline" class="card-icon-bg"></ion-icon>
         </div>
       </div>
-
-      <div class="card card-half card-blue" (click)="exportBills()">
+      <div class="card card-half card-blue" (click)="openExportModal()">
         <div class="card-content">
           <span class="card-title">Export<br>Bills</span>
           <ion-icon name="cloud-upload-outline" class="card-icon-bg"></ion-icon>
@@ -33,7 +29,7 @@
 
     <div class="section-title">System</div>
     <div class="system-list">
-      <div class="system-item" (click)="goTo('pages/setting')">
+      <div class="system-item">
         <div class="system-item-left">
           <ion-icon name="settings-outline"></ion-icon>
           <span>Setting</span>
@@ -41,12 +37,98 @@
         <ion-icon name="arrow-forward-outline"></ion-icon>
       </div>
     </div>
+  </div>
 
-    <ion-toast [isOpen]="showToast" [message]="toastMessage" duration="2000" position="bottom" (didDismiss)="showToast=false"></ion-toast>
+  <!-- EXPORT PAGE -->
+  <div *ngIf="showExportModal" style="padding:16px 20px 100px;">
+
+    <div style="display:flex;align-items:center;margin-bottom:24px;">
+      <ion-button fill="clear" style="--color:#1a1a1a;--padding-start:0;font-size:15px;font-weight:600;" (click)="closeExportModal()">
+        <ion-icon name="chevron-back-outline"></ion-icon> Back
+      </ion-button>
+      <span style="font-size:17px;font-weight:700;color:#1a1a1a;margin-left:8px;">Export Bills</span>
+    </div>
+
+    <!-- TAB -->
+    <div style="display:flex;gap:8px;margin-bottom:20px;">
+      <button (click)="exportType='all'; onExportTypeChange()" [style.background]="exportType==='all' ? '#1a1a1a' : '#fff'" [style.color]="exportType==='all' ? '#fff' : '#1a1a1a'" style="border:none;border-radius:50px;padding:8px 20px;font-size:13px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;">All</button>
+      <button (click)="exportType='customer'; onExportTypeChange()" [style.background]="exportType==='customer' ? '#1a1a1a' : '#fff'" [style.color]="exportType==='customer' ? '#fff' : '#1a1a1a'" style="border:none;border-radius:50px;padding:8px 20px;font-size:13px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;">By Customer</button>
+      <button (click)="exportType='single'; onExportTypeChange()" [style.background]="exportType==='single' ? '#1a1a1a' : '#fff'" [style.color]="exportType==='single' ? '#fff' : '#1a1a1a'" style="border:none;border-radius:50px;padding:8px 20px;font-size:13px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;">Single</button>
+    </div>
+
+    <!-- ALL -->
+    <div *ngIf="exportType==='all'">
+      <div style="background:#fff;border-radius:16px;padding:14px 16px;margin-bottom:10px;text-align:center;">
+        <ion-icon name="documents-outline" style="font-size:36px;color:#888;"></ion-icon>
+        <p style="font-size:14px;font-weight:600;color:#1a1a1a;margin:8px 0 4px;">Export All Invoices</p>
+        <p style="font-size:12px;color:#888;margin:0;">{{ invoices.length }} invoices will be exported</p>
+      </div>
+      <button (click)="exportPDF()" style="width:100%;background:#1a1a1a;color:#fff;border:none;border-radius:16px;padding:16px;font-size:15px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;">
+        EXPORT ALL ({{ invoices.length }})
+      </button>
+    </div>
+
+    <!-- BY CUSTOMER -->
+    <div *ngIf="exportType==='customer'">
+      <div style="background:#fff;border-radius:20px;padding:16px;margin-bottom:12px;">
+        <label style="font-size:11px;font-weight:700;letter-spacing:1px;color:#666;display:block;margin-bottom:8px;">SELECT CUSTOMER</label>
+        <select [(ngModel)]="selectedCustomerId" (change)="onCustomerChange()" style="width:100%;border:none;border-bottom:1px solid rgba(0,0,0,0.1);outline:none;background:transparent;font-size:14px;font-weight:600;font-family:'DM Sans',sans-serif;color:#1a1a1a;padding:6px 0;">
+          <option value="">Select Customer</option>
+          <option *ngFor="let c of customers" [value]="c.id">{{ c.name }}</option>
+        </select>
+      </div>
+
+      <div *ngIf="selectedCustomerId">
+        <div *ngFor="let invoice of filteredInvoices" style="background:#fff;border-radius:16px;padding:12px 16px;margin-bottom:10px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <div>
+              <div style="font-size:14px;font-weight:700;color:#1a1a1a;">{{ invoice.invoiceNumber }}</div>
+              <div style="font-size:12px;color:#888;margin-top:2px;">{{ invoice.invoiceDate | date:'dd/MM/yyyy' }}</div>
+            </div>
+            <div style="text-align:right;">
+              <div style="font-size:14px;font-weight:700;">RM {{ invoice.totalAmount | number:'1.2-2' }}</div>
+              <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:50px;" [style.background]="invoice.status==='Paid' ? '#d4edda' : invoice.status==='Partial' ? '#fff3cd' : '#f8d7da'" [style.color]="invoice.status==='Paid' ? '#27ae60' : invoice.status==='Partial' ? '#f39c12' : '#c0392b'">{{ invoice.status }}</span>
+            </div>
+          </div>
+        </div>
+        <div *ngIf="filteredInvoices.length===0" style="text-align:center;padding:20px;color:#aaa;">
+          <p>No invoices for this customer</p>
+        </div>
+        <button *ngIf="filteredInvoices.length > 0" (click)="exportPDF()" style="width:100%;background:#1a1a1a;color:#fff;border:none;border-radius:16px;padding:16px;font-size:15px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;margin-top:8px;">
+          EXPORT ({{ filteredInvoices.length }} invoices)
+        </button>
+      </div>
+    </div>
+
+    <!-- SINGLE -->
+    <div *ngIf="exportType==='single'">
+      <ion-searchbar [(ngModel)]="searchTerm" (ionInput)="filterInvoices()" placeholder="Search INV- or customer..." style="--background:#fff;--border-radius:16px;--box-shadow:none;padding:0;margin-bottom:12px;"></ion-searchbar>
+
+      <div *ngFor="let invoice of filteredInvoices" style="background:#fff;border-radius:16px;padding:12px 16px;margin-bottom:10px;cursor:pointer;" (click)="selectedInvoiceId=invoice.id; exportSingle(invoice)">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div>
+            <div style="font-size:14px;font-weight:700;color:#1a1a1a;">{{ invoice.invoiceNumber }}</div>
+            <div style="font-size:12px;color:#888;margin-top:2px;">{{ invoice.customerName }}</div>
+            <div style="font-size:12px;color:#888;">{{ invoice.invoiceDate | date:'dd/MM/yyyy' }}</div>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-size:14px;font-weight:700;">RM {{ invoice.totalAmount | number:'1.2-2' }}</div>
+            <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:50px;" [style.background]="invoice.status==='Paid' ? '#d4edda' : invoice.status==='Partial' ? '#fff3cd' : '#f8d7da'" [style.color]="invoice.status==='Paid' ? '#27ae60' : invoice.status==='Partial' ? '#f39c12' : '#c0392b'">{{ invoice.status }}</span>
+          </div>
+        </div>
+      </div>
+      <div *ngIf="filteredInvoices.length===0 && searchTerm" style="text-align:center;padding:20px;color:#aaa;">
+        <p>No invoices found</p>
+      </div>
+      <div *ngIf="!searchTerm" style="text-align:center;padding:40px;color:#aaa;">
+        <ion-icon name="search-outline" style="font-size:36px;"></ion-icon>
+        <p>Search for an invoice to export</p>
+      </div>
+    </div>
 
   </div>
 
-  <div class="bottom-nav">
+  <div *ngIf="!showExportModal" class="bottom-nav">
     <ion-button fill="clear" class="nav-btn" (click)="goTo('pages/home')">
       <ion-icon name="home-outline"></ion-icon>
     </ion-button>
@@ -57,5 +139,7 @@
       <ion-icon name="options-outline"></ion-icon>
     </ion-button>
   </div>
+
+  <ion-toast [isOpen]="showToast" [message]="toastMessage" duration="2000" position="bottom" (didDismiss)="showToast=false"></ion-toast>
 
 </ion-content>

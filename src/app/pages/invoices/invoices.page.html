@@ -1,25 +1,17 @@
-<ion-content [fullscreen]="true">
+﻿<ion-content [fullscreen]="true">
 
-  <!-- LIST VIEW -->
   <div *ngIf="!showModal" class="page-container">
     <div class="top-bar">
       <ion-button fill="clear" class="back-btn" (click)="goBack()">
         <ion-icon name="chevron-back-outline"></ion-icon> Back
       </ion-button>
       <span class="page-title">Invoices</span>
-      <div style="display:flex;gap:4px;">
-        <ion-button fill="clear" class="icon-btn" (click)="toggleSearch()">
-          <ion-icon name="search-outline"></ion-icon>
-        </ion-button>
-        <ion-button fill="clear" class="icon-btn" (click)="openAddModal()">
-          <ion-icon name="add-outline"></ion-icon>
-        </ion-button>
-      </div>
+      <ion-button fill="clear" class="icon-btn" (click)="openAddModal()">
+        <ion-icon name="add-outline"></ion-icon>
+      </ion-button>
     </div>
 
-    <div *ngIf="showSearch" style="margin-bottom:12px;">
-      <ion-searchbar [(ngModel)]="searchTerm" (ionInput)="filterInvoices()" placeholder="Search INV- or customer..." style="--background:#fff;--border-radius:16px;--box-shadow:none;padding:0;"></ion-searchbar>
-    </div>
+    <ion-searchbar [(ngModel)]="searchTerm" (ionInput)="filterInvoices()" placeholder="Search INV- or customer..." style="--background:#fff;--border-radius:16px;--box-shadow:none;padding:0;margin-bottom:12px;"></ion-searchbar>
 
     <div *ngIf="isLoading" style="display:flex;justify-content:center;padding:60px;">
       <ion-spinner name="crescent"></ion-spinner>
@@ -63,7 +55,6 @@
     </div>
   </div>
 
-  <!-- ADD FORM -->
   <div *ngIf="showModal && !isEditing" class="page-container">
     <div class="top-bar">
       <ion-button fill="clear" class="back-btn" (click)="closeModal()">
@@ -112,19 +103,14 @@
       </div>
       <div class="form-group">
         <label>QUANTITY</label>
-        <input type="number" [(ngModel)]="item.quantity" placeholder="1" class="form-input"/>
+        <input type="number" [(ngModel)]="item.quantity" placeholder="1" class="form-input" min="1"/>
       </div>
     </div>
 
     <button class="save-btn" (click)="saveInvoice()">CREATE INVOICE</button>
   </div>
 
-  <!-- EDIT FORM -->
   <div *ngIf="showModal && isEditing" class="page-container">
-    <div *ngIf="selectedInvoice?.status==='Paid'" style="background:#f8d7da;border-radius:16px;padding:14px 16px;margin-bottom:12px;display:flex;align-items:center;gap:10px;">
-      <ion-icon name="lock-closed-outline" style="font-size:20px;color:#c0392b;"></ion-icon>
-      <span style="font-size:14px;font-weight:700;color:#c0392b;">This invoice is fully paid and cannot be edited</span>
-    </div>
     <div class="top-bar">
       <ion-button fill="clear" class="back-btn" (click)="closeModal()">
         <ion-icon name="chevron-back-outline"></ion-icon> Back
@@ -135,10 +121,11 @@
       </ion-button>
     </div>
 
-    <div *ngIf="selectedInvoice?.status === 'Paid'" class="paid-banner">
-      <ion-icon name="checkmark-circle"></ion-icon>
-      <span>This invoice is fully paid</span>
+    <div *ngIf="selectedInvoice?.status === 'Paid'" style="background:#f8d7da;border-radius:16px;padding:14px 16px;margin-bottom:12px;display:flex;align-items:center;gap:10px;">
+      <ion-icon name="lock-closed-outline" style="font-size:20px;color:#c0392b;"></ion-icon>
+      <span style="font-size:14px;font-weight:700;color:#c0392b;">This invoice is fully paid and cannot be edited</span>
     </div>
+
     <div *ngIf="selectedInvoice?.status === 'Partial'" class="partial-banner">
       <ion-icon name="time"></ion-icon>
       <span>Partially paid - RM {{ selectedInvoice?.paidAmount | number:'1.2-2' }} of RM {{ selectedInvoice?.totalAmount | number:'1.2-2' }}</span>
@@ -205,11 +192,11 @@
       </div>
       <div class="form-group">
         <label>QUANTITY</label>
-        <input type="number" [(ngModel)]="item.quantity" placeholder="1" class="form-input"/>
+        <input type="number" [(ngModel)]="item.quantity" placeholder="1" class="form-input" min="1"/>
       </div>
       <div class="form-group">
         <label>UNIT PRICE (RM)</label>
-        <input type="number" [(ngModel)]="item.unitPrice" placeholder="0.00" class="form-input"/>
+        <input type="number" [(ngModel)]="item.unitPrice" placeholder="0.00" class="form-input" min="0"/>
       </div>
     </div>
 

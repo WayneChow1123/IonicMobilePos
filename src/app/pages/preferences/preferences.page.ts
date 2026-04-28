@@ -1,9 +1,11 @@
-import { Component } from '@angular/core';
+import { Component, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { IonicModule } from '@ionic/angular';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../services/api.service';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 @Component({
   standalone: true,
@@ -12,22 +14,173 @@ import { ApiService } from '../../services/api.service';
   templateUrl: './preferences.page.html',
   styleUrls: ['./preferences.page.scss'],
 })
-export class PreferencesPage {
+export class PreferencesPage implements OnInit {
   showToast = false;
   toastMessage = '';
+  showExportModal = false;
+  isLoading = false;
+  exportType = 'all';
+  customers: any[] = [];
+  invoices: any[] = [];
+  filteredInvoices: any[] = [];
+  selectedCustomerId = '';
+  selectedInvoiceId = '';
+  searchTerm = '';
+
   constructor(private router: Router, private api: ApiService) {}
-  goTo(path: string) { this.router.navigate([path]); }
-  goBack() { this.router.navigate(['pages/home']); }
+
+  ngOnInit() { this.loadCustomers(); this.loadInvoices(); }
+
+  loadCustomers() {
+    this.api.getAllCustomers().subscribe({
+      next: (res) => { this.customers = Array.isArray(res) ? res : []; },
+      error: () => {}
+    });
+  }
+
+  loadInvoices() {
+    this.api.getInvoices().subscribe({
+      next: (res) => {
+        this.invoices = Array.isArray(res) ? res : [];
+        this.filteredInvoices = [...this.invoices];
+      },
+      error: () => {}
+    });
+  }
+
+  filterInvoices() {
+    let filtered = [...this.invoices];
+    if (this.searchTerm) {
+      filtered = filtered.filter(inv =>
+        (inv.invoiceNumber || '').toLowerCase().includes(this.searchTerm.toLowerCase()) ||
+        (inv.customerName || '').toLowerCase().includes(this.searchTerm.toLowerCase())
+      );
+    }
+    if (this.exportType === 'customer' && this.selectedCustomerId) {
+      filtered = filtered.filter(inv => inv.customerId == this.selectedCustomerId);
+    }
+    this.filteredInvoices = filtered;
+  }
+
+  openExportModal() {
+    this.exportType = 'all';
+    this.selectedCustomerId = '';
+    this.selectedInvoiceId = '';
+    this.searchTerm = '';
+    this.filteredInvoices = [...this.invoices];
+    this.showExportModal = true;
+  }
+
+  closeExportModal() { this.showExportModal = false; }
+
+  onExportTypeChange() {
+    this.searchTerm = '';
+    this.selectedCustomerId = '';
+    this.selectedInvoiceId = '';
+    this.filteredInvoices = [...this.invoices];
+  }
+
+  onCustomerChange() {
+    this.filteredInvoices = this.invoices.filter(inv => inv.customerId == this.selectedCustomerId);
+  }
+
+  exportPDF() {
+    let invoicesToExport: any[] = [];
+
+    if (this.exportType === 'all') {
+      invoicesToExport = [...this.filteredInvoices];
+    } else if (this.exportType === 'customer') {
+      if (!this.selectedCustomerId) { this.showToastMsg('Please select a customer'); return; }
+      invoicesToExport = this.invoices.filter(inv => inv.customerId == this.selectedCustomerId);
+    } else if (this.exportType === 'single') {
+      if (!this.selectedInvoiceId) { this.showToastMsg('Please select an invoice'); return; }
+      invoicesToExport = this.invoices.filter(inv => inv.id == this.selectedInvoiceId);
+    }
+
+    if (invoicesToExport.length === 0) { this.showToastMsg('No invoices to export'); return; }
+
+    const doc = new jsPDF();
+
+    doc.setFontSize(18);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Invoice Report', 14, 20);
+
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Generated: ' + new Date().toLocaleDateString(), 14, 28);
+
+    if (this.exportType === 'customer' && this.selectedCustomerId) {
+      const customer = this.customers.find(c => c.id == this.selectedCustomerId);
+      doc.text('Customer: ' + (customer?.name || ''), 14, 35);
+    }
+
+    const tableData = invoicesToExport.map(inv => [
+      inv.invoiceNumber || 'INV-' + inv.id,
+      inv.customerName || '',
+      new Date(inv.invoiceDate).toLocaleDateString(),
+      'RM ' + (inv.totalAmount || 0).toFixed(2),
+      'RM ' + (inv.paidAmount || 0).toFixed(2),
+      'RM ' + ((inv.totalAmount || 0) - (inv.paidAmount || 0)).toFixed(2),
+      inv.status || 'Unpaid'
+    ]);
+
+    autoTable(doc, {
+      startY: this.exportType === 'customer' ? 40 : 35,
+      head: [['Invoice No', 'Customer', 'Date', 'Total', 'Paid', 'Balance', 'Status']],
+      body: tableData,
+      styles: { fontSize: 8 },
+      headStyles: { fillColor: [26, 26, 26] },
+      alternateRowStyles: { fillColor: [240, 235, 227] }
+    });
+
+    const totalAmount = invoicesToExport.reduce((sum, inv) => sum + (inv.totalAmount || 0), 0);
+    const totalPaid = invoicesToExport.reduce((sum, inv) => sum + (inv.paidAmount || 0), 0);
+    const totalBalance = totalAmount - totalPaid;
+
+    const finalY = (doc as any).lastAutoTable.finalY + 10;
+    doc.setFont('helvetica', 'bold');
+    doc.text('Summary:', 14, finalY);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Total Invoices: ' + invoicesToExport.length, 14, finalY + 6);
+    doc.text('Total Amount: RM ' + totalAmount.toFixed(2), 14, finalY + 12);
+    doc.text('Total Paid: RM ' + totalPaid.toFixed(2), 14, finalY + 18);
+    doc.text('Total Balance: RM ' + totalBalance.toFixed(2), 14, finalY + 24);
+
+    doc.save('invoice-report-' + new Date().toISOString().split('T')[0] + '.pdf');
+    this.showToastMsg('PDF exported successfully!');
+    this.closeExportModal();
+  }
+
+  exportSingle(invoice: any) {
+    const doc = new jsPDF();
+    doc.setFontSize(18);
+    doc.setFont("helvetica", "bold");
+    doc.text("Invoice", 14, 20);
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.text("Invoice No: " + invoice.invoiceNumber, 14, 30);
+    doc.text("Customer: " + invoice.customerName, 14, 37);
+    doc.text("Date: " + new Date(invoice.invoiceDate).toLocaleDateString(), 14, 44);
+    doc.text("Status: " + invoice.status, 14, 51);
+    autoTable(doc, {
+      startY: 58,
+      head: [["Invoice No", "Customer", "Date", "Total", "Paid", "Balance", "Status"]],
+      body: [[invoice.invoiceNumber, invoice.customerName, new Date(invoice.invoiceDate).toLocaleDateString(), "RM " + (invoice.totalAmount||0).toFixed(2), "RM " + (invoice.paidAmount||0).toFixed(2), "RM " + ((invoice.totalAmount||0)-(invoice.paidAmount||0)).toFixed(2), invoice.status]],
+      styles: { fontSize: 8 },
+      headStyles: { fillColor: [26, 26, 26] }
+    });
+    doc.save(invoice.invoiceNumber + ".pdf");
+    this.showToastMsg("PDF exported!");
+  }
+
   backupFull() {
     this.api.getFullBackup().subscribe({
-      next: () => { this.toastMessage = 'Backup successful!'; this.showToast = true; },
-      error: () => { this.toastMessage = 'Backup failed!'; this.showToast = true; }
+      next: () => { this.showToastMsg('Backup successful!'); },
+      error: () => { this.showToastMsg('Backup failed!'); }
     });
   }
-  exportBills() {
-    this.api.getBillReport().subscribe({
-      next: () => { this.toastMessage = 'Export successful!'; this.showToast = true; },
-      error: () => { this.toastMessage = 'Export failed!'; this.showToast = true; }
-    });
-  }
+
+  showToastMsg(msg: string) { this.toastMessage = msg; this.showToast = true; }
+  goTo(path: string) { this.router.navigate([path]); }
+  goBack() { this.router.navigate(['pages/home']); }
 }
