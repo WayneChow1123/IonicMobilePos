@@ -1,4 +1,4 @@
-﻿<ion-content [fullscreen]="true">
+<ion-content [fullscreen]="true">
 
   <div *ngIf="!showModal && !showAddStockModal" class="page-container">
     <div class="top-bar">
@@ -97,7 +97,7 @@
     <div class="form-card" style="background:#d4edda;">
       <div class="form-group">
         <label>ADD QUANTITY *</label>
-        <input type="number" [(ngModel)]="addStockQty" placeholder="Enter quantity to add" class="form-input" min="1"/>
+        <input type="number" [(ngModel)]="addStockQty" (keydown)="noLeadingZero($event, addStockQty)" placeholder="Enter quantity to add" class="form-input" min="1"/>
       </div>
       <div *ngIf="addStockQty > 0" style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;padding-top:8px;border-top:1px solid rgba(0,0,0,0.1);">
         <span style="font-size:13px;color:#27ae60;font-weight:600;">New Stock</span>
@@ -145,23 +145,23 @@
     <div class="form-card" style="background:#E8D5D0;">
       <div class="form-group">
         <label>PRICE (RM)</label>
-        <input type="number" [(ngModel)]="form.price" placeholder="0.00" class="form-input" min="0"/>
+        <input type="number" [(ngModel)]="form.price" (keydown)="noLeadingZero($event, form.price)" placeholder="0.00" class="form-input" min="0"/>
       </div>
       <div class="form-group">
         <label>RATE</label>
-        <input type="number" [(ngModel)]="form.rate" placeholder="1" class="form-input" min="0"/>
+        <input type="number" [(ngModel)]="form.rate" (keydown)="noLeadingZero($event, form.rate)" placeholder="1" class="form-input" min="0"/>
       </div>
       <div class="form-group">
         <label>COST (RM)</label>
-        <input type="number" [(ngModel)]="form.cost" placeholder="0.00" class="form-input" min="0"/>
+        <input type="number" [(ngModel)]="form.cost" (keydown)="noLeadingZero($event, form.cost)" placeholder="0.00" class="form-input" min="0"/>
       </div>
       <div class="form-group">
         <label>LOWEST PRICE (RM)</label>
-        <input type="number" [(ngModel)]="form.lowestPrice" placeholder="0.00" class="form-input" min="0"/>
+        <input type="number" [(ngModel)]="form.lowestPrice" (keydown)="noLeadingZero($event, form.lowestPrice)" placeholder="0.00" class="form-input" min="0"/>
       </div>
       <div class="form-group">
         <label>STOCK</label>
-        <input type="number" [(ngModel)]="form.stock" placeholder="0" class="form-input" min="0"/>
+        <input type="number" [(ngModel)]="form.stock" (keydown)="noLeadingZero($event, form.stock)" placeholder="0" class="form-input" min="0"/>
       </div>
     </div>
 

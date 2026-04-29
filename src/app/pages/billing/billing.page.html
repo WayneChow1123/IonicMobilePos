@@ -1,4 +1,4 @@
-﻿<ion-content [fullscreen]="true">
+<ion-content [fullscreen]="true">
 
   <div *ngIf="currentView==='home'" class="page-container">
     <div class="top-bar">
@@ -96,7 +96,7 @@
     <div class="form-card" style="background:#C5C8E0;">
       <div class="form-group">
         <label>AMOUNT (RM) *</label>
-        <input type="number" [(ngModel)]="paymentForm.amount" placeholder="0.00" class="form-input" min="0"/>
+        <input type="number" [(ngModel)]="paymentForm.amount" (keydown)="noLeadingZero($event, paymentForm.amount)" placeholder="0.00" class="form-input" min="0"/>
       </div>
       <div class="form-group">
         <label>PAYMENT METHOD</label>
@@ -132,7 +132,7 @@
       </div>
       <div class="form-group">
         <label>AMOUNT (RM) *</label>
-        <input type="number" [(ngModel)]="cnForm.amount" placeholder="0.00" class="form-input" min="0"/>
+        <input type="number" [(ngModel)]="cnForm.amount" (keydown)="noLeadingZero($event, cnForm.amount)" placeholder="0.00" class="form-input" min="0"/>
       </div>
       <div class="form-group">
         <label>REASON *</label>

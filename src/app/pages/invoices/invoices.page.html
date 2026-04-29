@@ -131,7 +131,7 @@
       </div>
       <div class="form-group">
         <label>QUANTITY</label>
-        <input type="number" [(ngModel)]="item.quantity" placeholder="1" class="form-input" min="1"/>
+        <input type="number" [(ngModel)]="item.quantity" placeholder="1" class="form-input" min="1" (keydown)="noLeadingZero($event, item.quantity)"/>
       </div>
     </div>
 
@@ -220,17 +220,17 @@
       </div>
       <div class="form-group">
         <label>PRODUCT</label>
-        <select [(ngModel)]="item.productId" class="form-select">
+        <select [(ngModel)]="item.productId" class="form-select" (change)="onProductChange(item)">
           <option *ngFor="let p of products" [value]="p.id">{{ p.name }}</option>
         </select>
       </div>
       <div class="form-group">
         <label>QUANTITY</label>
-        <input type="number" [(ngModel)]="item.quantity" placeholder="1" class="form-input" min="1"/>
+        <input type="number" [(ngModel)]="item.quantity" placeholder="1" class="form-input" min="1" (keydown)="noLeadingZero($event, item.quantity)"/>
       </div>
       <div class="form-group">
         <label>UNIT PRICE (RM)</label>
-        <input type="number" [(ngModel)]="item.unitPrice" placeholder="0.00" class="form-input" min="0"/>
+        <div style="font-size:14px;font-weight:600;color:#888;padding:4px 0;border-bottom:1px solid rgba(0,0,0,0.1);">RM {{ item.unitPrice | number:'1.2-2' }}</div>
       </div>
     </div>
 
@@ -347,4 +347,5 @@
   <ion-toast [isOpen]="showToast" [message]="toastMessage" duration="2000" position="bottom" (didDismiss)="showToast=false"></ion-toast>
 
 </ion-content>
+
 

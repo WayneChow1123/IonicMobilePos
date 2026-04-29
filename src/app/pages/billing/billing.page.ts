@@ -239,6 +239,12 @@ export class BillingPage implements OnInit {
     });
   }
 
+  noLeadingZero(event: KeyboardEvent, val: any) {
+    if ((val === 0 || val === "" || val === null || val === undefined) && event.key === "0") {
+      event.preventDefault();
+    }
+  }
+
   showToastMsg(msg: string) { this.toastMessage = msg; this.showToast = true; }
   goTo(path: string) { this.router.navigate([path]); }
   goBack() { this.router.navigate(['pages/home']); }

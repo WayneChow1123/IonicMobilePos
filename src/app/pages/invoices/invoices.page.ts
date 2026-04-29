@@ -151,10 +151,16 @@ export class InvoicesPage implements OnInit {
 
   addItem() {
     if (this.isEditing) {
-      this.editForm.items.push({ productId: this.products.length > 0 ? this.products[0].id : 0, quantity: 1, unitPrice: 0 });
+      const defaultProduct = this.products.length > 0 ? this.products[0] : null;
+      this.editForm.items.push({ productId: defaultProduct?.id || 0, quantity: 1, unitPrice: defaultProduct?.price || 0 });
     } else {
       this.form.items.push({ productId: this.products.length > 0 ? this.products[0].id : 0, quantity: 1 });
     }
+  }
+
+  onProductChange(item: any) {
+    const product = this.products.find((p: any) => p.id == item.productId);
+    if (product) item.unitPrice = product.price;
   }
 
   removeItem(index: number) {
@@ -213,6 +219,12 @@ export class InvoicesPage implements OnInit {
   getProductName(id: any) {
     const p = this.products.find((p: any) => p.id == id);
     return p ? p.name : 'Product #' + id;
+  }
+
+  noLeadingZero(event: KeyboardEvent, val: any) {
+    if ((val === 0 || val === "" || val === null || val === undefined) && event.key === "0") {
+      event.preventDefault();
+    }
   }
 
   showToastMsg(msg: string) { this.toastMessage = msg; this.showToast = true; }
