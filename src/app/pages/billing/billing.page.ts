@@ -23,10 +23,15 @@ export class BillingPage implements OnInit {
   currentView = 'home';
   showDeletePaymentAlert = false;
   showDeleteCNAlert = false;
+  showStockAlert = false;
   showToast = false;
   toastMessage = '';
   selectedPayment: any = null;
   selectedCN: any = null;
+  selectedInvoiceDetail: any = null;
+  stockIssues: any[] = [];
+  pendingPayload: any = null;
+  waitingInvoiceId: number | null = null;
   paymentSearchTerm = '';
   cnSearchTerm = '';
   paymentForm: any = { customerId: 0, invoiceId: 0, amount: 0, method: 'Cash', referenceNo: '' };
@@ -70,11 +75,7 @@ export class BillingPage implements OnInit {
   loadPayments() {
     this.isLoading = true;
     this.api.getPayments().subscribe({
-      next: (res) => {
-        this.payments = Array.isArray(res) ? res : [];
-        this.filteredPayments = [...this.payments];
-        this.isLoading = false;
-      },
+      next: (res) => { this.payments = Array.isArray(res) ? res : []; this.filteredPayments = [...this.payments]; this.isLoading = false; },
       error: () => { this.isLoading = false; }
     });
   }
@@ -82,11 +83,7 @@ export class BillingPage implements OnInit {
   loadCreditNotes() {
     this.isLoading = true;
     this.api.getAllCreditNotes().subscribe({
-      next: (res) => {
-        this.creditNotes = Array.isArray(res) ? res : [];
-        this.filteredCreditNotes = [...this.creditNotes];
-        this.isLoading = false;
-      },
+      next: (res) => { this.creditNotes = Array.isArray(res) ? res : []; this.filteredCreditNotes = [...this.creditNotes]; this.isLoading = false; },
       error: () => { this.isLoading = false; }
     });
   }
@@ -112,6 +109,7 @@ export class BillingPage implements OnInit {
 
   openNewPayment() {
     this.paymentForm = { customerId: this.customers.length > 0 ? this.customers[0].id : 0, invoiceId: 0, amount: 0, method: 'Cash', referenceNo: '' };
+    this.selectedInvoiceDetail = null;
     if (this.customers.length > 0) this.loadInvoicesByCustomer(this.customers[0].id);
     this.currentView = 'newPayment';
   }
@@ -128,7 +126,32 @@ export class BillingPage implements OnInit {
   onCustomerChange() {
     if (this.paymentForm.customerId) {
       this.loadInvoicesByCustomer(this.paymentForm.customerId);
+      this.paymentForm.invoiceId = 0;
+      this.selectedInvoiceDetail = null;
     }
+  }
+
+  onInvoiceChange() {
+    if (this.paymentForm.invoiceId && this.paymentForm.invoiceId != 0) {
+      this.api.getInvoiceDetails(Number(this.paymentForm.invoiceId)).subscribe({
+        next: (res: any) => { this.selectedInvoiceDetail = res; },
+        error: () => { this.selectedInvoiceDetail = null; }
+      });
+    } else {
+      this.selectedInvoiceDetail = null;
+    }
+  }
+
+  getTotalCNForPayment(): number {
+    if (!this.selectedInvoiceDetail?.creditNotes) return 0;
+    return this.selectedInvoiceDetail.creditNotes.reduce((sum: number, cn: any) => sum + (cn.amount || 0), 0);
+  }
+
+  getBalanceForPayment(): number {
+    if (!this.selectedInvoiceDetail) return 0;
+    const totalCN = this.getTotalCNForPayment();
+    const netTotal = (this.selectedInvoiceDetail.totalAmount || 0) - totalCN;
+    return netTotal - (this.selectedInvoiceDetail.paidAmount || 0);
   }
 
   savePayment() {
@@ -144,8 +167,47 @@ export class BillingPage implements OnInit {
     };
     this.api.createPayment(payload).subscribe({
       next: () => { this.showToastMsg('Payment created!'); this.openPaymentList(); },
-      error: (err: any) => this.showToastMsg('Failed: ' + (err.error || err.message || 'error'))
+      error: (err: any) => {
+        const errBody = err.error;
+        if (errBody?.type === 'STOCK_INSUFFICIENT') {
+          this.stockIssues = errBody.stockIssues || [];
+          this.pendingPayload = payload;
+          this.showStockAlert = true;
+        } else {
+          this.showToastMsg('Failed: ' + (errBody?.message || errBody || err.message || 'error'));
+        }
+      }
     });
+  }
+
+  adjustInvoiceToStock() {
+    this.showStockAlert = false;
+    this.router.navigate(['pages/invoices']);
+    this.showToastMsg('Please edit the invoice to match available stock');
+  }
+
+  deleteInvoiceFromStock() {
+    if (!this.pendingPayload) return;
+    this.showStockAlert = false;
+    this.api.deleteInvoice(this.pendingPayload.invoiceId).subscribe({
+      next: () => { this.showToastMsg('Invoice deleted!'); this.goHome(); },
+      error: () => this.showToastMsg('Failed to delete invoice')
+    });
+  }
+
+  ignoreStockIssue() {
+    // ? ???? invoice ?????
+    if (this.pendingPayload) {
+      this.waitingInvoiceId = this.pendingPayload.invoiceId;
+      // ??? localStorage
+      const waiting = JSON.parse(localStorage.getItem('waitingInvoices') || '[]');
+      if (!waiting.includes(this.pendingPayload.invoiceId)) {
+        waiting.push(this.pendingPayload.invoiceId);
+        localStorage.setItem('waitingInvoices', JSON.stringify(waiting));
+      }
+    }
+    this.showStockAlert = false;
+    this.showToastMsg('Invoice marked as waiting for stock');
   }
 
   saveCreditNote() {

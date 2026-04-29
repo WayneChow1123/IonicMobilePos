@@ -1,6 +1,6 @@
-<ion-content [fullscreen]="true">
+﻿<ion-content [fullscreen]="true">
 
-  <div *ngIf="!showModal" class="page-container">
+  <div *ngIf="!showModal && !showAddStockModal" class="page-container">
     <div class="top-bar">
       <ion-button fill="clear" class="back-btn" (click)="goBack()">
         <ion-icon name="chevron-back-outline"></ion-icon> Back
@@ -20,7 +20,7 @@
       <ion-searchbar [(ngModel)]="searchTerm" (ionInput)="filterProducts()" placeholder="Search products..." style="--background:#fff;--border-radius:16px;--box-shadow:none;padding:0;"></ion-searchbar>
     </div>
 
-    <div class="tab-row">
+    <div class="tab-row" style="overflow-x:auto;white-space:nowrap;scrollbar-width:none;-webkit-overflow-scrolling:touch;">
       <button *ngFor="let tab of categoryTabs" [class.tab-active]="activeTab===tab" class="tab-btn" (click)="setTab(tab)">{{ tab }}</button>
     </div>
 
@@ -29,23 +29,45 @@
     </div>
 
     <div *ngIf="!isLoading">
-      <div *ngFor="let product of filteredProducts" class="list-item">
-        <div class="item-info" (click)="openEditModal(product)">
-          <div class="item-avatar"><ion-icon name="cube-outline"></ion-icon></div>
-          <div>
-            <div class="item-name">{{ product.name }}</div>
-            <div class="item-sub">{{ product.category || 'DEFAULT' }} | Stock: {{ product.stock }}</div>
+      <div *ngFor="let product of filteredProducts" class="product-card" [class.inactive]="product.isActive === false">
+        <div class="product-main" (click)="openEditModal(product)">
+          <div class="product-left">
+            <div class="product-icon" [class.out-of-stock]="product.stock === 0">
+              <ion-icon name="cube-outline"></ion-icon>
+            </div>
+            <div class="product-details">
+              <div class="product-name-row">
+                <span class="item-name">{{ product.name }}</span>
+                <span *ngIf="product.isActive === false" class="badge inactive-badge">INACTIVE</span>
+                <span *ngIf="product.stock === 0" class="badge oos-badge">OUT OF STOCK</span>
+              </div>
+              <div class="item-sub">{{ product.category || 'DEFAULT' }}</div>
+              <div class="product-price-row">
+                <span class="product-price">RM {{ product.price | number:'1.2-2' }}</span>
+                <span class="product-stock" [class.low-stock]="product.stock <= 10 && product.stock > 0" [class.no-stock]="product.stock === 0">
+                  <ion-icon name="layers-outline" style="font-size:12px;"></ion-icon>
+                  {{ product.stock }}
+                </span>
+              </div>
+            </div>
           </div>
         </div>
-        <div style="display:flex;gap:4px;">
-          <ion-button fill="clear" style="--color:#5c85d6;" (click)="openEditModal(product)">
+        <div class="product-actions">
+          <button class="action-btn edit-btn" (click)="openEditModal(product)">
             <ion-icon name="create-outline"></ion-icon>
-          </ion-button>
-          <ion-button fill="clear" style="--color:#e57373;" (click)="confirmDelete(product)">
+          </button>
+          <button class="action-btn stock-btn" (click)="openAddStockModal(product)">
+            <ion-icon name="add-outline"></ion-icon>
+          </button>
+          <button class="action-btn" [class.activate-btn]="product.isActive === false" [class.deactivate-btn]="product.isActive !== false" (click)="toggleActive(product)">
+            <ion-icon [name]="product.isActive === false ? 'checkmark-outline' : 'pause-outline'"></ion-icon>
+          </button>
+          <button class="action-btn delete-btn" (click)="confirmDelete(product)">
             <ion-icon name="trash-outline"></ion-icon>
-          </ion-button>
+          </button>
         </div>
       </div>
+
       <div *ngIf="filteredProducts.length===0" class="empty-state">
         <ion-icon name="cube-outline"></ion-icon>
         <p>No products found</p>
@@ -54,6 +76,39 @@
     </div>
   </div>
 
+  <!-- ADD STOCK PAGE -->
+  <div *ngIf="showAddStockModal" class="page-container">
+    <div class="top-bar">
+      <ion-button fill="clear" class="back-btn" (click)="closeAddStockModal()">
+        <ion-icon name="chevron-back-outline"></ion-icon> Back
+      </ion-button>
+      <span class="page-title">Add Stock</span>
+    </div>
+
+    <div style="background:#fff;border-radius:20px;padding:20px;margin-bottom:16px;">
+      <div style="font-size:18px;font-weight:700;color:#1a1a1a;margin-bottom:4px;">{{ selectedProduct?.name }}</div>
+      <div style="font-size:13px;color:#888;margin-bottom:12px;">{{ selectedProduct?.category || 'DEFAULT' }}</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;background:#F0EBE3;border-radius:12px;padding:12px 16px;">
+        <span style="font-size:13px;color:#888;font-weight:600;">Current Stock</span>
+        <span style="font-size:20px;font-weight:800;color:#1a1a1a;">{{ selectedProduct?.stock }}</span>
+      </div>
+    </div>
+
+    <div class="form-card" style="background:#d4edda;">
+      <div class="form-group">
+        <label>ADD QUANTITY *</label>
+        <input type="number" [(ngModel)]="addStockQty" placeholder="Enter quantity to add" class="form-input" min="1"/>
+      </div>
+      <div *ngIf="addStockQty > 0" style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;padding-top:8px;border-top:1px solid rgba(0,0,0,0.1);">
+        <span style="font-size:13px;color:#27ae60;font-weight:600;">New Stock</span>
+        <span style="font-size:20px;font-weight:800;color:#27ae60;">{{ (selectedProduct?.stock || 0) + addStockQty }}</span>
+      </div>
+    </div>
+
+    <button class="save-btn" style="background:#27ae60;" (click)="submitAddStock()">ADD STOCK</button>
+  </div>
+
+  <!-- ADD / EDIT PRODUCT PAGE -->
   <div *ngIf="showModal" class="page-container">
     <div class="top-bar">
       <ion-button fill="clear" class="back-btn" (click)="closeModal()">
@@ -90,23 +145,23 @@
     <div class="form-card" style="background:#E8D5D0;">
       <div class="form-group">
         <label>PRICE (RM)</label>
-        <input type="number" [(ngModel)]="form.price" placeholder="0.00" class="form-input"/>
+        <input type="number" [(ngModel)]="form.price" placeholder="0.00" class="form-input" min="0"/>
       </div>
       <div class="form-group">
         <label>RATE</label>
-        <input type="number" [(ngModel)]="form.rate" placeholder="1" class="form-input"/>
+        <input type="number" [(ngModel)]="form.rate" placeholder="1" class="form-input" min="0"/>
       </div>
       <div class="form-group">
         <label>COST (RM)</label>
-        <input type="number" [(ngModel)]="form.cost" placeholder="0.00" class="form-input"/>
+        <input type="number" [(ngModel)]="form.cost" placeholder="0.00" class="form-input" min="0"/>
       </div>
       <div class="form-group">
         <label>LOWEST PRICE (RM)</label>
-        <input type="number" [(ngModel)]="form.lowestPrice" placeholder="0.00" class="form-input"/>
+        <input type="number" [(ngModel)]="form.lowestPrice" placeholder="0.00" class="form-input" min="0"/>
       </div>
       <div class="form-group">
         <label>STOCK</label>
-        <input type="number" [(ngModel)]="form.stock" placeholder="0" class="form-input"/>
+        <input type="number" [(ngModel)]="form.stock" placeholder="0" class="form-input" min="0"/>
       </div>
     </div>
 

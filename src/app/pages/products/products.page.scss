@@ -1,4 +1,4 @@
-ion-content { --background: #F0EBE3; }
+﻿ion-content { --background: #F0EBE3; }
 .page-container { padding: 16px 20px 100px; }
 .top-bar { display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; }
 .back-btn { --color:#1a1a1a; --padding-start:0; font-size:15px; font-weight:600; }
@@ -6,13 +6,123 @@ ion-content { --background: #F0EBE3; }
 .top-right { display:flex; gap:4px; }
 .icon-btn { --color:#1a1a1a; font-size:20px; }
 .tab-row { display:flex; gap:8px; margin-bottom:20px; }
-.tab-btn { background:transparent; border:none; color:#aaa; font-size:13px; font-weight:700; border-radius:50px; padding:8px 16px; cursor:pointer; font-family:'DM Sans',sans-serif; }
+.tab-btn { background:transparent; border:none; color:#aaa; font-size:13px; font-weight:700; border-radius:50px; padding:8px 16px; cursor:pointer; font-family:'DM Sans',sans-serif; flex-shrink:0; }
 .tab-btn.tab-active { color:#1a1a1a; background:#C5C8E0; }
-.list-item { background:#fff; border-radius:16px; padding:12px 16px; display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
-.item-info { display:flex; align-items:center; gap:12px; flex:1; cursor:pointer; }
-.item-avatar { width:44px; height:44px; background:#F0EBE3; border-radius:12px; display:flex; align-items:center; justify-content:center; ion-icon { font-size:22px; color:#888; } }
-.item-name { font-size:14px; font-weight:700; color:#1a1a1a; }
-.item-sub { font-size:12px; color:#888; margin-top:2px; }
+
+.product-card {
+  background: #fff;
+  border-radius: 20px;
+  padding: 14px 16px;
+  margin-bottom: 12px;
+  transition: opacity 0.2s;
+
+  &.inactive { opacity: 0.6; }
+
+  .product-main {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    margin-bottom: 12px;
+
+    .product-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex: 1;
+    }
+  }
+
+  .product-icon {
+    width: 48px;
+    height: 48px;
+    background: #F0EBE3;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    ion-icon { font-size: 24px; color: #888; }
+    &.out-of-stock { background: #f8d7da; ion-icon { color: #e57373; } }
+  }
+
+  .product-details { flex: 1; }
+
+  .product-name-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-bottom: 2px;
+  }
+
+  .product-price-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 4px;
+  }
+
+  .product-price {
+    font-size: 13px;
+    font-weight: 700;
+    color: #1a1a1a;
+  }
+
+  .product-stock {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #888;
+    background: #F0EBE3;
+    padding: 2px 8px;
+    border-radius: 50px;
+
+    &.low-stock { color: #f39c12; background: #fff3cd; }
+    &.no-stock { color: #e57373; background: #f8d7da; }
+  }
+
+  .product-actions {
+    display: flex;
+    gap: 8px;
+    border-top: 1px solid #F0EBE3;
+    padding-top: 10px;
+
+    .action-btn {
+      flex: 1;
+      border: none;
+      border-radius: 10px;
+      padding: 8px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 18px;
+      transition: all 0.2s;
+
+      &.edit-btn { background: #e8f0fd; color: #5c85d6; }
+      &.stock-btn { background: #d4edda; color: #27ae60; }
+      &.activate-btn { background: #d4edda; color: #27ae60; }
+      &.deactivate-btn { background: #fff3cd; color: #f39c12; }
+      &.delete-btn { background: #f8d7da; color: #e57373; }
+    }
+  }
+}
+
+.badge {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 50px;
+}
+.inactive-badge { background: #f8d7da; color: #c0392b; }
+.oos-badge { background: #f8d7da; color: #c0392b; }
+
+.item-name { font-size: 14px; font-weight: 700; color: #1a1a1a; }
+.item-sub { font-size: 12px; color: #888; margin-top: 2px; }
+
 .empty-state { display:flex; flex-direction:column; align-items:center; padding:60px 20px; color:#aaa; ion-icon { font-size:48px; margin-bottom:12px; } p { font-size:14px; margin-bottom:16px; } }
 .form-card { border-radius:20px; padding:16px; margin-bottom:12px; }
 .form-group { margin-bottom:12px; label { font-size:11px; font-weight:700; letter-spacing:1px; color:#666; display:block; margin-bottom:6px; } }

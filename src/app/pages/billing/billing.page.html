@@ -66,12 +66,33 @@
       </div>
       <div class="form-group">
         <label>INVOICE *</label>
-        <select [(ngModel)]="paymentForm.invoiceId" class="form-select">
+        <select [(ngModel)]="paymentForm.invoiceId" class="form-select" (change)="onInvoiceChange()">
           <option value="0">Select Invoice</option>
           <option *ngFor="let inv of invoices" [value]="inv.id">{{ inv.invoiceNumber }} (RM {{ inv.totalAmount | number:'1.2-2' }}) - {{ inv.status }}</option>
         </select>
       </div>
     </div>
+
+    <div *ngIf="selectedInvoiceDetail" style="background:#fff3cd;border-radius:16px;padding:14px 16px;margin-bottom:12px;">
+      <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+        <span style="font-size:13px;color:#888;">Total Invoice</span>
+        <span style="font-size:13px;font-weight:700;">RM {{ selectedInvoiceDetail.totalAmount | number:'1.2-2' }}</span>
+      </div>
+      <div *ngIf="getTotalCNForPayment() > 0" style="display:flex;justify-content:space-between;margin-bottom:6px;">
+        <span style="font-size:13px;color:#e67e22;">Credit Notes</span>
+        <span style="font-size:13px;font-weight:700;color:#e67e22;">- RM {{ getTotalCNForPayment() | number:'1.2-2' }}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+        <span style="font-size:13px;color:#888;">Already Paid</span>
+        <span style="font-size:13px;font-weight:700;color:#27ae60;">RM {{ selectedInvoiceDetail.paidAmount | number:'1.2-2' }}</span>
+      </div>
+      <div style="height:1px;background:rgba(0,0,0,0.1);margin:8px 0;"></div>
+      <div style="display:flex;justify-content:space-between;">
+        <span style="font-size:14px;font-weight:800;color:#1a1a1a;">Balance Due</span>
+        <span style="font-size:14px;font-weight:800;color:#e57373;">RM {{ getBalanceForPayment() | number:'1.2-2' }}</span>
+      </div>
+    </div>
+
     <div class="form-card" style="background:#C5C8E0;">
       <div class="form-group">
         <label>AMOUNT (RM) *</label>
@@ -208,6 +229,42 @@
     <ion-button fill="clear" class="nav-btn" (click)="goTo('pages/preferences')">
       <ion-icon name="options-outline"></ion-icon>
     </ion-button>
+  </div>
+
+  <!-- STOCK INSUFFICIENT MODAL -->
+  <div *ngIf="showStockAlert" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:flex-end;">
+    <div style="background:#F0EBE3;border-radius:24px 24px 0 0;padding:24px 20px;width:100%;max-height:80vh;overflow-y:auto;">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+        <ion-icon name="warning-outline" style="font-size:24px;color:#e57373;"></ion-icon>
+        <span style="font-size:17px;font-weight:700;color:#1a1a1a;">Insufficient Stock</span>
+      </div>
+
+      <div *ngFor="let issue of stockIssues" style="background:#f8d7da;border-radius:12px;padding:12px 14px;margin-bottom:8px;">
+        <div style="font-size:14px;font-weight:700;color:#1a1a1a;">{{ issue.productName }}</div>
+        <div style="font-size:12px;color:#888;margin-top:4px;">
+          Required: <strong>{{ issue.required }}</strong> &nbsp;|&nbsp;
+          Available: <strong style="color:#e57373;">{{ issue.available }}</strong> &nbsp;|&nbsp;
+          Shortage: <strong style="color:#c0392b;">{{ issue.shortage }}</strong>
+        </div>
+      </div>
+
+      <p style="font-size:13px;color:#888;margin:16px 0 12px;">What would you like to do?</p>
+
+      <button (click)="adjustInvoiceToStock()" style="width:100%;background:#5c85d6;color:#fff;border:none;border-radius:16px;padding:14px;font-size:14px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;margin-bottom:10px;">
+        <ion-icon name="create-outline" style="vertical-align:middle;margin-right:6px;"></ion-icon>
+        Edit Invoice to Match Stock
+      </button>
+
+      <button (click)="deleteInvoiceFromStock()" style="width:100%;background:#e57373;color:#fff;border:none;border-radius:16px;padding:14px;font-size:14px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;margin-bottom:10px;">
+        <ion-icon name="trash-outline" style="vertical-align:middle;margin-right:6px;"></ion-icon>
+        Delete This Invoice
+      </button>
+
+      <button (click)="ignoreStockIssue()" style="width:100%;background:#fff;color:#1a1a1a;border:none;border-radius:16px;padding:14px;font-size:14px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;">
+        <ion-icon name="time-outline" style="vertical-align:middle;margin-right:6px;"></ion-icon>
+        Wait for Stock to Arrive
+      </button>
+    </div>
   </div>
 
   <ion-alert [isOpen]="showDeletePaymentAlert" header="Delete Payment" message="Are you sure?" [buttons]="deletePaymentButtons" (didDismiss)="showDeletePaymentAlert=false"></ion-alert>

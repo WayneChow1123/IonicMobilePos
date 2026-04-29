@@ -11,6 +11,17 @@
       </ion-button>
     </div>
 
+    <div style="display:flex;gap:8px;overflow-x:auto;white-space:nowrap;scrollbar-width:none;-webkit-overflow-scrolling:touch;margin-bottom:12px;padding-bottom:4px;">
+      <div *ngFor="let p of allProducts" style="flex-shrink:0;background:#fff;border-radius:12px;padding:8px 12px;display:flex;align-items:center;gap:8px;min-width:120px;">
+        <div>
+          <div style="font-size:12px;font-weight:700;color:#1a1a1a;">{{ p.name }}</div>
+          <div style="font-size:11px;font-weight:600;" [style.color]="p.stock === 0 ? '#e57373' : p.stock <= 10 ? '#f39c12' : '#27ae60'">
+            Stock: {{ p.stock }}
+          </div>
+        </div>
+      </div>
+    </div>
+
     <ion-searchbar [(ngModel)]="searchTerm" (ionInput)="filterInvoices()" placeholder="Search INV- or customer..." style="--background:#fff;--border-radius:16px;--box-shadow:none;padding:0;margin-bottom:12px;"></ion-searchbar>
 
     <div *ngIf="isLoading" style="display:flex;justify-content:center;padding:60px;">
@@ -69,7 +80,7 @@
     <div class="form-card" style="background:#E8D5D0;">
       <div class="form-group">
         <label>CUSTOMER *</label>
-        <select [(ngModel)]="form.customerId" class="form-select">
+        <select [(ngModel)]="form.customerId" class="form-select" (change)="onCustomerChange()">
           <option *ngFor="let c of customers" [value]="c.id">{{ c.name }}</option>
         </select>
       </div>
@@ -80,6 +91,23 @@
       <div class="form-group">
         <label>REMARK</label>
         <input type="text" [(ngModel)]="form.remark" placeholder="Enter remark" class="form-input"/>
+      </div>
+    </div>
+
+    <!-- Credit Balance -->
+    <div *ngIf="getCustomerCreditBalance() > 0" style="background:#d4edda;border-radius:16px;padding:14px 16px;margin-bottom:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div>
+          <div style="font-size:13px;font-weight:700;color:#27ae60;">Credit Balance Available</div>
+          <div style="font-size:18px;font-weight:800;color:#27ae60;">RM {{ getCustomerCreditBalance() | number:'1.2-2' }}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="font-size:13px;font-weight:600;color:#1a1a1a;">Use Credit?</span>
+          <input type="checkbox" [(ngModel)]="form.useCreditBalance" style="width:20px;height:20px;cursor:pointer;"/>
+        </div>
+      </div>
+      <div *ngIf="form.useCreditBalance" style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(0,0,0,0.1);font-size:12px;color:#27ae60;">
+        ? Credit balance will be applied automatically when invoice is created
       </div>
     </div>
 
@@ -146,6 +174,7 @@
             <div class="item-sub" style="color:#e67e22;">- RM {{ cn.amount | number:'1.2-2' }}</div>
             <div class="item-sub">{{ cn.reason }}</div>
             <div class="item-sub">{{ cn.createdAt | date:'dd/MM/yyyy' }}</div>
+            <div *ngIf="cn.createdAfterPayment" style="margin-top:4px;background:#fff3cd;border-radius:6px;padding:3px 8px;font-size:10px;font-weight:700;color:#f39c12;">Created after partial payment</div>
           </div>
         </div>
       </div>
@@ -208,7 +237,7 @@
     <button class="save-btn" (click)="saveInvoice()">UPDATE INVOICE</button>
   </div>
 
-  <!-- ═══ Receipt Preview Overlay ═══ -->
+  <!-- Receipt Preview -->
   <div *ngIf="showCheckPreview" class="receipt-overlay">
     <div class="receipt-top-bar">
       <ion-button fill="clear" class="back-btn" (click)="showCheckPreview=false">
@@ -222,7 +251,6 @@
 
     <div class="receipt-scroll">
       <div class="receipt-paper" id="receipt-paper">
-        <!-- Header -->
         <div class="receipt-header">
           <span class="receipt-type">TAX INVOICE</span>
           <div class="receipt-divider"></div>
@@ -233,13 +261,11 @@
           <span class="receipt-contact">TEL: {{ previewData?.companyTel || '012-6988080' }}&nbsp;&nbsp;&nbsp;GST: {{ previewData?.companyGst || '000134806856' }}</span>
         </div>
 
-        <!-- Doc Info -->
         <div class="receipt-doc-info">
           <div class="doc-row"><span class="doc-label">DOC NO</span><span class="doc-value">: {{ selectedInvoice?.invoiceNumber || 'S001-' + selectedInvoice?.id }}</span></div>
           <div class="doc-row"><span class="doc-label">DATE</span><span class="doc-value">: {{ selectedInvoice?.invoiceDate | date:'dd MMMM yyyy HH:mm' }}</span></div>
         </div>
 
-        <!-- Customer -->
         <div class="receipt-to">
           <span class="to-label">TO:</span>
           <div class="to-box">
@@ -249,7 +275,6 @@
           </div>
         </div>
 
-        <!-- Items Table -->
         <div class="receipt-divider-thin"></div>
         <div class="receipt-table-header">
           <span class="col-desc"><em>DESCRIPTION</em></span>
@@ -264,19 +289,17 @@
             <span class="item-gst">[{{ item.taxType || 'SR' }}]</span>
           </div>
           <div class="item-calc-row">
-            <span>{{ item.quantity }} × {{ (item.unitPrice || 0) | number:'1.2-2' }}</span>
+            <span>{{ item.quantity }} x {{ (item.unitPrice || 0) | number:'1.2-2' }}</span>
             <span class="item-subtotal">{{ ((item.quantity || 0) * (item.unitPrice || 0)) | number:'1.2-2' }}</span>
           </div>
         </div>
 
-        <!-- Totals -->
         <div class="receipt-divider-thin" style="margin-top:16px;"></div>
         <div class="receipt-totals">
           <div class="total-row"><span>GROSS TOTAL</span><span>RM {{ selectedInvoice?.totalAmount | number:'1.2-2' }}</span></div>
           <div class="total-row"><span>TAX TOTAL</span><span>RM {{ previewData?.taxTotal || '0.00' }}</span></div>
         </div>
 
-        <!-- Credit Notes (if any) -->
         <div *ngIf="selectedInvoice?.creditNotes?.length > 0" class="receipt-cn-section">
           <div class="receipt-divider-thin"></div>
           <div class="cn-header">CREDIT NOTE(S)</div>
@@ -294,19 +317,16 @@
           </div>
         </div>
 
-        <!-- Net Amount -->
         <div class="receipt-net">
           <span class="net-label">NET AMOUNT</span>
           <span class="net-value">RM {{ (selectedInvoice?.totalAmount - getTotalCN()) | number:'1.2-2' }}</span>
         </div>
 
-        <!-- Payment Due -->
         <div class="receipt-due-box">
           <span class="due-label">PAYMENT DUE</span>
           <span class="due-date">{{ previewData?.paymentDue || (selectedInvoice?.invoiceDate | date:'dd MMMM yyyy') }}</span>
         </div>
 
-        <!-- Signature -->
         <div class="receipt-signature">
           <span class="sig-label">SIGNATURE</span>
         </div>
@@ -327,3 +347,4 @@
   <ion-toast [isOpen]="showToast" [message]="toastMessage" duration="2000" position="bottom" (didDismiss)="showToast=false"></ion-toast>
 
 </ion-content>
+

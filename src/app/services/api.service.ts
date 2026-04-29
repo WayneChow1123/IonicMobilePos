@@ -36,6 +36,8 @@ export class ApiService {
   deleteCustomerProductPrice(customerId: any, productId: any): Observable<any> { return this.http.delete(this.baseUrl + '/Customer/DeleteCustomerProductPrice/customers/' + customerId + '/product-prices/' + productId, { responseType: 'text' }); }
 
   createInvoice(data: any): Observable<any> { return this.http.post(this.baseUrl + '/Invoice/CreateInvoice/invoices', data); }
+  getStockReadyInvoices(): Observable<any> { return this.http.get(this.baseUrl + '/Invoice/GetStockReadyInvoices/invoices/stock-ready'); }
+
   getInvoices(params?: any): Observable<any> { return this.http.get(this.baseUrl + '/Invoice/GetInvoices/invoices', { params }); }
   getInvoiceDetails(id: any): Observable<any> { return this.http.get(this.baseUrl + '/Invoice/GetInvoiceDetails/invoices/' + id); }
   updateInvoice(id: any, data: any): Observable<any> { return this.http.patch(this.baseUrl + '/Invoice/UpdateInvoice/invoices/' + id, data); }
@@ -54,6 +56,9 @@ export class ApiService {
   getProductById(id: any): Observable<any> { return this.http.get(this.baseUrl + '/Product/GetProductById/getproductsby/' + id); }
   editProduct(id: any, data: any): Observable<any> { return this.http.put(this.baseUrl + '/Product/EditProduct/editproduct/' + id, data); }
   deleteProduct(id: any): Observable<any> { return this.http.delete(this.baseUrl + '/Product/DeleteProduct/deleteproduct/' + id, { responseType: 'text' }); }
+  activateProduct(id: any): Observable<any> { return this.http.patch(this.baseUrl + '/Product/ActivateProduct/activateproduct/' + id, {}); }
+  deactivateProduct(id: any): Observable<any> { return this.http.patch(this.baseUrl + '/Product/DeactivateProduct/deactivateproduct/' + id, {}); }
+  addStock(id: any, data: any): Observable<any> { return this.http.patch(this.baseUrl + '/Product/AddStock/addstock/' + id, data); }
 
   getBillReport(): Observable<any> { return this.http.get(this.baseUrl + '/Report/GetBillReport/reports/bill'); }
   getProductSalesReport(): Observable<any> { return this.http.get(this.baseUrl + '/Report/GetProductSalesReport/reports/product-sales'); }

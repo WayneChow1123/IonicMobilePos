@@ -22,11 +22,13 @@ export class ProductsPage implements OnInit {
   searchTerm = '';
   activeTab = 'ALL';
   showModal = false;
+  showAddStockModal = false;
   isEditing = false;
   selectedProduct: any = null;
   showDeleteAlert = false;
   showToast = false;
   toastMessage = '';
+  addStockQty = 0;
   form: any = { name: '', description: '', barcode: '', category: 'DEFAULT', uom: 'UNIT', price: 0, rate: 1, cost: 0, lowestPrice: 0, stock: 0, includeTax: false };
   deleteButtons = [
     { text: 'Cancel', role: 'cancel' },
@@ -40,7 +42,7 @@ export class ProductsPage implements OnInit {
   loadProducts() {
     this.isLoading = true;
     this.api.getProducts().subscribe({
-      next: (res) => { this.products = Array.isArray(res) ? res : []; this.filteredProducts = [...this.products]; this.isLoading = false; },
+      next: (res) => { this.products = Array.isArray(res) ? res : []; this.filterProducts(); this.isLoading = false; },
       error: () => { this.isLoading = false; this.showToastMsg('Failed to load products'); }
     });
   }
@@ -70,10 +72,7 @@ export class ProductsPage implements OnInit {
     this.filteredProducts = filtered;
   }
 
-  setTab(tab: string) {
-    this.activeTab = tab;
-    this.filterProducts();
-  }
+  setTab(tab: string) { this.activeTab = tab; this.filterProducts(); }
 
   toggleSearch() {
     this.showSearch = !this.showSearch;
@@ -110,6 +109,8 @@ export class ProductsPage implements OnInit {
 
   saveProduct() {
     if (!this.form.name) { this.showToastMsg('Product name is required'); return; }
+    if (this.form.price < 0) { this.showToastMsg('Price cannot be negative'); return; }
+    if (this.form.stock < 0) { this.showToastMsg('Stock cannot be negative'); return; }
     if (!this.form.category) this.form.category = 'DEFAULT';
     if (this.isEditing && this.selectedProduct) {
       this.api.editProduct(this.selectedProduct.id, this.form).subscribe({
@@ -122,6 +123,40 @@ export class ProductsPage implements OnInit {
         error: (err: any) => this.showToastMsg('Failed: ' + (err.error?.message || err.message || 'error'))
       });
     }
+  }
+
+  toggleActive(product: any) {
+    if (product.isActive) {
+      this.api.deactivateProduct(product.id).subscribe({
+        next: () => { this.showToastMsg(product.name + ' deactivated!'); this.loadProducts(); },
+        error: (err: any) => this.showToastMsg('Failed: ' + (err.error?.message || err.message || 'error'))
+      });
+    } else {
+      this.api.activateProduct(product.id).subscribe({
+        next: () => { this.showToastMsg(product.name + ' activated!'); this.loadProducts(); },
+        error: (err: any) => this.showToastMsg('Failed: ' + (err.error?.message || err.message || 'error'))
+      });
+    }
+  }
+
+  openAddStockModal(product: any) {
+    this.selectedProduct = product;
+    this.addStockQty = 0;
+    this.showAddStockModal = true;
+  }
+
+  closeAddStockModal() { this.showAddStockModal = false; }
+
+  submitAddStock() {
+    if (!this.addStockQty || this.addStockQty <= 0) { this.showToastMsg('Quantity must be greater than 0'); return; }
+    this.api.addStock(this.selectedProduct.id, { quantity: this.addStockQty }).subscribe({
+      next: (res: any) => {
+        this.showToastMsg('Stock added! New stock: ' + res.newStock);
+        this.closeAddStockModal();
+        this.loadProducts();
+      },
+      error: (err: any) => this.showToastMsg('Failed: ' + (err.error?.message || err.message || 'error'))
+    });
   }
 
   confirmDelete(product: any) { this.selectedProduct = product; this.showDeleteAlert = true; }
