@@ -1,4 +1,4 @@
-﻿<ion-content [fullscreen]="true">
+<ion-content [fullscreen]="true">
 
   <div *ngIf="!showModal" class="page-container">
     <div class="top-bar">
@@ -116,9 +116,14 @@
         <ion-icon name="chevron-back-outline"></ion-icon> Back
       </ion-button>
       <span class="page-title">Edit Invoice</span>
-      <ion-button fill="clear" class="icon-btn" (click)="saveInvoice()">
-        <ion-icon name="save-outline"></ion-icon>
-      </ion-button>
+      <div class="top-bar-actions">
+        <ion-button fill="clear" class="icon-btn" (click)="openCheckPreview()">
+          <ion-icon name="document-text-outline"></ion-icon>
+        </ion-button>
+        <ion-button fill="clear" class="icon-btn" (click)="saveInvoice()">
+          <ion-icon name="save-outline"></ion-icon>
+        </ion-button>
+      </div>
     </div>
 
     <div *ngIf="selectedInvoice?.status === 'Paid'" style="background:#f8d7da;border-radius:16px;padding:14px 16px;margin-bottom:12px;display:flex;align-items:center;gap:10px;">
@@ -201,6 +206,114 @@
     </div>
 
     <button class="save-btn" (click)="saveInvoice()">UPDATE INVOICE</button>
+  </div>
+
+  <!-- ═══ Receipt Preview Overlay ═══ -->
+  <div *ngIf="showCheckPreview" class="receipt-overlay">
+    <div class="receipt-top-bar">
+      <ion-button fill="clear" class="back-btn" (click)="showCheckPreview=false">
+        <ion-icon name="chevron-back-outline"></ion-icon> Back
+      </ion-button>
+      <span class="page-title">LIVE PREVIEW</span>
+      <ion-button fill="clear" class="icon-btn" (click)="downloadReceipt()">
+        <ion-icon name="download-outline"></ion-icon>
+      </ion-button>
+    </div>
+
+    <div class="receipt-scroll">
+      <div class="receipt-paper" id="receipt-paper">
+        <!-- Header -->
+        <div class="receipt-header">
+          <span class="receipt-type">TAX INVOICE</span>
+          <div class="receipt-divider"></div>
+          <h2 class="receipt-company">{{ previewData?.companyName || 'B JAYA TRADING' }}</h2>
+          <span class="receipt-co-reg">({{ previewData?.companyReg || '001188861-T' }})</span>
+          <span class="receipt-address">{{ previewData?.companyAddress || 'NO. 467, JALAN PALAS 13, TAMAN PELANGI,' }}</span>
+          <span class="receipt-address">{{ previewData?.companyCity || '70400 SEREMBAN N.S, SEREMBAN, N.S, MALAYSIA' }}</span>
+          <span class="receipt-contact">TEL: {{ previewData?.companyTel || '012-6988080' }}&nbsp;&nbsp;&nbsp;GST: {{ previewData?.companyGst || '000134806856' }}</span>
+        </div>
+
+        <!-- Doc Info -->
+        <div class="receipt-doc-info">
+          <div class="doc-row"><span class="doc-label">DOC NO</span><span class="doc-value">: {{ selectedInvoice?.invoiceNumber || 'S001-' + selectedInvoice?.id }}</span></div>
+          <div class="doc-row"><span class="doc-label">DATE</span><span class="doc-value">: {{ selectedInvoice?.invoiceDate | date:'dd MMMM yyyy HH:mm' }}</span></div>
+        </div>
+
+        <!-- Customer -->
+        <div class="receipt-to">
+          <span class="to-label">TO:</span>
+          <div class="to-box">
+            <strong>{{ selectedInvoice?.customerName || getCustomerName(selectedInvoice?.customerId) }}</strong>
+            <br *ngIf="getCustomer(selectedInvoice?.customerId)?.address" />
+            <span *ngIf="getCustomer(selectedInvoice?.customerId)?.address">{{ getCustomer(selectedInvoice?.customerId)?.address }}</span>
+          </div>
+        </div>
+
+        <!-- Items Table -->
+        <div class="receipt-divider-thin"></div>
+        <div class="receipt-table-header">
+          <span class="col-desc"><em>DESCRIPTION</em></span>
+          <span class="col-gst">GST</span>
+          <span class="col-sub">SUBTOTAL</span>
+        </div>
+        <div class="receipt-divider-thin"></div>
+
+        <div *ngFor="let item of (previewData?.items || selectedInvoice?.items || []); let i = index" class="receipt-item">
+          <div class="item-desc-row">
+            <span>{{ i + 1 }}. {{ item.productName || getProductName(item.productId) }} ({{ item.uom || 'UNIT' }})</span>
+            <span class="item-gst">[{{ item.taxType || 'SR' }}]</span>
+          </div>
+          <div class="item-calc-row">
+            <span>{{ item.quantity }} × {{ (item.unitPrice || 0) | number:'1.2-2' }}</span>
+            <span class="item-subtotal">{{ ((item.quantity || 0) * (item.unitPrice || 0)) | number:'1.2-2' }}</span>
+          </div>
+        </div>
+
+        <!-- Totals -->
+        <div class="receipt-divider-thin" style="margin-top:16px;"></div>
+        <div class="receipt-totals">
+          <div class="total-row"><span>GROSS TOTAL</span><span>RM {{ selectedInvoice?.totalAmount | number:'1.2-2' }}</span></div>
+          <div class="total-row"><span>TAX TOTAL</span><span>RM {{ previewData?.taxTotal || '0.00' }}</span></div>
+        </div>
+
+        <!-- Credit Notes (if any) -->
+        <div *ngIf="selectedInvoice?.creditNotes?.length > 0" class="receipt-cn-section">
+          <div class="receipt-divider-thin"></div>
+          <div class="cn-header">CREDIT NOTE(S)</div>
+          <div *ngFor="let cn of selectedInvoice.creditNotes" class="cn-row">
+            <div class="cn-row-left">
+              <span class="cn-number">{{ cn.cnNumber || 'CN-' + cn.id }}</span>
+              <span class="cn-reason" *ngIf="cn.reason">{{ cn.reason }}</span>
+            </div>
+            <span class="cn-amount">- RM {{ cn.amount | number:'1.2-2' }}</span>
+          </div>
+          <div class="receipt-divider-thin"></div>
+          <div class="receipt-totals">
+            <div class="total-row"><span>SUBTOTAL</span><span>RM {{ selectedInvoice?.totalAmount | number:'1.2-2' }}</span></div>
+            <div class="total-row cn-deduct"><span>CREDIT NOTE</span><span>- RM {{ getTotalCN() | number:'1.2-2' }}</span></div>
+          </div>
+        </div>
+
+        <!-- Net Amount -->
+        <div class="receipt-net">
+          <span class="net-label">NET AMOUNT</span>
+          <span class="net-value">RM {{ (selectedInvoice?.totalAmount - getTotalCN()) | number:'1.2-2' }}</span>
+        </div>
+
+        <!-- Payment Due -->
+        <div class="receipt-due-box">
+          <span class="due-label">PAYMENT DUE</span>
+          <span class="due-date">{{ previewData?.paymentDue || (selectedInvoice?.invoiceDate | date:'dd MMMM yyyy') }}</span>
+        </div>
+
+        <!-- Signature -->
+        <div class="receipt-signature">
+          <span class="sig-label">SIGNATURE</span>
+        </div>
+
+        <div class="receipt-thanks">THANK YOU</div>
+      </div>
+    </div>
   </div>
 
   <ion-alert
