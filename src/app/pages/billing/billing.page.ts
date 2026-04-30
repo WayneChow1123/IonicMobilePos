@@ -144,7 +144,9 @@ export class BillingPage implements OnInit {
 
   getTotalCNForPayment(): number {
     if (!this.selectedInvoiceDetail?.creditNotes) return 0;
-    return this.selectedInvoiceDetail.creditNotes.reduce((sum: number, cn: any) => sum + (cn.amount || 0), 0);
+    return this.selectedInvoiceDetail.creditNotes
+      .filter((cn: any) => !cn.createdAfterPayment)
+      .reduce((sum: number, cn: any) => sum + (cn.amount || 0), 0);
   }
 
   getBalanceForPayment(): number {
@@ -152,6 +154,18 @@ export class BillingPage implements OnInit {
     const totalCN = this.getTotalCNForPayment();
     const netTotal = (this.selectedInvoiceDetail.totalAmount || 0) - totalCN;
     return netTotal - (this.selectedInvoiceDetail.paidAmount || 0);
+  }
+
+  useCreditNote(cn: any) {
+    if (cn.isUsed) return;
+    this.api.useCreditNote(Number(cn.invoiceId), Number(cn.id)).subscribe({
+      next: () => {
+        cn.isUsed = true;
+        this.showToastMsg('Credit note marked as used!');
+        this.loadCreditNotes();
+      },
+      error: (err: any) => this.showToastMsg('Failed: ' + (err.error?.message || err.message || 'error'))
+    });
   }
 
   savePayment() {
@@ -196,10 +210,8 @@ export class BillingPage implements OnInit {
   }
 
   ignoreStockIssue() {
-    // ? ???? invoice ?????
     if (this.pendingPayload) {
       this.waitingInvoiceId = this.pendingPayload.invoiceId;
-      // ??? localStorage
       const waiting = JSON.parse(localStorage.getItem('waitingInvoices') || '[]');
       if (!waiting.includes(this.pendingPayload.invoiceId)) {
         waiting.push(this.pendingPayload.invoiceId);
@@ -230,7 +242,11 @@ export class BillingPage implements OnInit {
     });
   }
 
-  confirmDeleteCN(cn: any) { this.selectedCN = cn; this.showDeleteCNAlert = true; }
+  confirmDeleteCN(cn: any) {
+    if (cn.isUsed) { this.showToastMsg('This credit note has been used and cannot be deleted'); return; }
+    this.selectedCN = cn;
+    this.showDeleteCNAlert = true;
+  }
   deleteCreditNote() {
     if (!this.selectedCN) return;
     this.api.deleteCreditNote(Number(this.selectedCN.invoiceId), Number(this.selectedCN.id)).subscribe({
@@ -240,7 +256,7 @@ export class BillingPage implements OnInit {
   }
 
   noLeadingZero(event: KeyboardEvent, val: any) {
-    if ((val === 0 || val === "" || val === null || val === undefined) && event.key === "0") {
+    if ((val === 0 || val === '' || val === null || val === undefined) && event.key === '0') {
       event.preventDefault();
     }
   }

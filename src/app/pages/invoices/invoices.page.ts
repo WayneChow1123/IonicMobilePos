@@ -17,6 +17,9 @@ export class InvoicesPage implements OnInit {
   filteredInvoices: any[] = [];
   customers: any[] = [];
   products: any[] = [];
+  allProducts: any[] = [];
+  availableCredits: any[] = [];
+  selectedCreditNoteId: number | null = null;
   isLoading = false;
   showModal = false;
   showSearch = false;
@@ -29,14 +32,6 @@ export class InvoicesPage implements OnInit {
   selectedCustomerDetail: any = null;
   showCheckPreview = false;
   previewData: any = null;
-  allProducts: any[] = [];
-
-  loadAllProducts() {
-    this.api.getProducts().subscribe({
-      next: (res) => { this.allProducts = (Array.isArray(res) ? res : []).filter((p: any) => p.isActive !== false); },
-      error: () => {}
-    });
-  }
   form: any = { customerId: 0, invoiceDate: new Date().toISOString(), remark: '', useCreditBalance: false, items: [{ productId: 0, quantity: 1 }] };
   editForm: any = { invoiceDate: new Date().toISOString(), remark: '', items: [{ productId: 0, quantity: 1, unitPrice: 0 }] };
   deleteButtons = [
@@ -51,12 +46,7 @@ export class InvoicesPage implements OnInit {
   loadInvoices() {
     this.isLoading = true;
     this.api.getInvoices().subscribe({
-      next: (res) => {
-        this.invoices = Array.isArray(res) ? res : [];
-        this.filteredInvoices = [...this.invoices];
-        this.isLoading = false;
-       
-      },
+      next: (res) => { this.invoices = Array.isArray(res) ? res : []; this.filteredInvoices = [...this.invoices]; this.isLoading = false; },
       error: () => { this.isLoading = false; this.showToastMsg('Failed to load invoices'); }
     });
   }
@@ -78,6 +68,20 @@ export class InvoicesPage implements OnInit {
     });
   }
 
+  loadAllProducts() {
+    this.api.getProducts().subscribe({
+      next: (res) => { this.allProducts = (Array.isArray(res) ? res : []).filter((p: any) => p.isActive !== false); },
+      error: () => {}
+    });
+  }
+
+  loadAvailableCredits(customerId: number) {
+    this.api.getAvailableCredits(customerId).subscribe({
+      next: (res: any) => { this.availableCredits = Array.isArray(res) ? res : []; },
+      error: () => { this.availableCredits = []; }
+    });
+  }
+
   toggleSearch() {
     this.showSearch = !this.showSearch;
     if (!this.showSearch) { this.searchTerm = ''; this.filteredInvoices = [...this.invoices]; }
@@ -95,7 +99,15 @@ export class InvoicesPage implements OnInit {
       const customer = this.customers.find((c: any) => c.id == this.form.customerId);
       this.selectedCustomerDetail = customer || null;
       this.form.useCreditBalance = false;
+      this.selectedCreditNoteId = null;
+      this.availableCredits = [];
+      this.loadAvailableCredits(Number(this.form.customerId));
     }
+  }
+
+  onProductChange(item: any) {
+    const product = this.products.find((p: any) => p.id == item.productId);
+    if (product) item.unitPrice = product.price;
   }
 
   getCustomerCreditBalance(): number {
@@ -107,6 +119,8 @@ export class InvoicesPage implements OnInit {
     this.isEditing = false;
     this.selectedInvoice = null;
     this.selectedCustomerDetail = this.customers.length > 0 ? this.customers[0] : null;
+    this.selectedCreditNoteId = null;
+    this.availableCredits = [];
     this.form = {
       customerId: this.customers.length > 0 ? this.customers[0].id : 0,
       invoiceDate: new Date().toISOString(),
@@ -114,6 +128,9 @@ export class InvoicesPage implements OnInit {
       useCreditBalance: false,
       items: [{ productId: this.products.length > 0 ? this.products[0].id : 0, quantity: 1 }]
     };
+    if (this.customers.length > 0) {
+      this.loadAvailableCredits(Number(this.customers[0].id));
+    }
     this.showModal = true;
   }
 
@@ -124,11 +141,7 @@ export class InvoicesPage implements OnInit {
     this.api.getInvoiceDetails(invoice.id).subscribe({
       next: (res: any) => {
         this.isLoading = false;
-        this.selectedInvoice = {
-          ...res,
-          customerName: res.customerName || invoice.customerName,
-          customerId: res.customerId ?? invoice.customerId,
-        };
+        this.selectedInvoice = { ...res, customerName: res.customerName || invoice.customerName, customerId: res.customerId ?? invoice.customerId };
         this.editForm = {
           invoiceDate: res.invoiceDate || new Date().toISOString(),
           remark: res.remark || '',
@@ -158,11 +171,6 @@ export class InvoicesPage implements OnInit {
     }
   }
 
-  onProductChange(item: any) {
-    const product = this.products.find((p: any) => p.id == item.productId);
-    if (product) item.unitPrice = product.price;
-  }
-
   removeItem(index: number) {
     if (this.isEditing) {
       if (this.editForm.items.length > 1) this.editForm.items.splice(index, 1);
@@ -175,7 +183,6 @@ export class InvoicesPage implements OnInit {
     const items = this.isEditing ? this.editForm.items : this.form.items;
     for (const item of items) {
       if (!item.quantity || item.quantity <= 0) { this.showToastMsg('Quantity must be greater than 0'); return; }
-      if (this.isEditing && item.unitPrice !== undefined && item.unitPrice <= 0) { this.showToastMsg('Unit price must be greater than 0'); return; }
     }
     if (this.isEditing && this.selectedInvoice) {
       if (this.selectedInvoice.status === 'Paid') { this.showToastMsg('Invoice is fully paid and cannot be modified'); return; }
@@ -185,7 +192,8 @@ export class InvoicesPage implements OnInit {
       });
     } else {
       if (!this.form.customerId) { this.showToastMsg('Please select a customer'); return; }
-      this.api.createInvoice(this.form).subscribe({
+      const payload = { ...this.form, selectedCreditNoteId: this.form.useCreditBalance ? this.selectedCreditNoteId : null };
+      this.api.createInvoice(payload).subscribe({
         next: () => { this.showToastMsg('Invoice created!'); this.closeModal(); this.loadInvoices(); this.loadCustomers(); },
         error: (err: any) => this.showToastMsg('Failed: ' + (err.error?.message || err.message || 'error'))
       });
@@ -204,15 +212,14 @@ export class InvoicesPage implements OnInit {
 
   getTotalCN(): number {
     if (!this.selectedInvoice?.creditNotes) return 0;
-    return this.selectedInvoice.creditNotes.reduce((sum: number, cn: any) => sum + (cn.amount || 0), 0);
+    return this.selectedInvoice.creditNotes
+      .filter((cn: any) => !cn.createdAfterPayment)
+      .reduce((sum: number, cn: any) => sum + (cn.amount || 0), 0);
   }
 
   getReceiptCreditNotes(): any[] {
     if (!this.selectedInvoice?.creditNotes) return [];
-    if (this.selectedInvoice.status === 'Paid') {
-      return this.selectedInvoice.creditNotes.filter((cn: any) => !cn.createdAfterPayment);
-    }
-    return this.selectedInvoice.creditNotes;
+    return this.selectedInvoice.creditNotes.filter((cn: any) => !cn.createdAfterPayment);
   }
 
   getReceiptTotalCN(): number {
@@ -233,8 +240,22 @@ export class InvoicesPage implements OnInit {
     return p ? p.name : 'Product #' + id;
   }
 
+  getFormTotal(): number {
+    if (!this.form.items || this.form.items.length === 0) return 0;
+    return this.form.items.reduce((sum: number, item: any) => {
+      const product = this.products.find((p: any) => p.id == item.productId);
+      const price = product?.price || 0;
+      return sum + (price * (item.quantity || 0));
+    }, 0);
+  }
+
+  isCreditUsable(creditAmount: number): boolean {
+    const total = this.getFormTotal();
+    return total > 0 && creditAmount <= total;
+  }
+
   noLeadingZero(event: KeyboardEvent, val: any) {
-    if ((val === 0 || val === "" || val === null || val === undefined) && event.key === "0") {
+    if ((val === 0 || val === '' || val === null || val === undefined) && event.key === '0') {
       event.preventDefault();
     }
   }
@@ -253,7 +274,7 @@ export class InvoicesPage implements OnInit {
   downloadReceipt() {
     const printWindow = window.open('', '_blank');
     if (!printWindow) { this.showToastMsg('Please allow pop-ups to download'); return; }
-    const styles = `<style>* { margin: 0; padding: 0; box-sizing: border-box; } body { font-family: 'Courier New', monospace; background: #F0EBE3; display: flex; justify-content: center; padding: 40px 20px; } .receipt { background: #fff; border-radius: 24px; padding: 40px 36px; max-width: 480px; width: 100%; box-shadow: 0 4px 24px rgba(0,0,0,0.08); } .receipt-type { display: block; text-align: center; font-size: 13px; letter-spacing: 6px; color: #888; margin-bottom: 16px; } .divider { height: 1px; background: #1a1a1a; margin: 12px 0; } .divider-thin { height: 1px; background: #ddd; margin: 12px 0; } .company { text-align: center; font-size: 22px; font-weight: 700; margin: 12px 0 4px; } .co-reg { display: block; text-align: center; font-size: 12px; color: #888; margin-bottom: 8px; } .address { display: block; text-align: center; font-size: 11px; color: #666; line-height: 1.6; } .contact { display: block; text-align: center; font-size: 11px; color: #888; margin-top: 6px; } .doc-row { display: flex; gap: 12px; margin: 4px 0; } .doc-label { font-size: 12px; font-weight: 700; min-width: 70px; } .doc-value { font-size: 12px; font-weight: 700; } .to-section { margin: 16px 0; } .to-label { font-size: 12px; font-style: italic; color: #888; } .to-box { border: 1px solid #ddd; border-radius: 8px; padding: 12px; margin-top: 6px; font-size: 12px; line-height: 1.6; } .table-header { display: flex; justify-content: space-between; font-size: 11px; font-weight: 700; font-style: italic; } .item-row { margin: 12px 0; } .item-desc { display: flex; justify-content: space-between; font-size: 12px; font-weight: 700; } .item-calc { font-size: 11px; color: #888; margin-top: 2px; display: flex; justify-content: space-between; } .total-row { display: flex; justify-content: space-between; font-size: 12px; margin: 4px 0; } .cn-deduct { font-weight: 700; color: #1a1a1a; } .cn-list-section { margin-top: 12px; } .cn-list-header { font-size: 11px; font-weight: 700; letter-spacing: 2px; margin: 8px 0; } .cn-list-row { display: flex; justify-content: space-between; align-items: flex-start; padding: 6px 0; border-bottom: 1px dashed #ddd; } .cn-list-row:last-child { border-bottom: none; } .cn-list-left { display: flex; flex-direction: column; gap: 2px; } .cn-list-number { font-size: 12px; font-weight: 700; } .cn-list-reason { font-size: 10px; color: #888; } .cn-list-amount { font-size: 12px; font-weight: 700; white-space: nowrap; } .net-bar { background: #1a1a1a; color: #fff; border-radius: 8px; padding: 14px 20px; display: flex; justify-content: space-between; align-items: center; margin: 16px 0; } .net-label { font-size: 12px; font-weight: 700; font-style: italic; } .net-value { font-size: 20px; font-weight: 700; } .payment-status-box { display: flex; justify-content: space-between; align-items: center; padding: 12px 20px; border: 1px dashed #ddd; border-radius: 8px; margin-bottom: 0; } .ps-label { font-size: 11px; font-weight: 700; letter-spacing: 2px; color: #888; } .ps-value { font-size: 14px; font-weight: 800; letter-spacing: 1px; color: #1a1a1a; } .payment-detail-box { border: 1px dashed #ddd; border-top: none; border-radius: 0 0 8px 8px; padding: 10px 20px; margin-bottom: 16px; } .pd-row { display: flex; justify-content: space-between; font-size: 12px; font-weight: 700; color: #1a1a1a; padding: 3px 0; } .pd-balance { padding-top: 6px; margin-top: 4px; border-top: 1px solid #eee; font-size: 13px; font-weight: 800; } .payment-status-box:not(:has(+ .payment-detail-box)) { margin-bottom: 16px; } .due-box { border: 1px solid #ddd; border-radius: 8px; padding: 16px; text-align: center; margin: 16px 0; } .due-label { display: block; font-size: 10px; letter-spacing: 3px; color: #888; margin-bottom: 6px; } .due-date { font-size: 18px; font-weight: 700; } .sig-box { border: 1px solid #ddd; border-radius: 8px; padding: 16px; min-height: 100px; margin: 16px 0; } .sig-label { font-size: 11px; color: #ccc; font-style: italic; } .thanks { text-align: center; font-size: 12px; letter-spacing: 6px; color: #ccc; margin-top: 20px; }</style>`;
+    const styles = `<style>* { margin: 0; padding: 0; box-sizing: border-box; } body { font-family: 'Courier New', monospace; background: #F0EBE3; display: flex; justify-content: center; padding: 40px 20px; } .receipt { background: #fff; border-radius: 24px; padding: 40px 36px; max-width: 480px; width: 100%; box-shadow: 0 4px 24px rgba(0,0,0,0.08); } .receipt-type { display: block; text-align: center; font-size: 13px; letter-spacing: 6px; color: #888; margin-bottom: 16px; } .divider { height: 1px; background: #1a1a1a; margin: 12px 0; } .divider-thin { height: 1px; background: #ddd; margin: 12px 0; } .company { text-align: center; font-size: 22px; font-weight: 700; margin: 12px 0 4px; } .co-reg { display: block; text-align: center; font-size: 12px; color: #888; margin-bottom: 8px; } .address { display: block; text-align: center; font-size: 11px; color: #666; line-height: 1.6; } .contact { display: block; text-align: center; font-size: 11px; color: #888; margin-top: 6px; } .doc-row { display: flex; gap: 12px; margin: 4px 0; } .doc-label { font-size: 12px; font-weight: 700; min-width: 70px; } .doc-value { font-size: 12px; font-weight: 700; } .to-section { margin: 16px 0; } .to-label { font-size: 12px; font-style: italic; color: #888; } .to-box { border: 1px solid #ddd; border-radius: 8px; padding: 12px; margin-top: 6px; font-size: 12px; line-height: 1.6; } .table-header { display: flex; justify-content: space-between; font-size: 11px; font-weight: 700; font-style: italic; } .item-row { margin: 12px 0; } .item-desc { display: flex; justify-content: space-between; font-size: 12px; font-weight: 700; } .item-calc { font-size: 11px; color: #888; margin-top: 2px; display: flex; justify-content: space-between; } .total-row { display: flex; justify-content: space-between; font-size: 12px; margin: 4px 0; } .net-bar { background: #1a1a1a; color: #fff; border-radius: 8px; padding: 14px 20px; display: flex; justify-content: space-between; align-items: center; margin: 16px 0; } .net-label { font-size: 12px; font-weight: 700; font-style: italic; } .net-value { font-size: 20px; font-weight: 700; } .due-box { border: 1px solid #ddd; border-radius: 8px; padding: 16px; text-align: center; margin: 16px 0; } .due-label { display: block; font-size: 10px; letter-spacing: 3px; color: #888; margin-bottom: 6px; } .due-date { font-size: 18px; font-weight: 700; } .sig-box { border: 1px solid #ddd; border-radius: 8px; padding: 16px; min-height: 100px; margin: 16px 0; } .sig-label { font-size: 11px; color: #ccc; font-style: italic; } .thanks { text-align: center; font-size: 12px; letter-spacing: 6px; color: #ccc; margin-top: 20px; } .cn-header { font-size: 11px; font-weight: 700; letter-spacing: 2px; color: #1a1a1a; margin: 8px 0; } .cn-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 12px; } .cn-number { font-weight: 700; } .cn-amount { font-weight: 700; color: #1a1a1a; } .cn-deduct { color: #1a1a1a; font-weight: 700; }</style>`;
     const inv = this.selectedInvoice;
     const pd = this.previewData;
     const items = pd?.items || inv?.items || [];
@@ -271,23 +292,17 @@ export class InvoicesPage implements OnInit {
     const cnHtml = totalCN > 0 ? `<div class="total-row cn-deduct"><span>CREDIT NOTE</span><span>- RM ${totalCN.toFixed(2)}</span></div>` : '';
     let cnListHtml = '';
     if (cns.length > 0) {
-      cnListHtml = `<div class="divider-thin"></div><div class="cn-list-section"><div class="cn-list-header">CREDIT NOTE(S)</div>`;
+      cnListHtml = `<div class="divider-thin"></div><div class="cn-header">CREDIT NOTE(S)</div>`;
       cns.forEach((cn: any) => {
-        cnListHtml += `<div class="cn-list-row"><div class="cn-list-left"><span class="cn-list-number">${cn.cnNumber || 'CN-' + cn.id}</span><span class="cn-list-reason">${cn.reason || ''}</span></div><span class="cn-list-amount">- RM ${(cn.amount || 0).toFixed(2)}</span></div>`;
+        cnListHtml += `<div class="cn-row"><span class="cn-number">${cn.cnNumber || 'CN-' + cn.id}${cn.reason ? ' (' + cn.reason + ')' : ''}</span><span class="cn-amount">- RM ${(cn.amount || 0).toFixed(2)}</span></div>`;
       });
-      cnListHtml += `</div>`;
     }
-    const paymentStatus = inv?.status === 'Paid' ? 'PAID' : inv?.status === 'Partial' ? 'PARTIALLY PAID' : 'UNPAID';
     const netAmount = (inv?.totalAmount || 0) - totalCN;
     const paidAmount = inv?.paidAmount || 0;
-    const balance = netAmount - paidAmount;
-    let paymentDetailHtml = '';
-    if (inv?.status === 'Partial') {
-      paymentDetailHtml = `<div class="payment-detail-box"><div class="pd-row"><span>PAID</span><span>RM ${paidAmount.toFixed(2)}</span></div><div class="pd-row pd-balance"><span>BALANCE</span><span>RM ${balance.toFixed(2)}</span></div></div>`;
-    }
-    printWindow.document.write(`<!DOCTYPE html><html><head><title>Invoice ${inv?.invoiceNumber || ''}</title>${styles}</head><body><div class="receipt"><span class="receipt-type">TAX INVOICE</span><div class="divider"></div><div class="company">${pd?.companyName || 'B JAYA TRADING'}</div><span class="co-reg">(${pd?.companyReg || '001188861-T'})</span><span class="address">${pd?.companyAddress || 'NO. 467, JALAN PALAS 13, TAMAN PELANGI,'}</span><span class="address">${pd?.companyCity || '70400 SEREMBAN N.S, SEREMBAN, N.S, MALAYSIA'}</span><span class="contact">TEL: ${pd?.companyTel || '012-6988080'} GST: ${pd?.companyGst || '000134806856'}</span><div style="margin-top:20px;"><div class="doc-row"><span class="doc-label">DOC NO</span><span class="doc-value">: ${inv?.invoiceNumber || 'S001-' + inv?.id}</span></div><div class="doc-row"><span class="doc-label">DATE</span><span class="doc-value">: ${dateStr}</span></div></div><div class="to-section"><span class="to-label">TO:</span><div class="to-box"><strong>${inv?.customerName || this.getCustomerName(inv?.customerId)}</strong></div></div><div class="divider-thin"></div><div class="table-header"><span>DESCRIPTION</span><span>GST SUBTOTAL</span></div><div class="divider-thin"></div>${itemsHtml}<div class="divider-thin"></div><div class="total-row"><span>GROSS TOTAL</span><span>RM ${(inv?.totalAmount || 0).toFixed(2)}</span></div><div class="total-row"><span>TAX TOTAL</span><span>RM ${pd?.taxTotal || '0.00'}</span></div>${cnHtml}${cnListHtml}<div class="net-bar"><span class="net-label">NET AMOUNT</span><span class="net-value">RM ${netAmount.toFixed(2)}</span></div><div class="payment-status-box"><span class="ps-label">PAYMENT STATUS</span><span class="ps-value">${paymentStatus}</span></div>${paymentDetailHtml}<div class="due-box"><span class="due-label">PAYMENT DUE</span><span class="due-date">${dueStr}</span></div><div class="sig-box"><span class="sig-label">SIGNATURE</span></div><div class="thanks">THANK YOU</div></div></body></html>`);
+    const paymentStatus = inv?.status === 'Paid' ? 'PAID' : inv?.status === 'Partial' ? 'PARTIALLY PAID' : 'UNPAID';
+    const paymentDetailHtml = inv?.status === 'Partial' ? `<div style="padding:8px 20px;border:1px dashed #ddd;border-top:none;border-radius:0 0 8px 8px;margin-bottom:16px;"><div style="display:flex;justify-content:space-between;font-size:12px;font-weight:700;padding:3px 0;"><span>PAID</span><span>RM ${paidAmount.toFixed(2)}</span></div><div style="display:flex;justify-content:space-between;font-size:13px;font-weight:800;padding:6px 0 3px;border-top:1px solid #eee;margin-top:4px;"><span>BALANCE</span><span>RM ${(netAmount - paidAmount).toFixed(2)}</span></div></div>` : '';
+    printWindow.document.write(`<!DOCTYPE html><html><head><title>Invoice ${inv?.invoiceNumber || ''}</title>${styles}</head><body><div class="receipt"><span class="receipt-type">TAX INVOICE</span><div class="divider"></div><div class="company">${pd?.companyName || 'B JAYA TRADING'}</div><span class="co-reg">(${pd?.companyReg || '001188861-T'})</span><span class="address">${pd?.companyAddress || 'NO. 467, JALAN PALAS 13, TAMAN PELANGI,'}</span><span class="address">${pd?.companyCity || '70400 SEREMBAN N.S, SEREMBAN, N.S, MALAYSIA'}</span><span class="contact">TEL: ${pd?.companyTel || '012-6988080'} GST: ${pd?.companyGst || '000134806856'}</span><div style="margin-top:20px;"><div class="doc-row"><span class="doc-label">DOC NO</span><span class="doc-value">: ${inv?.invoiceNumber || 'S001-' + inv?.id}</span></div><div class="doc-row"><span class="doc-label">DATE</span><span class="doc-value">: ${dateStr}</span></div></div><div class="to-section"><span class="to-label">TO:</span><div class="to-box"><strong>${inv?.customerName || this.getCustomerName(inv?.customerId)}</strong></div></div><div class="divider-thin"></div><div class="table-header"><span>DESCRIPTION</span><span>GST SUBTOTAL</span></div><div class="divider-thin"></div>${itemsHtml}<div class="divider-thin"></div><div class="total-row"><span>GROSS TOTAL</span><span>RM ${(inv?.totalAmount || 0).toFixed(2)}</span></div>${cnHtml}${cnListHtml}<div class="net-bar"><span class="net-label">NET AMOUNT</span><span class="net-value">RM ${netAmount.toFixed(2)}</span></div><div style="display:flex;justify-content:space-between;padding:12px 20px;border:1px dashed #ddd;border-radius:8px;margin-bottom:0;"><span style="font-size:11px;font-weight:700;letter-spacing:2px;color:#888;">PAYMENT STATUS</span><span style="font-size:14px;font-weight:800;">${paymentStatus}</span></div>${paymentDetailHtml}<div class="due-box"><span class="due-label">PAYMENT DUE</span><span class="due-date">${dueStr}</span></div><div class="sig-box"><span class="sig-label">SIGNATURE</span></div><div class="thanks">THANK YOU</div></div></body></html>`);
     printWindow.document.close();
     setTimeout(() => printWindow.print(), 500);
   }
 }
-

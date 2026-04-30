@@ -85,7 +85,14 @@ export class PreferencesPage implements OnInit {
 
   getTotalCN(details: any): number {
     if (!details?.creditNotes) return 0;
-    return details.creditNotes.reduce((sum: number, cn: any) => sum + (cn.amount || 0), 0);
+    return details.creditNotes
+      .filter((cn: any) => !cn.createdAfterPayment)
+      .reduce((sum: number, cn: any) => sum + (cn.amount || 0), 0);
+  }
+
+  getFilteredCNs(details: any): any[] {
+    if (!details?.creditNotes) return [];
+    return details.creditNotes.filter((cn: any) => !cn.createdAfterPayment);
   }
 
   exportPDF() {
@@ -169,7 +176,8 @@ export class PreferencesPage implements OnInit {
   exportSingle(invoice: any) {
     this.api.getInvoiceDetails(invoice.id).subscribe({
       next: (detail: any) => {
-        const totalCN = this.getTotalCN(detail);
+        const filteredCNs = this.getFilteredCNs(detail);
+        const totalCN = filteredCNs.reduce((sum: number, cn: any) => sum + (cn.amount || 0), 0);
         const netTotal = (invoice.totalAmount || 0) - totalCN;
         const balance = netTotal - (invoice.paidAmount || 0);
 
@@ -184,7 +192,6 @@ export class PreferencesPage implements OnInit {
         doc.text('Date: ' + new Date(invoice.invoiceDate).toLocaleDateString(), 14, 44);
         doc.text('Status: ' + invoice.status, 14, 51);
 
-        // Items table - ????
         const itemRows: any[] = [];
         if (detail?.items && detail.items.length > 0) {
           detail.items.forEach((item: any) => {
@@ -192,10 +199,22 @@ export class PreferencesPage implements OnInit {
           });
         }
 
-        // ? CN ??????
-        if (detail?.creditNotes && detail.creditNotes.length > 0) {
+        // ? Credit Used ??????
+        if (detail?.creditUsed > 0) {
           itemRows.push(['', '', '', '', '']);
-          detail.creditNotes.forEach((cn: any) => {
+          itemRows.push([
+            'Credit Balance Used' + (detail.creditCNNumber ? ' (' + detail.creditCNNumber + ')' : ''),
+            '',
+            '',
+            '- RM ' + (detail.creditUsed || 0).toFixed(2),
+            ''
+          ]);
+        }
+
+        // ? CN ??????
+        if (filteredCNs.length > 0) {
+          itemRows.push(['', '', '', '', '']);
+          filteredCNs.forEach((cn: any) => {
             itemRows.push([
               'Credit Note: ' + cn.cnNumber,
               '',
@@ -216,6 +235,10 @@ export class PreferencesPage implements OnInit {
           didParseCell: (data: any) => {
             if (data.row.raw && data.row.raw[0] && String(data.row.raw[0]).startsWith('Credit Note:')) {
               data.cell.styles.textColor = [230, 126, 34];
+              data.cell.styles.fontStyle = 'bold';
+            }
+            if (data.row.raw && data.row.raw[0] && String(data.row.raw[0]).startsWith('Credit Balance Used')) {
+              data.cell.styles.textColor = [39, 174, 96];
               data.cell.styles.fontStyle = 'bold';
             }
           }
@@ -240,7 +263,6 @@ export class PreferencesPage implements OnInit {
           doc.text('Balance:       RM ' + balance.toFixed(2), 14, finalY + 14);
         }
         doc.setTextColor(0, 0, 0);
-
         doc.save(invoice.invoiceNumber + '.pdf');
         this.showToastMsg('PDF exported!');
       },

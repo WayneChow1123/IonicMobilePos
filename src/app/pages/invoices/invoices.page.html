@@ -15,9 +15,7 @@
       <div *ngFor="let p of allProducts" style="flex-shrink:0;background:#fff;border-radius:12px;padding:8px 12px;display:flex;align-items:center;gap:8px;min-width:120px;">
         <div>
           <div style="font-size:12px;font-weight:700;color:#1a1a1a;">{{ p.name }}</div>
-          <div style="font-size:11px;font-weight:600;" [style.color]="p.stock === 0 ? '#e57373' : p.stock <= 10 ? '#f39c12' : '#27ae60'">
-            Stock: {{ p.stock }}
-          </div>
+          <div style="font-size:11px;font-weight:600;" [style.color]="p.stock === 0 ? '#e57373' : p.stock <= 10 ? '#f39c12' : '#27ae60'">Stock: {{ p.stock }}</div>
         </div>
       </div>
     </div>
@@ -57,7 +55,6 @@
           </ion-button>
         </div>
       </div>
-
       <div *ngIf="filteredInvoices.length===0" class="empty-state">
         <ion-icon name="receipt-outline"></ion-icon>
         <p>No invoices found</p>
@@ -94,21 +91,20 @@
       </div>
     </div>
 
-    <!-- Credit Balance -->
-    <div *ngIf="getCustomerCreditBalance() > 0" style="background:#d4edda;border-radius:16px;padding:14px 16px;margin-bottom:12px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;">
+    <div *ngIf="availableCredits.length > 0" style="background:#d4edda;border-radius:16px;padding:14px 16px;margin-bottom:12px;">
+      <div style="font-size:13px;font-weight:700;color:#27ae60;margin-bottom:10px;">Available Credits - Select to Use</div>
+      <div *ngFor="let credit of availableCredits" (click)="isCreditUsable(credit.amount) && (selectedCreditNoteId=credit.id) && (form.useCreditBalance=true)" style="background:#fff;border-radius:12px;padding:10px 14px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;" [style.border]="selectedCreditNoteId===credit.id ? '2px solid #27ae60' : '2px solid transparent'">
         <div>
-          <div style="font-size:13px;font-weight:700;color:#27ae60;">Credit Balance Available</div>
-          <div style="font-size:18px;font-weight:800;color:#27ae60;">RM {{ getCustomerCreditBalance() | number:'1.2-2' }}</div>
+          <div style="font-size:13px;font-weight:700;color:#1a1a1a;">{{ credit.cnNumber }}</div>
+          <div style="font-size:11px;color:#888;">{{ credit.invoiceNumber }} | {{ credit.reason }}</div>
         </div>
-        <div style="display:flex;align-items:center;gap:8px;">
-          <span style="font-size:13px;font-weight:600;color:#1a1a1a;">Use Credit?</span>
-          <input type="checkbox" [(ngModel)]="form.useCreditBalance" style="width:20px;height:20px;cursor:pointer;"/>
+        <div style="text-align:right;">
+          <div style="font-size:14px;font-weight:800;color:#27ae60;">RM {{ credit.amount | number:'1.2-2' }}</div>
+          <div *ngIf="selectedCreditNoteId===credit.id" style="font-size:10px;color:#27ae60;font-weight:700;">Selected</div>
+          <div *ngIf="!isCreditUsable(credit.amount)" style="font-size:10px;color:#e57373;font-weight:700;">Invoice total must be >= RM {{ credit.amount | number:'1.2-2' }}</div>
         </div>
       </div>
-      <div *ngIf="form.useCreditBalance" style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(0,0,0,0.1);font-size:12px;color:#27ae60;">
-        ? Credit balance will be applied automatically when invoice is created
-      </div>
+      <button *ngIf="selectedCreditNoteId" (click)="selectedCreditNoteId=null; form.useCreditBalance=false;" style="border:none;background:transparent;color:#e57373;font-size:12px;font-weight:700;cursor:pointer;padding:0;font-family:'DM Sans',sans-serif;">Clear Selection</button>
     </div>
 
     <div class="section-title">
@@ -159,6 +155,14 @@
       <span style="font-size:14px;font-weight:700;color:#c0392b;">This invoice is fully paid and cannot be edited</span>
     </div>
 
+    <div *ngIf="selectedInvoice?.creditUsed > 0" style="background:#d4edda;border-radius:16px;padding:12px 16px;margin-bottom:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <span style="font-size:13px;font-weight:700;color:#27ae60;">Credit Balance Used</span>
+        <span style="font-size:14px;font-weight:800;color:#27ae60;">RM {{ selectedInvoice.creditUsed | number:'1.2-2' }}</span>
+      </div>
+      <div *ngIf="selectedInvoice.creditCNNumber" style="font-size:11px;color:#27ae60;margin-top:4px;">CN: {{ selectedInvoice.creditCNNumber }}</div>
+    </div>
+
     <div *ngIf="selectedInvoice?.status === 'Partial'" class="partial-banner">
       <ion-icon name="time"></ion-icon>
       <span>Partially paid - RM {{ selectedInvoice?.paidAmount | number:'1.2-2' }} of RM {{ selectedInvoice?.totalAmount | number:'1.2-2' }}</span>
@@ -174,7 +178,10 @@
             <div class="item-sub" style="color:#e67e22;">- RM {{ cn.amount | number:'1.2-2' }}</div>
             <div class="item-sub">{{ cn.reason }}</div>
             <div class="item-sub">{{ cn.createdAt | date:'dd/MM/yyyy' }}</div>
-            <div *ngIf="cn.createdAfterPayment" style="margin-top:4px;background:#fff3cd;border-radius:6px;padding:3px 8px;font-size:10px;font-weight:700;color:#f39c12;">Created after partial payment</div>
+            <div *ngIf="cn.createdAfterPayment" style="margin-top:4px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+              <span style="background:#fff3cd;border-radius:6px;padding:3px 8px;font-size:10px;font-weight:700;color:#f39c12;">Created after partial payment</span>
+              <span [style.background]="cn.isUsed ? '#e0e0e0' : '#00bcd4'" [style.color]="cn.isUsed ? '#888' : '#fff'" style="font-size:10px;font-weight:700;padding:3px 8px;border-radius:6px;">{{ cn.isUsed ? "Credit Used" : "Credit Active" }}</span>
+            </div>
           </div>
         </div>
       </div>
@@ -237,7 +244,6 @@
     <button class="save-btn" (click)="saveInvoice()">UPDATE INVOICE</button>
   </div>
 
-  <!-- Receipt Preview -->
   <div *ngIf="showCheckPreview" class="receipt-overlay">
     <div class="receipt-top-bar">
       <ion-button fill="clear" class="back-btn" (click)="showCheckPreview=false">
@@ -248,7 +254,6 @@
         <ion-icon name="download-outline"></ion-icon>
       </ion-button>
     </div>
-
     <div class="receipt-scroll">
       <div class="receipt-paper" id="receipt-paper">
         <div class="receipt-header">
@@ -260,12 +265,10 @@
           <span class="receipt-address">{{ previewData?.companyCity || '70400 SEREMBAN N.S, SEREMBAN, N.S, MALAYSIA' }}</span>
           <span class="receipt-contact">TEL: {{ previewData?.companyTel || '012-6988080' }}&nbsp;&nbsp;&nbsp;GST: {{ previewData?.companyGst || '000134806856' }}</span>
         </div>
-
         <div class="receipt-doc-info">
           <div class="doc-row"><span class="doc-label">DOC NO</span><span class="doc-value">: {{ selectedInvoice?.invoiceNumber || 'S001-' + selectedInvoice?.id }}</span></div>
           <div class="doc-row"><span class="doc-label">DATE</span><span class="doc-value">: {{ selectedInvoice?.invoiceDate | date:'dd MMMM yyyy HH:mm' }}</span></div>
         </div>
-
         <div class="receipt-to">
           <span class="to-label">TO:</span>
           <div class="to-box">
@@ -274,7 +277,6 @@
             <span *ngIf="getCustomer(selectedInvoice?.customerId)?.address">{{ getCustomer(selectedInvoice?.customerId)?.address }}</span>
           </div>
         </div>
-
         <div class="receipt-divider-thin"></div>
         <div class="receipt-table-header">
           <span class="col-desc"><em>DESCRIPTION</em></span>
@@ -282,7 +284,6 @@
           <span class="col-sub">SUBTOTAL</span>
         </div>
         <div class="receipt-divider-thin"></div>
-
         <div *ngFor="let item of (previewData?.items || selectedInvoice?.items || []); let i = index" class="receipt-item">
           <div class="item-desc-row">
             <span>{{ i + 1 }}. {{ item.productName || getProductName(item.productId) }} ({{ item.uom || 'UNIT' }})</span>
@@ -293,14 +294,12 @@
             <span class="item-subtotal">{{ ((item.quantity || 0) * (item.unitPrice || 0)) | number:'1.2-2' }}</span>
           </div>
         </div>
-
         <div class="receipt-divider-thin" style="margin-top:16px;"></div>
         <div class="receipt-totals">
           <div class="total-row"><span>GROSS TOTAL</span><span>RM {{ selectedInvoice?.totalAmount | number:'1.2-2' }}</span></div>
           <div class="total-row"><span>TAX TOTAL</span><span>RM {{ previewData?.taxTotal || '0.00' }}</span></div>
           <div *ngIf="getReceiptTotalCN() > 0" class="total-row cn-deduct"><span>CREDIT NOTE</span><span>- RM {{ getReceiptTotalCN() | number:'1.2-2' }}</span></div>
         </div>
-
         <div *ngIf="getReceiptCreditNotes().length > 0" class="receipt-divider-thin"></div>
         <div *ngIf="getReceiptCreditNotes().length > 0" class="receipt-cn-section">
           <div class="cn-header">CREDIT NOTE(S)</div>
@@ -312,12 +311,17 @@
             <span class="cn-amount">- RM {{ cn.amount | number:'1.2-2' }}</span>
           </div>
         </div>
-
+        <div *ngIf="selectedInvoice?.creditUsed > 0" style="background:#d4edda;border-radius:12px;padding:10px 16px;margin-bottom:8px;">
+          <div style="display:flex;justify-content:space-between;">
+            <span style="font-size:12px;font-weight:700;color:#27ae60;">Credit Balance Used</span>
+            <span style="font-size:12px;font-weight:800;color:#27ae60;">RM {{ selectedInvoice.creditUsed | number:'1.2-2' }}</span>
+          </div>
+          <div *ngIf="selectedInvoice.creditCNNumber" style="font-size:10px;color:#27ae60;margin-top:2px;">CN: {{ selectedInvoice.creditCNNumber }}</div>
+        </div>
         <div class="receipt-net">
           <span class="net-label">NET AMOUNT</span>
           <span class="net-value">RM {{ (selectedInvoice?.totalAmount - getReceiptTotalCN()) | number:'1.2-2' }}</span>
         </div>
-
         <div class="receipt-payment-status">
           <span class="payment-status-label">PAYMENT STATUS</span>
           <span class="payment-status-value">{{ selectedInvoice?.status === 'Paid' ? 'PAID' : selectedInvoice?.status === 'Partial' ? 'PARTIALLY PAID' : 'UNPAID' }}</span>
@@ -326,16 +330,13 @@
           <div class="payment-detail-row"><span>PAID</span><span>RM {{ selectedInvoice?.paidAmount | number:'1.2-2' }}</span></div>
           <div class="payment-detail-row balance"><span>BALANCE</span><span>RM {{ ((selectedInvoice?.totalAmount - getReceiptTotalCN()) - (selectedInvoice?.paidAmount || 0)) | number:'1.2-2' }}</span></div>
         </div>
-
         <div class="receipt-due-box">
           <span class="due-label">PAYMENT DUE</span>
           <span class="due-date">{{ previewData?.paymentDue || (selectedInvoice?.invoiceDate | date:'dd MMMM yyyy') }}</span>
         </div>
-
         <div class="receipt-signature">
           <span class="sig-label">SIGNATURE</span>
         </div>
-
         <div class="receipt-thanks">THANK YOU</div>
       </div>
     </div>
@@ -352,5 +353,3 @@
   <ion-toast [isOpen]="showToast" [message]="toastMessage" duration="2000" position="bottom" (didDismiss)="showToast=false"></ion-toast>
 
 </ion-content>
-
-

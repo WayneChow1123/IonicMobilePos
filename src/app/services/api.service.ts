@@ -23,6 +23,10 @@ export class ApiService {
   createCreditNote(invoiceId: any, data: any): Observable<any> { return this.http.post(this.baseUrl + '/Credit/CreateCreditNote/invoices/' + invoiceId + '/credit-notes', data); }
   getCreditNotesByInvoice(invoiceId: any): Observable<any> { return this.http.get(this.baseUrl + '/Credit/GetCreditNotesByInvoice/invoices/' + invoiceId + '/credit-notes'); }
   getCreditNoteById(invoiceId: any, cnId: any): Observable<any> { return this.http.get(this.baseUrl + '/Credit/GetCreditNoteById/invoices/' + invoiceId + '/credit-notes/' + cnId); }
+  getAvailableCredits(customerId: number): Observable<any> { return this.http.get(this.baseUrl + '/Credit/GetAvailableCredits/customers/' + customerId + '/available-credits'); }
+
+  useCreditNote(invoiceId: number, cnId: number): Observable<any> { return this.http.patch(this.baseUrl + '/Credit/UseCreditNote/invoices/' + invoiceId + '/credit-notes/' + cnId + '/use', {}); }
+
   deleteCreditNote(invoiceId: any, cnId: any): Observable<any> { return this.http.delete(this.baseUrl + '/Credit/DeleteCreditNote/invoices/' + invoiceId + '/credit-notes/' + cnId, { responseType: 'text' }); }
   getAllCreditNotes(): Observable<any> { return this.http.get(this.baseUrl + '/Credit/GetAllCreditNotes/credit-notes/list'); }
 
