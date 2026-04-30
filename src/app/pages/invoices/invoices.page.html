@@ -298,28 +298,33 @@
         <div class="receipt-totals">
           <div class="total-row"><span>GROSS TOTAL</span><span>RM {{ selectedInvoice?.totalAmount | number:'1.2-2' }}</span></div>
           <div class="total-row"><span>TAX TOTAL</span><span>RM {{ previewData?.taxTotal || '0.00' }}</span></div>
+          <div *ngIf="getReceiptTotalCN() > 0" class="total-row cn-deduct"><span>CREDIT NOTE</span><span>- RM {{ getReceiptTotalCN() | number:'1.2-2' }}</span></div>
         </div>
 
-        <div *ngIf="selectedInvoice?.creditNotes?.length > 0" class="receipt-cn-section">
-          <div class="receipt-divider-thin"></div>
+        <div *ngIf="getReceiptCreditNotes().length > 0" class="receipt-divider-thin"></div>
+        <div *ngIf="getReceiptCreditNotes().length > 0" class="receipt-cn-section">
           <div class="cn-header">CREDIT NOTE(S)</div>
-          <div *ngFor="let cn of selectedInvoice.creditNotes" class="cn-row">
+          <div *ngFor="let cn of getReceiptCreditNotes()" class="cn-row">
             <div class="cn-row-left">
               <span class="cn-number">{{ cn.cnNumber || 'CN-' + cn.id }}</span>
-              <span class="cn-reason" *ngIf="cn.reason">{{ cn.reason }}</span>
+              <span class="cn-reason">{{ cn.reason }}</span>
             </div>
             <span class="cn-amount">- RM {{ cn.amount | number:'1.2-2' }}</span>
-          </div>
-          <div class="receipt-divider-thin"></div>
-          <div class="receipt-totals">
-            <div class="total-row"><span>SUBTOTAL</span><span>RM {{ selectedInvoice?.totalAmount | number:'1.2-2' }}</span></div>
-            <div class="total-row cn-deduct"><span>CREDIT NOTE</span><span>- RM {{ getTotalCN() | number:'1.2-2' }}</span></div>
           </div>
         </div>
 
         <div class="receipt-net">
           <span class="net-label">NET AMOUNT</span>
-          <span class="net-value">RM {{ (selectedInvoice?.totalAmount - getTotalCN()) | number:'1.2-2' }}</span>
+          <span class="net-value">RM {{ (selectedInvoice?.totalAmount - getReceiptTotalCN()) | number:'1.2-2' }}</span>
+        </div>
+
+        <div class="receipt-payment-status">
+          <span class="payment-status-label">PAYMENT STATUS</span>
+          <span class="payment-status-value">{{ selectedInvoice?.status === 'Paid' ? 'PAID' : selectedInvoice?.status === 'Partial' ? 'PARTIALLY PAID' : 'UNPAID' }}</span>
+        </div>
+        <div *ngIf="selectedInvoice?.status === 'Partial'" class="receipt-payment-detail">
+          <div class="payment-detail-row"><span>PAID</span><span>RM {{ selectedInvoice?.paidAmount | number:'1.2-2' }}</span></div>
+          <div class="payment-detail-row balance"><span>BALANCE</span><span>RM {{ ((selectedInvoice?.totalAmount - getReceiptTotalCN()) - (selectedInvoice?.paidAmount || 0)) | number:'1.2-2' }}</span></div>
         </div>
 
         <div class="receipt-due-box">

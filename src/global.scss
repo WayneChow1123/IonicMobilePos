@@ -21,3 +21,36 @@ ion-header {
     display: none;
   }
 }
+
+.app-main-title-box {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 24px;
+  
+  .app-logo-icon {
+    width: 44px;
+    height: 44px;
+    background: #1a1a1a;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 20px;
+  }
+  
+  .app-title-text {
+    font-size: 16px;
+    font-weight: 800;
+    color: #1a1a1a;
+    letter-spacing: 0.5px;
+    margin-bottom: 2px;
+  }
+  
+  .app-company-text {
+    font-size: 12px;
+    font-weight: 600;
+    color: #888;
+  }
+}
