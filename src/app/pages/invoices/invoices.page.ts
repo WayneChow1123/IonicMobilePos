@@ -1,4 +1,5 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
+import { NavController } from '@ionic/angular';
 import { Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { IonicModule } from '@ionic/angular';
@@ -39,7 +40,11 @@ export class InvoicesPage implements OnInit {
     { text: 'Delete', role: 'destructive', handler: () => this.deleteInvoice() }
   ];
 
-  constructor(private router: Router, private api: ApiService) {}
+  constructor(private router: Router, private navCtrl: NavController, private api: ApiService, private cdr: ChangeDetectorRef) {}
+
+  ionViewWillEnter() {
+    this.cdr.detectChanges();
+  }
 
   ngOnInit() { this.loadInvoices(); this.loadCustomers(); this.loadProducts(); this.loadAllProducts(); }
 
@@ -261,7 +266,7 @@ export class InvoicesPage implements OnInit {
   }
 
   showToastMsg(msg: string) { this.toastMessage = msg; this.showToast = true; }
-  goBack() { this.router.navigate(['pages/billing']); }
+  goBack() { this.navCtrl.navigateRoot('pages/billing'); }
 
   openCheckPreview() {
     if (!this.selectedInvoice) return;

@@ -1,4 +1,5 @@
-import { Component } from '@angular/core';
+import { Component, ChangeDetectorRef } from '@angular/core';
+import { NavController } from '@ionic/angular';
 import { Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { IonicModule } from '@ionic/angular';
@@ -14,10 +15,14 @@ export class SettingPage {
   deviceAutoBlocking = false;
   trainingMode = false;
 
-  constructor(private router: Router) {}
+  constructor(private router: Router, private navCtrl: NavController, private cdr: ChangeDetectorRef) {}
+
+  ionViewWillEnter() {
+    this.cdr.detectChanges();
+  }
 
   goBack() {
-    this.router.navigate(['pages/preferences']);
+    this.navCtrl.navigateRoot('pages/preferences');
   }
 
   toggleDeviceAutoBlocking() {
@@ -29,6 +34,6 @@ export class SettingPage {
   }
 
   navigateTo(section: string) {
-    this.router.navigate(['pages/' + section]);
+    this.navCtrl.navigateRoot('pages/' + section);
   }
 }

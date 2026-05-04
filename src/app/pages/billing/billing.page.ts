@@ -208,7 +208,7 @@ export class BillingPage implements OnInit {
 
   adjustInvoiceToStock() {
     this.showStockAlert = false;
-    this.router.navigate(['pages/invoices']);
+    this.navCtrl.navigateRoot('pages/invoices');
     this.showToastMsg('Please edit the invoice to match available stock');
   }
 
@@ -276,5 +276,5 @@ export class BillingPage implements OnInit {
   showToastMsg(msg: string) { this.toastMessage = msg; this.showToast = true; }
   goTo(path: string) { this.navCtrl.navigateRoot(path); }
 
-  goBack() { this.router.navigate(['pages/home']); }
+  goBack() { this.navCtrl.navigateRoot('pages/home'); }
 }

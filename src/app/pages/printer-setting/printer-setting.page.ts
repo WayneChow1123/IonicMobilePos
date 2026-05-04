@@ -1,4 +1,5 @@
-import { Component } from '@angular/core';
+import { Component, ChangeDetectorRef } from '@angular/core';
+import { NavController } from '@ionic/angular';
 import { Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { IonicModule } from '@ionic/angular';
@@ -48,10 +49,14 @@ export class PrinterSettingPage {
 
   contentOptions = this.buildOptions('FORMAT 1');
 
-  constructor(private router: Router) {}
+  constructor(private router: Router, private navCtrl: NavController, private cdr: ChangeDetectorRef) {}
+
+  ionViewWillEnter() {
+    this.cdr.detectChanges();
+  }
 
   goBack() {
-    this.router.navigate(['pages/setting']);
+    this.navCtrl.navigateRoot('pages/setting');
   }
 
   togglePaperWidth() {

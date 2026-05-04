@@ -1,4 +1,5 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
+import { NavController } from '@ionic/angular';
 import { Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { IonicModule } from '@ionic/angular';
@@ -21,7 +22,11 @@ export class CustomerDetailPage implements OnInit {
   customerInvoices: any[] = [];
   showInvoiceList = false;
 
-  constructor(private router: Router, private api: ApiService) {}
+  constructor(private router: Router, private navCtrl: NavController, private api: ApiService, private cdr: ChangeDetectorRef) {}
+
+  ionViewWillEnter() {
+    this.cdr.detectChanges();
+  }
 
   ngOnInit() { this.loadCustomers(); }
 
@@ -76,6 +81,6 @@ export class CustomerDetailPage implements OnInit {
   }
 
   showToastMsg(msg: string) { this.toastMessage = msg; this.showToast = true; }
-  goToInvoice(invoice: any) { this.router.navigate(['pages/invoices'], { queryParams: { id: invoice.id } }); }
-  goBack() { this.router.navigate(['pages/home']); }
+  goToInvoice(invoice: any) { this.navCtrl.navigateRoot('pages/invoices', { queryParams: { id: invoice.id } }); }
+  goBack() { this.navCtrl.navigateRoot('pages/home'); }
 }

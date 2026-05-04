@@ -1,4 +1,5 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
+import { NavController } from '@ionic/angular';
 import { Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { IonicModule } from '@ionic/angular';
@@ -31,7 +32,11 @@ export class CustomersPage implements OnInit {
     { text: 'Delete', role: 'destructive', handler: () => this.deleteCustomer() }
   ];
 
-  constructor(private router: Router, private api: ApiService) {}
+  constructor(private router: Router, private navCtrl: NavController, private api: ApiService, private cdr: ChangeDetectorRef) {}
+
+  ionViewWillEnter() {
+    this.cdr.detectChanges();
+  }
 
   ngOnInit() { this.loadCustomers(); }
 
@@ -108,5 +113,5 @@ export class CustomersPage implements OnInit {
   }
 
   showToastMsg(msg: string) { this.toastMessage = msg; this.showToast = true; }
-  goBack() { this.router.navigate(['pages/home']); }
+  goBack() { this.navCtrl.navigateRoot('pages/home'); }
 }

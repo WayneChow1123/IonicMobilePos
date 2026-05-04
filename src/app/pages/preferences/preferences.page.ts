@@ -291,5 +291,5 @@ export class PreferencesPage implements OnInit {
   showToastMsg(msg: string) { this.toastMessage = msg; this.showToast = true; }
   goTo(path: string) { this.navCtrl.navigateRoot(path); }
 
-  goBack() { this.router.navigate(['pages/home']); }
+  goBack() { this.navCtrl.navigateRoot('pages/home'); }
 }
