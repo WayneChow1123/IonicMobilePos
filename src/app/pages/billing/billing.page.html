@@ -1,6 +1,7 @@
-<ion-content [fullscreen]="true">
+<ion-content>
 
-  <div *ngIf="currentView==='home'" class="page-container">
+
+  <div [hidden]="currentView !== 'home'" class="page-container">
     <div class="top-bar">
       <ion-button fill="clear" class="back-btn" (click)="goBack()">
         <ion-icon name="chevron-back-outline"></ion-icon> Back
@@ -222,18 +223,6 @@
     </div>
   </div>
 
-  <div *ngIf="currentView==='home'" class="bottom-nav">
-    <ion-button fill="clear" class="nav-btn" (click)="goTo('pages/home')">
-      <ion-icon name="home-outline"></ion-icon>
-    </ion-button>
-    <ion-button fill="clear" class="nav-btn active" (click)="goTo('pages/billing')">
-      <ion-icon name="swap-horizontal-outline"></ion-icon>
-    </ion-button>
-    <ion-button fill="clear" class="nav-btn" (click)="goTo('pages/preferences')">
-      <ion-icon name="options-outline"></ion-icon>
-    </ion-button>
-  </div>
-
   <div *ngIf="showStockAlert" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:flex-end;">
     <div style="background:#F0EBE3;border-radius:24px 24px 0 0;padding:24px 20px;width:100%;max-height:80vh;overflow-y:auto;">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
@@ -260,3 +249,15 @@
   <ion-toast [isOpen]="showToast" [message]="toastMessage" duration="2000" position="bottom" (didDismiss)="showToast=false"></ion-toast>
 
 </ion-content>
+
+<div *ngIf="currentView==='home'" class="bottom-nav">
+  <ion-button fill="clear" class="nav-btn" (click)="goTo('pages/home')">
+    <ion-icon name="home-outline"></ion-icon>
+  </ion-button>
+  <ion-button fill="clear" class="nav-btn active" (click)="goTo('pages/billing')">
+    <ion-icon name="swap-horizontal-outline"></ion-icon>
+  </ion-button>
+  <ion-button fill="clear" class="nav-btn" (click)="goTo('pages/preferences')">
+    <ion-icon name="options-outline"></ion-icon>
+  </ion-button>
+</div>

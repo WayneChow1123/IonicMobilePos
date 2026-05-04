@@ -1,4 +1,7 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
+import { NavController } from '@ionic/angular';
+
+
 import { Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { IonicModule } from '@ionic/angular';
@@ -17,6 +20,11 @@ import { catchError } from 'rxjs/operators';
   styleUrls: ['./preferences.page.scss'],
 })
 export class PreferencesPage implements OnInit {
+  ionViewWillEnter() {
+    this.showExportModal = false;
+    this.cdr.detectChanges();
+  }
+
   showToast = false;
   toastMessage = '';
   showExportModal = false;
@@ -29,7 +37,10 @@ export class PreferencesPage implements OnInit {
   selectedInvoiceId = '';
   searchTerm = '';
 
-  constructor(private router: Router, private api: ApiService) {}
+  constructor(private router: Router, private navCtrl: NavController, private api: ApiService, private cdr: ChangeDetectorRef) {}
+
+
+
 
   ngOnInit() { this.loadCustomers(); this.loadInvoices(); }
 
@@ -278,6 +289,7 @@ export class PreferencesPage implements OnInit {
   }
 
   showToastMsg(msg: string) { this.toastMessage = msg; this.showToast = true; }
-  goTo(path: string) { this.router.navigate([path]); }
+  goTo(path: string) { this.navCtrl.navigateRoot(path); }
+
   goBack() { this.router.navigate(['pages/home']); }
 }

@@ -1,4 +1,4 @@
-<ion-content [fullscreen]="true">
+<ion-content>
   <div class="home-container">
 
     <div class="app-main-title-box">
@@ -55,17 +55,16 @@
 
     </div>
   </div>
-
-  <div class="bottom-nav">
-    <ion-button fill="clear" class="nav-btn active" (click)="goTo('pages/home')">
-      <ion-icon name="home"></ion-icon>
-    </ion-button>
-    <ion-button fill="clear" class="nav-btn" (click)="goTo('pages/billing')">
-      <ion-icon name="swap-horizontal-outline"></ion-icon>
-    </ion-button>
-    <ion-button fill="clear" class="nav-btn" (click)="goTo('pages/preferences')">
-      <ion-icon name="options-outline"></ion-icon>
-    </ion-button>
-  </div>
-
 </ion-content>
+
+<div class="bottom-nav">
+  <ion-button fill="clear" class="nav-btn active" (click)="goTo('pages/home')">
+    <ion-icon name="home"></ion-icon>
+  </ion-button>
+  <ion-button fill="clear" class="nav-btn" (click)="goTo('pages/billing')">
+    <ion-icon name="swap-horizontal-outline"></ion-icon>
+  </ion-button>
+  <ion-button fill="clear" class="nav-btn" (click)="goTo('pages/preferences')">
+    <ion-icon name="options-outline"></ion-icon>
+  </ion-button>
+</div>

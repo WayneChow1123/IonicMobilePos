@@ -1,6 +1,7 @@
-<ion-content [fullscreen]="true">
+<ion-content>
 
-  <div *ngIf="!showExportModal" class="pref-container">
+  <div [hidden]="showExportModal" class="pref-container">
+
     <div class="top-bar">
       <ion-button fill="clear" class="back-btn" (click)="goBack()">
         <ion-icon name="chevron-back-outline"></ion-icon> Back
@@ -138,18 +139,19 @@
 
   </div>
 
-  <div *ngIf="!showExportModal" class="bottom-nav">
-    <ion-button fill="clear" class="nav-btn" (click)="goTo('pages/home')">
-      <ion-icon name="home-outline"></ion-icon>
-    </ion-button>
-    <ion-button fill="clear" class="nav-btn" (click)="goTo('pages/billing')">
-      <ion-icon name="swap-horizontal-outline"></ion-icon>
-    </ion-button>
-    <ion-button fill="clear" class="nav-btn active" (click)="goTo('pages/preferences')">
-      <ion-icon name="options-outline"></ion-icon>
-    </ion-button>
-  </div>
-
-  <ion-toast [isOpen]="showToast" [message]="toastMessage" duration="2000" position="bottom" (didDismiss)="showToast=false"></ion-toast>
-
 </ion-content>
+
+<div *ngIf="!showExportModal" class="bottom-nav">
+  <ion-button fill="clear" class="nav-btn" (click)="goTo('pages/home')">
+    <ion-icon name="home-outline"></ion-icon>
+  </ion-button>
+  <ion-button fill="clear" class="nav-btn" (click)="goTo('pages/billing')">
+    <ion-icon name="swap-horizontal-outline"></ion-icon>
+  </ion-button>
+  <ion-button fill="clear" class="nav-btn active" (click)="goTo('pages/preferences')">
+    <ion-icon name="options-outline"></ion-icon>
+  </ion-button>
+</div>
+
+<ion-toast [isOpen]="showToast" [message]="toastMessage" duration="2000" position="bottom" (didDismiss)="showToast=false"></ion-toast>
+

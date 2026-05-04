@@ -1,4 +1,7 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
+import { NavController } from '@ionic/angular';
+
+
 import { Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { IonicModule } from '@ionic/angular';
@@ -13,6 +16,12 @@ import { ApiService } from '../../services/api.service';
   styleUrls: ['./billing.page.scss'],
 })
 export class BillingPage implements OnInit {
+  ionViewWillEnter() {
+    this.currentView = 'home';
+    this.cdr.detectChanges();
+  }
+
+
   payments: any[] = [];
   filteredPayments: any[] = [];
   creditNotes: any[] = [];
@@ -47,7 +56,10 @@ export class BillingPage implements OnInit {
     { text: 'Delete', role: 'destructive', handler: () => this.deleteCreditNote() }
   ];
 
-  constructor(private router: Router, private api: ApiService) {}
+  constructor(private router: Router, private navCtrl: NavController, private api: ApiService, private cdr: ChangeDetectorRef) {}
+
+
+
 
   ngOnInit() { this.loadCustomers(); }
 
@@ -262,6 +274,7 @@ export class BillingPage implements OnInit {
   }
 
   showToastMsg(msg: string) { this.toastMessage = msg; this.showToast = true; }
-  goTo(path: string) { this.router.navigate([path]); }
+  goTo(path: string) { this.navCtrl.navigateRoot(path); }
+
   goBack() { this.router.navigate(['pages/home']); }
 }
