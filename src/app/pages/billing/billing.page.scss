@@ -3,7 +3,7 @@ ion-content {
 }
 
 .page-container {
-    padding: 16px 20px 100px;
+    padding: 16px 20px 88px;
     max-width: 1040px;
     margin: 0 auto;
 }
@@ -40,7 +40,7 @@ ion-content {
 }
 
 .header {
-    margin-bottom: 24px;
+    margin-bottom: 18px;
 
     .section-label {
         font-size: 11px;
@@ -51,7 +51,7 @@ ion-content {
     }
 
     h1 {
-        font-size: 26px;
+        font-size: 24px;
         font-weight: 400;
         line-height: 1.3;
         margin: 0;
@@ -67,8 +67,8 @@ ion-content {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     column-gap: 16px;
-    row-gap: 30px;
-    margin-bottom: 32px;
+    row-gap: 20px;
+    margin-bottom: 22px;
 }
 
 .card,
@@ -88,12 +88,12 @@ ion-content {
 }
 
 .card {
-    padding: 30px 18px;
-    min-height: 170px;
+    padding: 22px 18px;
+    min-height: 142px;
 
     &.card-wide {
         grid-column: 1 / -1;
-        min-height: 122px;
+        min-height: 106px;
         background: #cdd9c1;
         border-color: #cdd9c1;
     }
@@ -103,7 +103,7 @@ ion-content {
         flex-direction: column;
         align-items: center;
         justify-content: space-between;
-        gap: 30px;
+        gap: 22px;
     }
 
     &.card-wide .card-content {
@@ -148,13 +148,13 @@ ion-content {
     font-size: 18px;
     font-weight: 700;
     color: #1a1a1a;
-    margin-bottom: 14px;
+    margin-bottom: 10px;
 }
 
 .report-list {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 16px;
+    gap: 14px;
 
     .report-item {
         padding: 16px 8px 14px;
@@ -168,7 +168,7 @@ ion-content {
         line-height: 1.25;
         color: #2c2c2c;
         text-align: center;
-        min-height: 96px;
+        min-height: 84px;
 
         ion-icon {
             width: 42px;
@@ -194,7 +194,7 @@ ion-content {
 
 .bottom-nav {
     position: fixed;
-    bottom: 24px;
+    bottom: 16px;
     left: 50%;
     transform: translateX(-50%);
     background: #1a1a1a;
