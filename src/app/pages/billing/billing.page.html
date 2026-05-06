@@ -6,6 +6,9 @@
       <ion-button fill="clear" class="back-btn" (click)="goBack()">
         <ion-icon name="chevron-back-outline"></ion-icon> Back
       </ion-button>
+      <ion-button fill="clear" class="more-btn">
+        <ion-icon name="ellipsis-vertical-outline"></ion-icon>
+      </ion-button>
     </div>
     <div class="app-main-title-box">
       <div class="app-logo-icon">
@@ -44,15 +47,15 @@
     <div class="report-list">
       <div class="report-item" (click)="goTo('pages/invoices')">
         <span>Invoice Report</span>
-        <ion-icon name="arrow-forward-outline"></ion-icon>
+        <ion-icon name="receipt-outline"></ion-icon>
       </div>
       <div class="report-item" (click)="openCNList()">
         <span>C.N. Report</span>
-        <ion-icon name="arrow-forward-outline"></ion-icon>
+        <ion-icon name="document-outline"></ion-icon>
       </div>
       <div class="report-item" (click)="openPaymentList()">
         <span>Payment Report</span>
-        <ion-icon name="arrow-forward-outline"></ion-icon>
+        <ion-icon name="wallet-outline"></ion-icon>
       </div>
     </div>
   </div>
