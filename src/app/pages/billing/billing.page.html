@@ -7,6 +7,15 @@
         <ion-icon name="chevron-back-outline"></ion-icon> Back
       </ion-button>
     </div>
+    <div class="app-main-title-box">
+      <div class="app-logo-icon">
+        <ion-icon name="phone-portrait-outline"></ion-icon>
+      </div>
+      <div>
+        <div class="app-title-text">TD Mobile POS</div>
+        <div class="app-company-text">B JAYA TRADING</div>
+      </div>
+    </div>
     <div class="header">
       <p class="section-label">DAILY ACTIONS</p>
       <h1>Hello there,<br>What do you need <strong>to bill?</strong></h1>
@@ -69,33 +78,39 @@
         <label>INVOICE *</label>
         <select [(ngModel)]="paymentForm.invoiceId" class="form-select" (change)="onInvoiceChange()">
           <option value="0">Select Invoice</option>
-          <option *ngFor="let inv of invoices" [value]="inv.id">{{ inv.invoiceNumber }} (RM {{ inv.totalAmount | number:'1.2-2' }}) - {{ inv.status }}</option>
+          <option *ngFor="let inv of invoices" [value]="inv.id">{{ inv.invoiceNumber }} (RM {{ inv.totalAmount |
+            number:'1.2-2' }}) - {{ inv.status }}</option>
         </select>
       </div>
     </div>
-    <div *ngIf="selectedInvoiceDetail" style="background:#fff3cd;border-radius:16px;padding:14px 16px;margin-bottom:12px;">
+    <div *ngIf="selectedInvoiceDetail"
+      style="background:#fff3cd;border-radius:16px;padding:14px 16px;margin-bottom:12px;">
       <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
         <span style="font-size:13px;color:#888;">Total Invoice</span>
         <span style="font-size:13px;font-weight:700;">RM {{ selectedInvoiceDetail.totalAmount | number:'1.2-2' }}</span>
       </div>
       <div *ngIf="getTotalCNForPayment() > 0" style="display:flex;justify-content:space-between;margin-bottom:6px;">
         <span style="font-size:13px;color:#e67e22;">Credit Notes</span>
-        <span style="font-size:13px;font-weight:700;color:#e67e22;">- RM {{ getTotalCNForPayment() | number:'1.2-2' }}</span>
+        <span style="font-size:13px;font-weight:700;color:#e67e22;">- RM {{ getTotalCNForPayment() | number:'1.2-2'
+          }}</span>
       </div>
       <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
         <span style="font-size:13px;color:#888;">Already Paid</span>
-        <span style="font-size:13px;font-weight:700;color:#27ae60;">RM {{ selectedInvoiceDetail.paidAmount | number:'1.2-2' }}</span>
+        <span style="font-size:13px;font-weight:700;color:#27ae60;">RM {{ selectedInvoiceDetail.paidAmount |
+          number:'1.2-2' }}</span>
       </div>
       <div style="height:1px;background:rgba(0,0,0,0.1);margin:8px 0;"></div>
       <div style="display:flex;justify-content:space-between;">
         <span style="font-size:14px;font-weight:800;color:#1a1a1a;">Balance Due</span>
-        <span style="font-size:14px;font-weight:800;color:#e57373;">RM {{ getBalanceForPayment() | number:'1.2-2' }}</span>
+        <span style="font-size:14px;font-weight:800;color:#e57373;">RM {{ getBalanceForPayment() | number:'1.2-2'
+          }}</span>
       </div>
     </div>
     <div class="form-card" style="background:#C5C8E0;">
       <div class="form-group">
         <label>AMOUNT (RM) *</label>
-        <input type="number" [(ngModel)]="paymentForm.amount" (keydown)="noLeadingZero($event, paymentForm.amount)" placeholder="0.00" class="form-input" min="0"/>
+        <input type="number" [(ngModel)]="paymentForm.amount" (keydown)="noLeadingZero($event, paymentForm.amount)"
+          placeholder="0.00" class="form-input" min="0" />
       </div>
       <div class="form-group">
         <label>PAYMENT METHOD</label>
@@ -105,7 +120,8 @@
       </div>
       <div class="form-group">
         <label>REFERENCE NO</label>
-        <input type="text" [(ngModel)]="paymentForm.referenceNo" placeholder="Enter reference number" class="form-input"/>
+        <input type="text" [(ngModel)]="paymentForm.referenceNo" placeholder="Enter reference number"
+          class="form-input" />
       </div>
     </div>
     <button class="save-btn" (click)="savePayment()">CREATE PAYMENT</button>
@@ -126,16 +142,19 @@
         <label>INVOICE *</label>
         <select [(ngModel)]="cnForm.invoiceId" class="form-select">
           <option value="0">Select Invoice</option>
-          <option *ngFor="let inv of invoices" [value]="inv.id">{{ inv.invoiceNumber }} - {{ inv.customerName }} (RM {{ inv.totalAmount | number:'1.2-2' }})</option>
+          <option *ngFor="let inv of invoices" [value]="inv.id">{{ inv.invoiceNumber }} - {{ inv.customerName }} (RM {{
+            inv.totalAmount | number:'1.2-2' }})</option>
         </select>
       </div>
       <div class="form-group">
         <label>AMOUNT (RM) *</label>
-        <input type="number" [(ngModel)]="cnForm.amount" (keydown)="noLeadingZero($event, cnForm.amount)" placeholder="0.00" class="form-input" min="0"/>
+        <input type="number" [(ngModel)]="cnForm.amount" (keydown)="noLeadingZero($event, cnForm.amount)"
+          placeholder="0.00" class="form-input" min="0" />
       </div>
       <div class="form-group">
         <label>REASON *</label>
-        <textarea [(ngModel)]="cnForm.reason" placeholder="Enter reason for credit note..." class="form-textarea"></textarea>
+        <textarea [(ngModel)]="cnForm.reason" placeholder="Enter reason for credit note..."
+          class="form-textarea"></textarea>
       </div>
     </div>
     <button class="save-btn" (click)="saveCreditNote()">CREATE CREDIT NOTE</button>
@@ -151,7 +170,9 @@
         <ion-icon name="add-outline"></ion-icon>
       </ion-button>
     </div>
-    <ion-searchbar [(ngModel)]="paymentSearchTerm" (ionInput)="filterPayments()" placeholder="Search customer / invoice / ref..." style="--background:#fff;--border-radius:16px;--box-shadow:none;padding:0;margin-bottom:12px;"></ion-searchbar>
+    <ion-searchbar [(ngModel)]="paymentSearchTerm" (ionInput)="filterPayments()"
+      placeholder="Search customer / invoice / ref..."
+      style="--background:#fff;--border-radius:16px;--box-shadow:none;padding:0;margin-bottom:12px;"></ion-searchbar>
     <div *ngIf="isLoading" style="display:flex;justify-content:center;padding:60px;">
       <ion-spinner name="crescent"></ion-spinner>
     </div>
@@ -189,7 +210,9 @@
         <ion-icon name="add-outline"></ion-icon>
       </ion-button>
     </div>
-    <ion-searchbar [(ngModel)]="cnSearchTerm" (ionInput)="filterCreditNotes()" placeholder="Search CN / invoice / customer..." style="--background:#fff;--border-radius:16px;--box-shadow:none;padding:0;margin-bottom:12px;"></ion-searchbar>
+    <ion-searchbar [(ngModel)]="cnSearchTerm" (ionInput)="filterCreditNotes()"
+      placeholder="Search CN / invoice / customer..."
+      style="--background:#fff;--border-radius:16px;--box-shadow:none;padding:0;margin-bottom:12px;"></ion-searchbar>
     <div *ngIf="isLoading" style="display:flex;justify-content:center;padding:60px;">
       <ion-spinner name="crescent"></ion-spinner>
     </div>
@@ -205,7 +228,8 @@
             <div class="item-sub">{{ cn.reason }}</div>
             <div class="item-sub">{{ cn.createdAt | date:'dd/MM/yyyy HH:mm' }}</div>
             <div *ngIf="cn.createdAfterPayment" style="margin-top:6px;">
-              <span [style.background]="cn.isUsed ? '#e0e0e0' : '#00bcd4'" [style.color]="cn.isUsed ? '#888' : '#fff'" style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:8px;display:inline-block;">
+              <span [style.background]="cn.isUsed ? '#e0e0e0' : '#00bcd4'" [style.color]="cn.isUsed ? '#888' : '#fff'"
+                style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:8px;display:inline-block;">
                 {{ cn.isUsed ? 'Credit Used' : 'Credit Active' }}
               </span>
             </div>
@@ -223,13 +247,16 @@
     </div>
   </div>
 
-  <div *ngIf="showStockAlert" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:flex-end;">
-    <div style="background:#F0EBE3;border-radius:24px 24px 0 0;padding:24px 20px;width:100%;max-height:80vh;overflow-y:auto;">
+  <div *ngIf="showStockAlert"
+    style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:flex-end;">
+    <div
+      style="background:#F0EBE3;border-radius:24px 24px 0 0;padding:24px 20px;width:100%;max-height:80vh;overflow-y:auto;">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
         <ion-icon name="warning-outline" style="font-size:24px;color:#e57373;"></ion-icon>
         <span style="font-size:17px;font-weight:700;color:#1a1a1a;">Insufficient Stock</span>
       </div>
-      <div *ngFor="let issue of stockIssues" style="background:#f8d7da;border-radius:12px;padding:12px 14px;margin-bottom:8px;">
+      <div *ngFor="let issue of stockIssues"
+        style="background:#f8d7da;border-radius:12px;padding:12px 14px;margin-bottom:8px;">
         <div style="font-size:14px;font-weight:700;color:#1a1a1a;">{{ issue.productName }}</div>
         <div style="font-size:12px;color:#888;margin-top:4px;">
           Required: <strong>{{ issue.required }}</strong> &nbsp;|&nbsp;
@@ -238,15 +265,24 @@
         </div>
       </div>
       <p style="font-size:13px;color:#888;margin:16px 0 12px;">What would you like to do?</p>
-      <button (click)="adjustInvoiceToStock()" style="width:100%;background:#5c85d6;color:#fff;border:none;border-radius:16px;padding:14px;font-size:14px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;margin-bottom:10px;">Edit Invoice to Match Stock</button>
-      <button (click)="deleteInvoiceFromStock()" style="width:100%;background:#e57373;color:#fff;border:none;border-radius:16px;padding:14px;font-size:14px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;margin-bottom:10px;">Delete This Invoice</button>
-      <button (click)="ignoreStockIssue()" style="width:100%;background:#fff;color:#1a1a1a;border:none;border-radius:16px;padding:14px;font-size:14px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;">Wait for Stock to Arrive</button>
+      <button (click)="adjustInvoiceToStock()"
+        style="width:100%;background:#5c85d6;color:#fff;border:none;border-radius:16px;padding:14px;font-size:14px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;margin-bottom:10px;">Edit
+        Invoice to Match Stock</button>
+      <button (click)="deleteInvoiceFromStock()"
+        style="width:100%;background:#e57373;color:#fff;border:none;border-radius:16px;padding:14px;font-size:14px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;margin-bottom:10px;">Delete
+        This Invoice</button>
+      <button (click)="ignoreStockIssue()"
+        style="width:100%;background:#fff;color:#1a1a1a;border:none;border-radius:16px;padding:14px;font-size:14px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;">Wait
+        for Stock to Arrive</button>
     </div>
   </div>
 
-  <ion-alert [isOpen]="showDeletePaymentAlert" header="Delete Payment" message="Are you sure?" [buttons]="deletePaymentButtons" (didDismiss)="showDeletePaymentAlert=false"></ion-alert>
-  <ion-alert [isOpen]="showDeleteCNAlert" header="Delete Credit Note" message="Are you sure?" [buttons]="deleteCNButtons" (didDismiss)="showDeleteCNAlert=false"></ion-alert>
-  <ion-toast [isOpen]="showToast" [message]="toastMessage" duration="2000" position="bottom" (didDismiss)="showToast=false"></ion-toast>
+  <ion-alert [isOpen]="showDeletePaymentAlert" header="Delete Payment" message="Are you sure?"
+    [buttons]="deletePaymentButtons" (didDismiss)="showDeletePaymentAlert=false"></ion-alert>
+  <ion-alert [isOpen]="showDeleteCNAlert" header="Delete Credit Note" message="Are you sure?"
+    [buttons]="deleteCNButtons" (didDismiss)="showDeleteCNAlert=false"></ion-alert>
+  <ion-toast [isOpen]="showToast" [message]="toastMessage" duration="2000" position="bottom"
+    (didDismiss)="showToast=false"></ion-toast>
 
 </ion-content>
 
