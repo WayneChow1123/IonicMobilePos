@@ -31,7 +31,7 @@ export class ProductsPage implements OnInit {
   showToast = false;
   toastMessage = '';
   addStockQty = 0;
-  form: any = { name: '', description: '', barcode: '', category: 'DEFAULT', uom: 'UNIT', price: 0, rate: 1, cost: 0, lowestPrice: 0, stock: 0, includeTax: false, salesDefault: false, returnDefault: false };
+  form: any = { name: '', description: '', barcode: '', code: '', category: 'DEFAULT', uom: 'UNIT', price: 0, rate: 1, cost: 0, lowestPrice: 0, stock: 0, includeTax: false, salesDefault: false, returnDefault: false };
   deleteButtons = [
     { text: 'Cancel', role: 'cancel' },
     { text: 'Delete', role: 'destructive', handler: () => this.deleteProduct() }
@@ -72,7 +72,8 @@ export class ProductsPage implements OnInit {
     if (this.searchTerm) {
       filtered = filtered.filter(p =>
         (p.name || '').toLowerCase().includes(this.searchTerm.toLowerCase()) ||
-        (p.barcode || '').toLowerCase().includes(this.searchTerm.toLowerCase())
+        (p.barcode || '').toLowerCase().includes(this.searchTerm.toLowerCase()) ||
+        (p.code || '').toLowerCase().includes(this.searchTerm.toLowerCase())
       );
     }
     this.filteredProducts = filtered;
@@ -89,7 +90,7 @@ export class ProductsPage implements OnInit {
     this.isEditing = false;
     this.isEditMode = true;
     this.selectedProduct = null;
-    this.form = { name: '', description: '', barcode: '', category: 'DEFAULT', uom: 'UNIT', price: 0, rate: 1, cost: 0, lowestPrice: 0, stock: 0, includeTax: false, salesDefault: false, returnDefault: false };
+    this.form = { name: '', description: '', barcode: '', code: '', category: 'DEFAULT', uom: 'UNIT', price: 0, rate: 1, cost: 0, lowestPrice: 0, stock: 0, includeTax: false, salesDefault: false, returnDefault: false };
     this.showModal = true;
   }
 
@@ -101,6 +102,7 @@ export class ProductsPage implements OnInit {
       name: product.name || '',
       description: product.description || '',
       barcode: product.barcode || '',
+      code: product.code || '',
       category: product.category || 'DEFAULT',
       uom: product.uom || 'UNIT',
       price: product.price || 0,
