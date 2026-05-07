@@ -2,6 +2,9 @@
   <div class="home-container">
 
     <div class="top-bar">
+      <ion-button fill="clear" class="back-btn" (click)="goBack()">
+        <ion-icon name="chevron-back-outline"></ion-icon> Back
+      </ion-button>
       <ion-button fill="clear" class="more-btn">
         <ion-icon name="ellipsis-vertical-outline"></ion-icon>
       </ion-button>
@@ -9,7 +12,7 @@
 
     <div class="app-main-title-box">
       <div class="app-logo-icon">
-        <ion-icon name="phone-portrait-outline"></ion-icon>
+        <span class="phone-emoji">📱</span>
       </div>
       <div>
         <div class="app-title-text">TD Mobile POS</div>
@@ -24,38 +27,54 @@
 
     <div class="cards-grid">
 
-      <div class="card card-wide card-blue" (click)="goTo('pages/invoices')">
-        <div class="card-content">
-          <span class="card-title">Stock Report /<br>Stock Move</span>
-          <ion-icon name="cube-outline" class="card-icon-bg"></ion-icon>
+      <!-- Row 1: Stock Report (wide) + Stock Move (small) -->
+      <div class="row-one">
+        <div class="card card-stock-report" (click)="goTo('pages/invoices')">
+          <span class="card-title-center">Stock Report</span>
+          <div class="icon-bubble icon-bubble-center">
+            <ion-icon name="cube-outline" class="icon-mono icon-blue"></ion-icon>
+          </div>
+        </div>
+
+        <div class="card card-stock-move" (click)="goTo('pages/invoices')">
+          <span class="card-title-small">STOCK<br>MOVE</span>
+          <div class="icon-bubble icon-bubble-center">
+            <ion-icon name="swap-horizontal-outline" class="icon-mono icon-orange"></ion-icon>
+          </div>
         </div>
       </div>
 
-      <div class="card card-half card-pink" (click)="goTo('pages/add-product')">
-        <div class="card-content">
-          <span class="card-title">Item<br>Group</span>
-          <ion-icon name="layers-outline" class="card-icon-bg"></ion-icon>
+      <!-- Row 2: Item Group + Product -->
+      <div class="row-two">
+        <div class="card card-half" (click)="goTo('pages/add-product')">
+          <span class="card-title-center">ITEM<br>GROUP</span>
+          <div class="icon-bubble icon-bubble-center">
+            <ion-icon name="layers-outline" class="icon-mono icon-gray"></ion-icon>
+          </div>
+        </div>
+
+        <div class="card card-half" (click)="goTo('pages/products')">
+          <span class="card-title-center">PRODUCT</span>
+          <div class="icon-bubble icon-bubble-center">
+            <ion-icon name="cube-outline" class="icon-mono icon-gray"></ion-icon>
+          </div>
         </div>
       </div>
 
-      <div class="card card-half card-yellow" (click)="goTo('pages/products')">
-        <div class="card-content">
-          <span class="card-title">Product</span>
-          <ion-icon name="cube-outline" class="card-icon-bg"></ion-icon>
+      <!-- Row 3: Customer Category + Customer -->
+      <div class="row-two">
+        <div class="card card-half" (click)="goTo('pages/customer-detail')">
+          <span class="card-title-center">CUSTOMER<br>CATEGORY</span>
+          <div class="icon-bubble icon-bubble-center">
+            <ion-icon name="people-outline" class="icon-mono icon-gray"></ion-icon>
+          </div>
         </div>
-      </div>
 
-      <div class="card card-half card-purple" (click)="goTo('pages/customer-detail')">
-        <div class="card-content">
-          <span class="card-title">Customer<br>Category</span>
-          <ion-icon name="people-outline" class="card-icon-bg"></ion-icon>
-        </div>
-      </div>
-
-      <div class="card card-half card-beige" (click)="goTo('pages/customers')">
-        <div class="card-content">
-          <span class="card-title">Customer</span>
-          <ion-icon name="person-outline" class="card-icon-bg"></ion-icon>
+        <div class="card card-half" (click)="goTo('pages/customers')">
+          <span class="card-title-center">CUSTOMER</span>
+          <div class="icon-bubble icon-bubble-center">
+            <ion-icon name="person-circle-outline" class="icon-mono icon-gray"></ion-icon>
+          </div>
         </div>
       </div>
 

@@ -109,76 +109,148 @@
   </div>
 
   <!-- ADD / EDIT PRODUCT PAGE -->
-  <div *ngIf="showModal" class="page-container">
-    <div class="top-bar">
-      <ion-button fill="clear" class="back-btn" (click)="closeModal()">
-        <ion-icon name="chevron-back-outline"></ion-icon> Back
+  <div *ngIf="showModal" class="pd-container">
+
+    <!-- Top Bar -->
+    <div class="pd-top-bar">
+      <ion-button fill="clear" class="pd-back-btn" (click)="closeModal()">
+        <ion-icon name="chevron-back-outline"></ion-icon>
       </ion-button>
-      <span class="page-title">{{ isEditing ? 'Edit Product' : 'Add Product' }}</span>
-      <ion-button fill="clear" class="icon-btn" (click)="saveProduct()">
-        <ion-icon name="save-outline"></ion-icon>
+      <span class="pd-title">PRODUCT DETAIL</span>
+      <ion-button fill="clear" class="pd-edit-btn" (click)="toggleEditMode()">
+        <ion-icon [name]="isEditMode ? 'save-outline' : 'settings-outline'"></ion-icon> 
+        {{ isEditMode ? 'SAVE' : 'EDIT' }}
       </ion-button>
     </div>
 
-    <div class="form-card" style="background:#fff;">
-      <div class="form-group">
-        <label>PRODUCT NAME *</label>
-        <input type="text" [(ngModel)]="form.name" placeholder="Enter product name" class="form-input"/>
+    <!-- Barcode Code Display -->
+    <div class="pd-code-row">
+      CODE: 
+    </div>
+
+    <!-- White Info Card: Name, Category, Include Tax -->
+    <div class="pd-card pd-card-white">
+      <div class="pd-field">
+        <label class="pd-label">PRODUCT NAME *</label>
+        <input type="text" [(ngModel)]="form.name" placeholder="Enter product name" class="pd-input pd-input-bold" [readonly]="!isEditMode"/>
       </div>
-      <div class="form-group">
-        <label>CATEGORY</label>
-        <select [(ngModel)]="form.category" class="form-select">
-          <option value="DEFAULT">DEFAULT</option>
-          <option *ngFor="let cat of categories" [value]="cat.categoryName">{{ cat.categoryName }}</option>
-        </select>
+      <div class="pd-divider"></div>
+      <div class="pd-field">
+        <label class="pd-label">CATEGORY</label>
+        <div class="pd-select-wrap">
+          <select [(ngModel)]="form.category" class="pd-select" [disabled]="!isEditMode">
+            <option value="DEFAULT">DEFAULT</option>
+            <option *ngFor="let cat of categories" [value]="cat.categoryName">{{ cat.categoryName }}</option>
+          </select>
+          <ion-icon name="chevron-down-outline" class="pd-select-arrow" *ngIf="isEditMode"></ion-icon>
+        </div>
       </div>
-      <div class="form-group">
-        <label>BARCODE</label>
-        <input type="text" [(ngModel)]="form.barcode" placeholder="Enter barcode" class="form-input"/>
-      </div>
-      <div class="form-group">
-        <label>U.O.M</label>
-        <input type="text" [(ngModel)]="form.uom" placeholder="UNIT" class="form-input"/>
+      <div class="pd-divider"></div>
+      <div class="pd-field">
+        <label class="pd-label">INCLUDE TAX</label>
+        <div class="pd-tax-row">
+          <label class="pd-toggle">
+            <input type="checkbox" [(ngModel)]="form.includeTax" [disabled]="!isEditMode"/>
+            <span class="pd-toggle-slider"></span>
+          </label>
+          <div class="pd-select-wrap pd-select-wrap-tax">
+            <select class="pd-select" [disabled]="!isEditMode">
+              <option>STE(0)</option>
+              <option>STE(10)</option>
+            </select>
+            <ion-icon name="chevron-down-outline" class="pd-select-arrow" *ngIf="isEditMode"></ion-icon>
+          </div>
+        </div>
       </div>
     </div>
 
-    <div class="form-card" style="background:#E8D5D0;">
-      <div class="form-group">
-        <label>PRICE (RM)</label>
-        <input type="number" [(ngModel)]="form.price" (keydown)="noLeadingZero($event, form.price)" placeholder="0.00" class="form-input" min="0"/>
-      </div>
-      <div class="form-group">
-        <label>RATE</label>
-        <input type="number" [(ngModel)]="form.rate" (keydown)="noLeadingZero($event, form.rate)" placeholder="1" class="form-input" min="0"/>
-      </div>
-      <div class="form-group">
-        <label>COST (RM)</label>
-        <input type="number" [(ngModel)]="form.cost" (keydown)="noLeadingZero($event, form.cost)" placeholder="0.00" class="form-input" min="0"/>
-      </div>
-      <div class="form-group">
-        <label>LOWEST PRICE (RM)</label>
-        <input type="number" [(ngModel)]="form.lowestPrice" (keydown)="noLeadingZero($event, form.lowestPrice)" placeholder="0.00" class="form-input" min="0"/>
-      </div>
-      <div class="form-group">
-        <label>STOCK</label>
-        <input type="number" [(ngModel)]="form.stock" (keydown)="noLeadingZero($event, form.stock)" placeholder="0" class="form-input" min="0"/>
-      </div>
+    <!-- Blue Description Card -->
+    <div class="pd-card pd-card-blue">
+      <label class="pd-label">DESCRIPTION</label>
+      <textarea [(ngModel)]="form.description" placeholder="Enter description..." class="pd-textarea" [readonly]="!isEditMode"></textarea>
     </div>
 
-    <div class="form-card" style="background:#C5C8E0;">
-      <div class="form-group">
-        <label>DESCRIPTION</label>
-        <textarea [(ngModel)]="form.description" placeholder="Enter description..." class="form-textarea"></textarea>
+    <!-- Unit Overview Section -->
+    <div class="pd-section-label">UNIT OVERVIEW</div>
+    <div class="pd-card pd-card-beige">
+
+      <!-- Available Stock (big centered number) -->
+      <div class="pd-stock-center">
+        <span class="pd-stock-label">AVAILABLE STOCK</span>
+        <span class="pd-stock-number">{{ form.stock || 0 }}</span>
       </div>
-      <div class="form-group" style="display:flex;align-items:center;gap:10px;">
-        <label style="margin:0;">Include Tax</label>
-        <input type="checkbox" [(ngModel)]="form.includeTax" style="width:18px;height:18px;"/>
+
+      <div class="pd-divider"></div>
+
+      <!-- UOM + RATE row -->
+      <div class="pd-two-col">
+        <div class="pd-field">
+          <label class="pd-label">U.O.M.</label>
+          <input type="text" [(ngModel)]="form.uom" placeholder="PCS" class="pd-input pd-input-bold" [readonly]="!isEditMode"/>
+        </div>
+        <div class="pd-field pd-field-right">
+          <label class="pd-label">RATE</label>
+          <div class="pd-rate-row">
+            <span class="pd-rate-badge">● RATE</span>
+            <input type="number" [(ngModel)]="form.rate" placeholder="1" class="pd-input pd-input-bold" min="0" [readonly]="!isEditMode"/>
+          </div>
+        </div>
       </div>
+
+      <div class="pd-divider"></div>
+
+      <!-- Barcode -->
+      <div class="pd-field">
+        <label class="pd-label">BARCODE</label>
+        <input type="text" [(ngModel)]="form.barcode" placeholder="Enter barcode" class="pd-input pd-input-bold" [readonly]="!isEditMode"/>
+      </div>
+
+      <div class="pd-divider"></div>
+
+      <!-- Price + Cost row -->
+      <div class="pd-two-col">
+        <div class="pd-field">
+          <label class="pd-label">PRICE (RM)</label>
+          <input type="number" [(ngModel)]="form.price" (keydown)="noLeadingZero($event, form.price)" placeholder="0.00" class="pd-input pd-input-bold" min="0" [readonly]="!isEditMode"/>
+        </div>
+        <div class="pd-field pd-field-right">
+          <label class="pd-label">COST (RM)</label>
+          <input type="number" [(ngModel)]="form.cost" (keydown)="noLeadingZero($event, form.cost)" placeholder="0.00" class="pd-input pd-input-bold" min="0" [readonly]="!isEditMode"/>
+        </div>
+      </div>
+
+      <div class="pd-divider"></div>
+
+      <!-- Lowest Price -->
+      <div class="pd-field">
+        <label class="pd-label">LOWEST PRICE (RM)</label>
+        <input type="number" [(ngModel)]="form.lowestPrice" (keydown)="noLeadingZero($event, form.lowestPrice)" placeholder="0.00" class="pd-input pd-input-bold" min="0" [readonly]="!isEditMode"/>
+      </div>
+
+      <div class="pd-divider"></div>
+
     </div>
 
-    <button class="save-btn" (click)="saveProduct()">
+    <!-- Bottom Checkboxes: SALES DEFAULT + RETURN DEFAULT -->
+    <div class="pd-bottom-checks">
+      <label class="pd-check-label">
+        <input type="checkbox" [(ngModel)]="form.salesDefault" class="pd-checkbox" [disabled]="!isEditMode"/>
+        <span>SALES DEFAULT</span>
+      </label>
+      <label class="pd-check-label">
+        <input type="checkbox" [(ngModel)]="form.returnDefault" class="pd-checkbox" [disabled]="!isEditMode"/>
+        <span>RETURN <strong>DEFAULT</strong></span>
+      </label>
+    </div>
+
+    <button class="pd-save-btn" *ngIf="!isEditMode">
+      PRICING STRUCTURE <ion-icon name="swap-horizontal-outline"></ion-icon>
+    </button>
+
+    <button class="pd-save-btn" (click)="saveProduct()" *ngIf="isEditMode">
       {{ isEditing ? 'UPDATE PRODUCT' : 'CREATE PRODUCT' }}
     </button>
+
   </div>
 
   <ion-alert [isOpen]="showDeleteAlert" header="Delete Product" [message]="'Delete ' + (selectedProduct?.name || '') + '?'" [buttons]="deleteButtons" (didDismiss)="showDeleteAlert=false"></ion-alert>

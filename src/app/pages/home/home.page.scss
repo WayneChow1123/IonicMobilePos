@@ -8,9 +8,16 @@ ion-content {
 
 .top-bar {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
   align-items: center;
   margin-bottom: 8px;
+
+  .back-btn {
+    --color: #1a1a1a;
+    --padding-start: 0;
+    font-size: 15px;
+    font-weight: 600;
+  }
 
   .more-btn {
     --color: #1a1a1a;
@@ -19,8 +26,43 @@ ion-content {
   }
 }
 
+.app-main-title-box {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+
+  .app-logo-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 48px;
+    background: #1a1a1a;
+    border-radius: 14px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+
+    .phone-emoji {
+      font-size: 24px;
+      line-height: 1;
+    }
+  }
+
+  .app-title-text {
+    font-size: 15px;
+    font-weight: 700;
+    color: #1a1a1a;
+  }
+
+  .app-company-text {
+    font-size: 12px;
+    color: #888;
+  }
+}
+
 .header {
-  margin-top: 8px; margin-bottom: 12px;
+  margin-top: 8px;
+  margin-bottom: 16px;
 
   .section-label {
     font-size: 11px;
@@ -43,53 +85,130 @@ ion-content {
   }
 }
 
+/* ── Cards Grid ── */
 .cards-grid {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 12px;
 }
 
-.card {
-  border-radius: 20px;
-  padding: 16px;
-  position: relative;
+/* Row 1 – Stock Report (wide) + Stock Move (small square) */
+.row-one {
   display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  min-height: 130px;
-  cursor: pointer;
+  gap: 12px;
+  align-items: stretch;
 
-  &.card-wide {
-    width: 100%;
-    min-height: 120px;
+  .card-stock-report {
+    flex: 1;
+    min-height: 130px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    align-items: center;
+    text-align: center;
   }
 
-  &.card-half {
-    width: calc(50% - 6px);
-  }
-
-  &.card-blue { background: #C5C8E0; }
-  &.card-pink { background: #E8D5D0; }
-  &.card-yellow { background: #DDD9A3; }
-  &.card-purple { background: #D4CCDC; }
-  &.card-beige { background: #D9CFC4; }
-
-  .card-title {
-    font-size: 14px;
-    font-weight: 700;
-    color: #1a1a1a;
-    line-height: 1.4;
-  }
-
-  .card-icon-bg {
-    font-size: 48px;
-    color: rgba(0,0,0,0.12);
-    position: absolute;
-    bottom: 16px;
-    left: 14px;
+  .card-stock-move {
+    width: 200px;
+    min-height: 130px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    align-items: center;
+    text-align: center;
   }
 }
 
+/* Row 2/3 – two equal half cards */
+.row-two {
+  display: flex;
+  gap: 12px;
+
+  .card-half {
+    flex: 1;
+    min-height: 140px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    align-items: center;
+    text-align: center;
+  }
+}
+
+/* Base card */
+.card {
+  background: #ffffff;
+  border-radius: 20px;
+  padding: 16px;
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+
+  &:active {
+    transform: scale(0.97);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+  }
+}
+
+/* Title styles */
+.card-title-top {
+  font-size: 15px;
+  font-weight: 700;
+  color: #1a1a1a;
+  line-height: 1.4;
+}
+
+.card-title-small {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: #1a1a1a;
+  line-height: 1.3;
+}
+
+.card-title-center {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: #1a1a1a;
+  line-height: 1.4;
+  padding-top: 4px;
+}
+
+/* Icon bubble (grey circle background) */
+.icon-bubble {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #f0f0f0;
+  border-radius: 50%;
+  width: 52px;
+  height: 52px;
+  margin-top: 8px;
+
+  &.icon-bubble-center {
+    align-self: center;
+  }
+}
+
+/* Icon colours */
+.icon-mono {
+  font-size: 26px;
+}
+
+.icon-gray {
+  color: #999999;
+}
+
+.icon-blue {
+  color: #4A7EC7;
+}
+
+.icon-orange {
+  color: #E07B3A;
+}
+
+/* ── Bottom Nav ── */
 .bottom-nav {
   position: fixed;
   bottom: 24px;
@@ -103,14 +222,14 @@ ion-content {
   z-index: 999;
 
   .nav-btn {
-    --color: rgba(255,255,255,0.5);
+    --color: rgba(255, 255, 255, 0.5);
     font-size: 22px;
     --padding-start: 12px;
     --padding-end: 12px;
 
     &.active {
       --color: #ffffff;
-      background: rgba(255,255,255,0.15);
+      background: rgba(255, 255, 255, 0.15);
       border-radius: 50px;
     }
   }

@@ -25,12 +25,13 @@ export class ProductsPage implements OnInit {
   showModal = false;
   showAddStockModal = false;
   isEditing = false;
+  isEditMode = false;
   selectedProduct: any = null;
   showDeleteAlert = false;
   showToast = false;
   toastMessage = '';
   addStockQty = 0;
-  form: any = { name: '', description: '', barcode: '', category: 'DEFAULT', uom: 'UNIT', price: 0, rate: 1, cost: 0, lowestPrice: 0, stock: 0, includeTax: false };
+  form: any = { name: '', description: '', barcode: '', category: 'DEFAULT', uom: 'UNIT', price: 0, rate: 1, cost: 0, lowestPrice: 0, stock: 0, includeTax: false, salesDefault: false, returnDefault: false };
   deleteButtons = [
     { text: 'Cancel', role: 'cancel' },
     { text: 'Delete', role: 'destructive', handler: () => this.deleteProduct() }
@@ -86,13 +87,15 @@ export class ProductsPage implements OnInit {
 
   openAddModal() {
     this.isEditing = false;
+    this.isEditMode = true;
     this.selectedProduct = null;
-    this.form = { name: '', description: '', barcode: '', category: 'DEFAULT', uom: 'UNIT', price: 0, rate: 1, cost: 0, lowestPrice: 0, stock: 0, includeTax: false };
+    this.form = { name: '', description: '', barcode: '', category: 'DEFAULT', uom: 'UNIT', price: 0, rate: 1, cost: 0, lowestPrice: 0, stock: 0, includeTax: false, salesDefault: false, returnDefault: false };
     this.showModal = true;
   }
 
   openEditModal(product: any) {
     this.isEditing = true;
+    this.isEditMode = false;
     this.selectedProduct = product;
     this.form = {
       name: product.name || '',
@@ -105,12 +108,22 @@ export class ProductsPage implements OnInit {
       cost: product.cost || 0,
       lowestPrice: product.lowestPrice || 0,
       stock: product.stock || 0,
-      includeTax: product.includeTax || false
+      includeTax: product.includeTax || false,
+      salesDefault: product.salesDefault || false,
+      returnDefault: product.returnDefault || false
     };
     this.showModal = true;
   }
 
-  closeModal() { this.showModal = false; }
+  toggleEditMode() {
+    if (this.isEditMode) {
+      this.saveProduct();
+    } else {
+      this.isEditMode = true;
+    }
+  }
+
+  closeModal() { this.showModal = false; this.isEditMode = false; }
 
   saveProduct() {
     if (!this.form.name) { this.showToastMsg('Product name is required'); return; }
@@ -119,12 +132,21 @@ export class ProductsPage implements OnInit {
     if (!this.form.category) this.form.category = 'DEFAULT';
     if (this.isEditing && this.selectedProduct) {
       this.api.editProduct(this.selectedProduct.id, this.form).subscribe({
-        next: () => { this.showToastMsg('Product updated!'); this.closeModal(); this.loadProducts(); },
+        next: () => { 
+          this.showToastMsg('Product updated!'); 
+          this.isEditMode = false; 
+          this.loadProducts(); 
+        },
         error: (err: any) => this.showToastMsg('Failed: ' + (err.error?.message || err.message || 'error'))
       });
     } else {
       this.api.createProduct(this.form).subscribe({
-        next: () => { this.showToastMsg('Product created!'); this.closeModal(); this.loadProducts(); },
+        next: () => { 
+          this.showToastMsg('Product created!'); 
+          this.isEditMode = false; 
+          this.closeModal(); 
+          this.loadProducts(); 
+        },
         error: (err: any) => this.showToastMsg('Failed: ' + (err.error?.message || err.message || 'error'))
       });
     }

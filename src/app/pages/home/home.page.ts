@@ -34,5 +34,6 @@ export class HomePage implements OnInit {
   }
 
   goTo(path: string) { this.navCtrl.navigateRoot(path); }
+  goBack() { this.navCtrl.back(); }
 
 }
