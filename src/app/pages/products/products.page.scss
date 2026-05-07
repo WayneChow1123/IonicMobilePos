@@ -226,6 +226,16 @@ ion-content {
   color: #1a1a1a;
 }
 
+.item-code {
+  font-size: 11px;
+  font-weight: 600;
+  color: #888;
+  background: #eee;
+  padding: 1px 6px;
+  border-radius: 4px;
+  margin-left: 4px;
+}
+
 .item-sub {
   font-size: 12px;
   color: #888;
@@ -333,8 +343,8 @@ ion-content {
 
 /* Top Bar */
 .pd-top-bar {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
   margin-bottom: 8px;
 }
@@ -343,6 +353,7 @@ ion-content {
   --color: #1a1a1a;
   --padding-start: 0;
   font-size: 20px;
+  justify-self: start;
 }
 
 .pd-title {
@@ -360,6 +371,7 @@ ion-content {
   display: flex;
   align-items: center;
   gap: 4px;
+  justify-self: end;
 
   ion-icon {
     font-size: 20px;
@@ -564,11 +576,21 @@ ion-content {
   margin-bottom: 6px;
 }
 
-.pd-stock-number {
+.pd-stock-number, .pd-stock-input {
   font-size: 56px;
   font-weight: 800;
   color: #1a1a1a;
   line-height: 1;
+}
+
+.pd-stock-input {
+  background: transparent;
+  border: none;
+  border-bottom: 2px dashed rgba(0,0,0,0.1);
+  width: 140px;
+  text-align: center;
+  outline: none;
+  font-family: inherit;
 }
 
 /* Two Column */

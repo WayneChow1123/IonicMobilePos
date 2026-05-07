@@ -38,6 +38,7 @@
             <div class="product-details">
               <div class="product-name-row">
                 <span class="item-name">{{ product.name }}</span>
+                <span class="item-code" *ngIf="product.code">#{{ product.code }}</span>
                 <span *ngIf="product.isActive === false" class="badge inactive-badge">INACTIVE</span>
                 <span *ngIf="product.stock === 0" class="badge oos-badge">OUT OF STOCK</span>
               </div>
@@ -125,7 +126,7 @@
 
     <!-- Barcode Code Display -->
     <div class="pd-code-row">
-      CODE: 
+      CODE: {{ form.code }}
     </div>
 
     <!-- White Info Card: Name, Category, Include Tax -->
@@ -177,7 +178,8 @@
       <!-- Available Stock (big centered number) -->
       <div class="pd-stock-center">
         <span class="pd-stock-label">AVAILABLE STOCK</span>
-        <span class="pd-stock-number">{{ form.stock || 0 }}</span>
+        <input type="number" [(ngModel)]="form.stock" class="pd-stock-input" *ngIf="isEditMode" (keydown)="noLeadingZero($event, form.stock)"/>
+        <span class="pd-stock-number" *ngIf="!isEditMode">{{ form.stock || 0 }}</span>
       </div>
 
       <div class="pd-divider"></div>
@@ -195,6 +197,14 @@
             <input type="number" [(ngModel)]="form.rate" placeholder="1" class="pd-input pd-input-bold" min="0" [readonly]="!isEditMode"/>
           </div>
         </div>
+      </div>
+
+      <div class="pd-divider"></div>
+
+      <!-- Code -->
+      <div class="pd-field">
+        <label class="pd-label">PRODUCT CODE</label>
+        <input type="text" [(ngModel)]="form.code" placeholder="Enter product code" class="pd-input pd-input-bold" [readonly]="!isEditMode"/>
       </div>
 
       <div class="pd-divider"></div>
