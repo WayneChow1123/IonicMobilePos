@@ -22,11 +22,22 @@ export class CustomersPage implements OnInit {
   activeTab = 'ALL';
   showModal = false;
   isEditing = false;
+  isEditMode = false;
   selectedCustomer: any = null;
   showDeleteAlert = false;
   showToast = false;
   toastMessage = '';
-  form: any = { name: '', phone: '', email: '', address: '' };
+  form: any = { 
+    name: '', phone: '', email: '', address: '', 
+    code: '', term: 'Cash Sale', sequence: '', category: 'DEFAULT', 
+    description: '', processCompany: 'ALL COMPANY', taxStatus: 'Un-Defined', 
+    taxDocNo: '', discount: 0, requireDigitSign: false,
+    totalCredit: -23744.66,
+    branchCode: 'BILLING', branchName: 'BILLING', branchAddress: 'NO 2-1 JALAN TTDI GROVE 1/2. TAMAN TTDI GROVE',
+    branchPostcode: '43000', branchCity: 'kajang', branchState: 'Selangor',
+    isDefaultBranch: true
+  };
+  activeSubTab = 'MASTER';
   deleteButtons = [
     { text: 'Cancel', role: 'cancel' },
     { text: 'Delete', role: 'destructive', handler: () => this.deleteCustomer() }
@@ -68,24 +79,67 @@ export class CustomersPage implements OnInit {
 
   openAddModal() {
     this.isEditing = false;
+    this.isEditMode = true;
     this.selectedCustomer = null;
-    this.form = { name: '', phone: '', email: '', address: '' };
+    this.form = { 
+      name: '', phone: '', email: '', address: '', 
+      code: '', term: 'Cash Sale', sequence: '', category: 'DEFAULT', 
+      description: '', processCompany: 'ALL COMPANY', taxStatus: 'Un-Defined', 
+      taxDocNo: '', discount: 0, requireDigitSign: false,
+      totalCredit: 0.00,
+      branchCode: '', branchName: '', branchAddress: '', 
+      branchPostcode: '', branchCity: '', branchState: '',
+      isDefaultBranch: false
+    };
     this.showModal = true;
   }
 
   openEditModal(customer: any) {
     this.isEditing = true;
+    this.isEditMode = false;
     this.selectedCustomer = customer;
     this.form = {
       name: customer.name || '',
       phone: customer.phone || '',
       email: customer.email || '',
-      address: customer.address || ''
+      address: customer.address || '',
+      code: customer.code || '',
+      term: customer.term || 'Cash Sale',
+      sequence: customer.sequence || '',
+      category: customer.category || 'DEFAULT',
+      description: customer.description || '',
+      processCompany: customer.processCompany || 'ALL COMPANY',
+      taxStatus: customer.taxStatus || 'Un-Defined',
+      taxDocNo: customer.taxDocNo || '',
+      discount: customer.discount || 0,
+      requireDigitSign: customer.requireDigitSign || false,
+      totalCredit: customer.totalCredit || 0,
+      branchCode: customer.branchCode || 'BILLING',
+      branchName: customer.branchName || 'BILLING',
+      branchAddress: customer.branchAddress || 'NO 2-1 JALAN TTDI GROVE 1/2. TAMAN TTDI GROVE',
+      branchPostcode: customer.branchPostcode || '43000',
+      branchCity: customer.branchCity || 'kajang',
+      branchState: customer.branchState || 'Selangor',
+      isDefaultBranch: customer.isDefaultBranch !== undefined ? customer.isDefaultBranch : true
     };
     this.showModal = true;
   }
 
-  closeModal() { this.showModal = false; }
+  toggleEditMode() {
+    if (this.isEditMode) {
+      this.saveCustomer();
+    } else {
+      this.isEditMode = true;
+    }
+  }
+
+  closeModal() { this.showModal = false; this.isEditMode = false; }
+
+  viewAllInvoices() {
+    if (this.selectedCustomer) {
+      this.router.navigate(['pages/customer-detail'], { queryParams: { id: this.selectedCustomer.id } });
+    }
+  }
 
   saveCustomer() {
     if (!this.form.name) { this.showToastMsg('Customer name is required'); return; }

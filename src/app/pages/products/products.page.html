@@ -117,7 +117,7 @@
       <ion-button fill="clear" class="pd-back-btn" (click)="closeModal()">
         <ion-icon name="chevron-back-outline"></ion-icon>
       </ion-button>
-      <span class="pd-title">PRODUCT DETAIL</span>
+      <span class="pd-title">{{ isEditing ? 'PRODUCT DETAIL' : 'CREATE PRODUCT' }}</span>
       <ion-button fill="clear" class="pd-edit-btn" (click)="toggleEditMode()">
         <ion-icon [name]="isEditMode ? 'save-outline' : 'settings-outline'"></ion-icon> 
         {{ isEditMode ? 'SAVE' : 'EDIT' }}
@@ -125,7 +125,7 @@
     </div>
 
     <!-- Barcode Code Display -->
-    <div class="pd-code-row">
+    <div class="pd-code-row" *ngIf="isEditing">
       CODE: {{ form.code }}
     </div>
 
@@ -197,14 +197,6 @@
             <input type="number" [(ngModel)]="form.rate" placeholder="1" class="pd-input pd-input-bold" min="0" [readonly]="!isEditMode"/>
           </div>
         </div>
-      </div>
-
-      <div class="pd-divider"></div>
-
-      <!-- Code -->
-      <div class="pd-field">
-        <label class="pd-label">PRODUCT CODE</label>
-        <input type="text" [(ngModel)]="form.code" placeholder="Enter product code" class="pd-input pd-input-bold" [readonly]="!isEditMode"/>
       </div>
 
       <div class="pd-divider"></div>

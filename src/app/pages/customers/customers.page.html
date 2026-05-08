@@ -57,40 +57,220 @@
     </div>
   </div>
 
-  <!-- ADD/EDIT FORM -->
-  <div *ngIf="showModal" class="page-container">
-    <div class="top-bar">
-      <ion-button fill="clear" class="back-btn" (click)="closeModal()">
-        <ion-icon name="chevron-back-outline"></ion-icon> Back
-      </ion-button>
-      <span class="page-title">{{ isEditing ? 'Edit Customer' : 'Add Customer' }}</span>
-      <ion-button fill="clear" class="icon-btn" (click)="saveCustomer()">
-        <ion-icon name="save-outline"></ion-icon>
-      </ion-button>
+  <!-- CUSTOMER DETAIL REDESIGN (With Fixed Footer) -->
+  <div *ngIf="showModal" class="cd-container">
+    
+    <div class="cd-content">
+      <!-- Top Bar -->
+      <div class="cd-top-bar">
+        <ion-button fill="clear" class="cd-back-btn" (click)="closeModal()">
+          <ion-icon name="chevron-back-outline"></ion-icon>
+        </ion-button>
+        <span class="cd-title">{{ activeSubTab === 'BRANCHES' ? 'BRANCHES' : 'CUSTOMER DETAILS' }}</span>
+        <div class="cd-top-right">
+          <ion-button fill="clear" class="cd-icon-btn" (click)="toggleEditMode()">
+            <ion-icon [name]="isEditMode ? 'save-outline' : 'settings-outline'"></ion-icon>
+            {{ isEditMode ? 'SAVE' : 'EDIT' }}
+          </ion-button>
+          <ion-button fill="clear" class="cd-icon-btn delete-btn" (click)="confirmDelete(selectedCustomer)" *ngIf="isEditing">
+            <ion-icon name="close-outline"></ion-icon>
+            DELETE
+          </ion-button>
+        </div>
+      </div>
+
+      <!-- Code Row -->
+      <div class="cd-code-row" *ngIf="isEditing">
+        CODE: {{ form.code || '---' }}
+      </div>
+
+      <!-- MASTER SUB-TAB CONTENT -->
+      <div *ngIf="activeSubTab === 'MASTER'">
+        <!-- 1. White Card -->
+        <div class="cd-card cd-card-white">
+          <div class="cd-field">
+            <label class="cd-label">CUSTOMER NAME</label>
+            <div class="cd-value-bold" *ngIf="!isEditMode">{{ form.name }}</div>
+            <input type="text" [(ngModel)]="form.name" *ngIf="isEditMode" class="cd-input cd-input-bold"/>
+          </div>
+          
+          <div class="cd-divider"></div>
+          
+          <div class="cd-two-col">
+            <div class="cd-field">
+              <label class="cd-label">TERM</label>
+              <div class="cd-value-bold" *ngIf="!isEditMode">{{ form.term }}</div>
+              <input type="text" [(ngModel)]="form.term" *ngIf="isEditMode" class="cd-input"/>
+            </div>
+            <div class="cd-field">
+              <label class="cd-label">SEQUENCE</label>
+              <div class="cd-value-bold" *ngIf="!isEditMode">{{ form.sequence }}</div>
+              <input type="text" [(ngModel)]="form.sequence" *ngIf="isEditMode" class="cd-input"/>
+            </div>
+          </div>
+
+          <div class="cd-divider"></div>
+
+          <div class="cd-field">
+            <label class="cd-label">CATEGORY</label>
+            <div class="cd-value-bold" *ngIf="!isEditMode">{{ form.category }}</div>
+            <input type="text" [(ngModel)]="form.category" *ngIf="isEditMode" class="cd-input"/>
+          </div>
+        </div>
+
+        <!-- 2. Blue Card -->
+        <div class="cd-card cd-card-blue">
+          <label class="cd-label">DESCRIPTION</label>
+          <textarea [(ngModel)]="form.description" placeholder="No description provided..." class="cd-textarea" [readonly]="!isEditMode"></textarea>
+        </div>
+
+        <!-- 3. Beige Card -->
+        <div class="cd-card cd-card-beige">
+          <label class="cd-label">PROCESS COMPANY</label>
+          <div class="cd-pill-display">{{ form.processCompany }}</div>
+
+          <div class="cd-two-col">
+            <div class="cd-field">
+              <label class="cd-label">TAX STATUS</label>
+              <div class="cd-value-bold" *ngIf="!isEditMode">{{ form.taxStatus }}</div>
+              <input type="text" [(ngModel)]="form.taxStatus" *ngIf="isEditMode" class="cd-input"/>
+            </div>
+            <div class="cd-field">
+              <label class="cd-label">TAX DOC NO</label>
+              <div class="cd-value-bold" *ngIf="!isEditMode">{{ form.taxDocNo }}</div>
+              <input type="text" [(ngModel)]="form.taxDocNo" *ngIf="isEditMode" class="cd-input"/>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4. White Card -->
+        <div class="cd-card cd-card-white">
+          <div class="cd-info-row">
+            <div class="cd-info-label">
+              <div class="cd-icon-box"><ion-icon name="cash-outline"></ion-icon></div>
+              DISCOUNT
+            </div>
+            <div class="cd-percentage">{{ form.discount }}%</div>
+          </div>
+          
+          <div class="cd-divider" *ngIf="isEditMode"></div>
+
+          <div class="cd-info-row">
+            <div class="cd-info-label">
+              <div class="cd-icon-box"><ion-icon name="document-text-outline"></ion-icon></div>
+              REQUIRE DIGIT SIGN
+            </div>
+            <label class="cd-toggle">
+              <input type="checkbox" [(ngModel)]="form.requireDigitSign" [disabled]="!isEditMode">
+              <span class="cd-toggle-slider"></span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Bottom Report Grid -->
+        <div class="cd-report-grid">
+          <div class="cd-report-card yellow">
+            <span class="report-label">INVOICE<br>REPORT</span>
+            <ion-icon name="document-outline"></ion-icon>
+          </div>
+          <div class="cd-report-card pink">
+            <span class="report-label">C.N.<br>REPORT</span>
+            <ion-icon name="copy-outline"></ion-icon>
+          </div>
+          <div class="cd-report-card green">
+            <span class="report-label">PAYMENTS</span>
+            <ion-icon name="wallet-outline"></ion-icon>
+          </div>
+        </div>
+      </div>
+
+      <!-- BRANCHES SUB-TAB CONTENT -->
+      <div *ngIf="activeSubTab === 'BRANCHES'">
+        <div class="cd-card cd-card-white">
+          <div class="cd-field">
+            <label class="cd-label">CODE</label>
+            <div class="cd-value-bold" *ngIf="!isEditMode">{{ form.branchCode }}</div>
+            <input type="text" [(ngModel)]="form.branchCode" *ngIf="isEditMode" class="cd-input cd-input-bold"/>
+          </div>
+          
+          <div class="cd-divider"></div>
+
+          <div class="cd-field">
+            <label class="cd-label">NAME</label>
+            <div class="cd-value-bold" *ngIf="!isEditMode">{{ form.branchName }}</div>
+            <input type="text" [(ngModel)]="form.branchName" *ngIf="isEditMode" class="cd-input cd-input-bold"/>
+          </div>
+
+          <div class="cd-divider"></div>
+
+          <div class="cd-field">
+            <label class="cd-label">ADDRESS</label>
+            <div class="cd-value-bold" *ngIf="!isEditMode">{{ form.branchAddress }}</div>
+            <textarea [(ngModel)]="form.branchAddress" *ngIf="isEditMode" class="cd-input" style="font-size:15px; font-weight:700; height: 60px;"></textarea>
+          </div>
+
+          <div class="cd-divider"></div>
+
+          <div class="cd-field">
+            <label class="cd-label">POSTCODE</label>
+            <div class="cd-value-bold" *ngIf="!isEditMode">{{ form.branchPostcode }}</div>
+            <input type="text" [(ngModel)]="form.branchPostcode" *ngIf="isEditMode" class="cd-input"/>
+          </div>
+
+          <div class="cd-divider"></div>
+
+          <div class="cd-two-col">
+            <div class="cd-field">
+              <label class="cd-label">CITY</label>
+              <div class="cd-value-bold" *ngIf="!isEditMode">{{ form.branchCity }}</div>
+              <input type="text" [(ngModel)]="form.branchCity" *ngIf="isEditMode" class="cd-input"/>
+            </div>
+            <div class="cd-field">
+              <label class="cd-label">STATE</label>
+              <div class="cd-value-bold" *ngIf="!isEditMode">{{ form.branchState }}</div>
+              <input type="text" [(ngModel)]="form.branchState" *ngIf="isEditMode" class="cd-input"/>
+            </div>
+          </div>
+
+          <div class="cd-divider"></div>
+
+          <div class="cd-info-row" style="justify-content: flex-start; gap: 12px; padding: 4px 0;">
+            <div class="custom-checkbox" [class.checked]="form.isDefaultBranch" (click)="isEditMode ? form.isDefaultBranch = !form.isDefaultBranch : null">
+              <ion-icon name="checkmark-outline" *ngIf="form.isDefaultBranch"></ion-icon>
+            </div>
+            <span class="cd-label" style="margin-bottom: 0; color: #1a1a1a; font-size: 11px;">IS DEFAULT BRANCH</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- PRICE SUB-TAB CONTENT (Placeholder) -->
+      <div *ngIf="activeSubTab === 'PRICE'" style="padding: 40px; text-align: center; color: #888;">
+        <ion-icon name="pricetag-outline" style="font-size: 48px; margin-bottom: 12px;"></ion-icon>
+        <p>Price settings not implemented yet.</p>
+      </div>
     </div>
 
-    <div class="form-card" style="background:#E8D5D0;">
-      <div class="form-group">
-        <label>NAME *</label>
-        <input type="text" [(ngModel)]="form.name" placeholder="Enter customer name" class="form-input"/>
+    <!-- Sticky Footer Area (Credit & Sub-Tabs) -->
+    <div class="cd-footer">
+      <div class="cd-summary-card">
+        <div class="cd-credit-row">
+          <span class="credit-label">TOTAL CREDIT</span>
+          <span class="credit-amount">RM {{ form.totalCredit | number:'1.2-2' }}</span>
+        </div>
+        
+        <div class="cd-sub-tabs">
+          <div class="sub-tab" [class.active]="activeSubTab === 'MASTER'" (click)="activeSubTab = 'MASTER'">MASTER</div>
+          <div class="sub-tab" [class.active]="activeSubTab === 'BRANCHES'" (click)="activeSubTab = 'BRANCHES'">BRANCHES</div>
+          <div class="sub-tab" [class.active]="activeSubTab === 'PRICE'" (click)="activeSubTab = 'PRICE'">PRICE</div>
+        </div>
       </div>
-      <div class="form-group">
-        <label>PHONE</label>
-        <input type="text" [(ngModel)]="form.phone" placeholder="Enter phone number" class="form-input"/>
-      </div>
-      <div class="form-group">
-        <label>EMAIL</label>
-        <input type="email" [(ngModel)]="form.email" placeholder="Enter email" class="form-input"/>
-      </div>
-      <div class="form-group">
-        <label>ADDRESS</label>
-        <textarea [(ngModel)]="form.address" placeholder="Enter address..." class="form-textarea"></textarea>
-      </div>
+
+      <!-- Action Button (Visible when creating or editing) -->
+      <button *ngIf="isEditMode" class="cd-save-btn" (click)="saveCustomer()">
+        {{ isEditing ? 'UPDATE CUSTOMER' : 'CREATE CUSTOMER' }}
+      </button>
     </div>
 
-    <button class="save-btn" (click)="saveCustomer()">
-      {{ isEditing ? 'UPDATE CUSTOMER' : 'CREATE CUSTOMER' }}
-    </button>
   </div>
 
   <ion-alert
