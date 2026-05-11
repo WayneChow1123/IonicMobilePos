@@ -1,3 +1,4 @@
+﻿import { AlertService } from '../../services/alert.service';
 import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
 import { NavController } from '@ionic/angular';
 import { Router } from '@angular/router';
@@ -40,7 +41,7 @@ export class InvoicesPage implements OnInit {
     { text: 'Delete', role: 'destructive', handler: () => this.deleteInvoice() }
   ];
 
-  constructor(private router: Router, private navCtrl: NavController, private api: ApiService, private cdr: ChangeDetectorRef) {}
+  constructor(private router: Router, private navCtrl: NavController, private api: ApiService, private cdr: ChangeDetectorRef, private alertService: AlertService) {}
 
   ionViewWillEnter() {
     this.cdr.detectChanges();
@@ -205,7 +206,7 @@ export class InvoicesPage implements OnInit {
     }
   }
 
-  confirmDelete(invoice: any) { this.selectedInvoice = invoice; this.showDeleteAlert = true; }
+  confirmDelete(invoice: any) { this.selectedInvoice = invoice; this.alertService.confirm('Delete Invoice', 'Delete ' + (invoice.invoiceNumber || 'INV-'+invoice.id) + '?').then(c => { if(c) this.deleteInvoice(); }); }
 
   deleteInvoice() {
     if (!this.selectedInvoice) return;
@@ -265,7 +266,7 @@ export class InvoicesPage implements OnInit {
     }
   }
 
-  showToastMsg(msg: string) { this.toastMessage = msg; this.showToast = true; }
+  showToastMsg(msg: string) { const isWarn = msg.toLowerCase().includes('please') || msg.toLowerCase().includes('must') || msg.toLowerCase().includes('cannot') || msg.toLowerCase().includes('required') || msg.toLowerCase().includes('no '); const isErr = msg.toLowerCase().includes('fail') || msg.toLowerCase().includes('error'); this.alertService.toast(msg, isErr ? 'error' : (isWarn ? 'warning' : 'success')); }
   goBack() { this.navCtrl.navigateRoot('pages/billing'); }
 
   openCheckPreview() {
@@ -311,3 +312,6 @@ export class InvoicesPage implements OnInit {
     setTimeout(() => printWindow.print(), 500);
   }
 }
+
+
+

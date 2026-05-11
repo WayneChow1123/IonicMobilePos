@@ -1,3 +1,4 @@
+﻿import { AlertService } from '../../services/alert.service';
 import { Component, ChangeDetectorRef } from '@angular/core';
 import { NavController } from '@ionic/angular';
 import { Router } from '@angular/router';
@@ -49,7 +50,7 @@ export class PrinterSettingPage {
 
   contentOptions = this.buildOptions('FORMAT 1');
 
-  constructor(private router: Router, private navCtrl: NavController, private cdr: ChangeDetectorRef) {}
+  constructor(private router: Router, private navCtrl: NavController, private cdr: ChangeDetectorRef, private alertService: AlertService) {}
 
   ionViewWillEnter() {
     this.cdr.detectChanges();
@@ -89,3 +90,5 @@ export class PrinterSettingPage {
     });
   }
 }
+
+

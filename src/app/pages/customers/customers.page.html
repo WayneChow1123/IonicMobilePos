@@ -1,4 +1,4 @@
-<ion-content [fullscreen]="true">
+﻿<ion-content [fullscreen]="true">
 
   <!-- LIST VIEW -->
   <div *ngIf="!showModal" class="page-container">
@@ -273,14 +273,8 @@
 
   </div>
 
-  <ion-alert
-    [isOpen]="showDeleteAlert"
-    header="Delete Customer"
-    [message]="'Delete ' + (selectedCustomer?.name || '') + '?'"
-    [buttons]="deleteButtons"
-    (didDismiss)="showDeleteAlert=false">
-  </ion-alert>
+  
 
-  <ion-toast [isOpen]="showToast" [message]="toastMessage" duration="2000" position="bottom" (didDismiss)="showToast=false"></ion-toast>
+  
 
 </ion-content>

@@ -1,3 +1,4 @@
+﻿import { AlertService } from '../../services/alert.service';
 import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
 import { NavController } from '@ionic/angular';
 
@@ -19,7 +20,7 @@ export class HomePage implements OnInit {
   totalCustomers = 0;
   totalProducts = 0;
 
-  constructor(private router: Router, private navCtrl: NavController, private api: ApiService, private cdr: ChangeDetectorRef) {}
+  constructor(private router: Router, private navCtrl: NavController, private api: ApiService, private cdr: ChangeDetectorRef, private alertService: AlertService) {}
 
 
 
@@ -37,3 +38,5 @@ export class HomePage implements OnInit {
   goBack() { this.navCtrl.back(); }
 
 }
+
+

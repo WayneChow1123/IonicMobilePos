@@ -1,3 +1,4 @@
+﻿import { AlertService } from '../../services/alert.service';
 import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
 import { NavController } from '@ionic/angular';
 
@@ -56,7 +57,7 @@ export class BillingPage implements OnInit {
     { text: 'Delete', role: 'destructive', handler: () => this.deleteCreditNote() }
   ];
 
-  constructor(private router: Router, private navCtrl: NavController, private api: ApiService, private cdr: ChangeDetectorRef) {}
+  constructor(private router: Router, private navCtrl: NavController, private api: ApiService, private cdr: ChangeDetectorRef, private alertService: AlertService) {}
 
 
 
@@ -245,7 +246,7 @@ export class BillingPage implements OnInit {
     });
   }
 
-  confirmDeletePayment(payment: any) { this.selectedPayment = payment; this.showDeletePaymentAlert = true; }
+  confirmDeletePayment(payment: any) { this.selectedPayment = payment; this.alertService.confirm('Delete Payment', 'Are you sure?').then(c => { if(c) this.deletePayment(); }); }
   deletePayment() {
     if (!this.selectedPayment) return;
     this.api.deletePayment(this.selectedPayment.id).subscribe({
@@ -257,7 +258,7 @@ export class BillingPage implements OnInit {
   confirmDeleteCN(cn: any) {
     if (cn.isUsed) { this.showToastMsg('This credit note has been used and cannot be deleted'); return; }
     this.selectedCN = cn;
-    this.showDeleteCNAlert = true;
+    this.alertService.confirm('Delete Credit Note', 'Are you sure?').then(c => { if(c) this.deleteCreditNote(); });
   }
   deleteCreditNote() {
     if (!this.selectedCN) return;
@@ -273,8 +274,11 @@ export class BillingPage implements OnInit {
     }
   }
 
-  showToastMsg(msg: string) { this.toastMessage = msg; this.showToast = true; }
+  showToastMsg(msg: string) { const isWarn = msg.toLowerCase().includes('please') || msg.toLowerCase().includes('must') || msg.toLowerCase().includes('cannot') || msg.toLowerCase().includes('required') || msg.toLowerCase().includes('no '); const isErr = msg.toLowerCase().includes('fail') || msg.toLowerCase().includes('error'); this.alertService.toast(msg, isErr ? 'error' : (isWarn ? 'warning' : 'success')); }
   goTo(path: string) { this.navCtrl.navigateRoot(path); }
 
   goBack() { this.navCtrl.navigateRoot('pages/home'); }
 }
+
+
+

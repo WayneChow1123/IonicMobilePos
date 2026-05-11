@@ -1,4 +1,4 @@
-<ion-content [fullscreen]="true">
+﻿<ion-content [fullscreen]="true">
 
   <div *ngIf="!showModal && !showAddStockModal" class="page-container">
     <div class="top-bar">
@@ -255,7 +255,7 @@
 
   </div>
 
-  <ion-alert [isOpen]="showDeleteAlert" header="Delete Product" [message]="'Delete ' + (selectedProduct?.name || '') + '?'" [buttons]="deleteButtons" (didDismiss)="showDeleteAlert=false"></ion-alert>
-  <ion-toast [isOpen]="showToast" [message]="toastMessage" duration="2000" position="bottom" (didDismiss)="showToast=false"></ion-toast>
+  
+  
 
 </ion-content>

@@ -1,3 +1,4 @@
+﻿import { AlertService } from '../../services/alert.service';
 import { Component, ChangeDetectorRef } from '@angular/core';
 import { NavController } from '@ionic/angular';
 import { Router } from '@angular/router';
@@ -15,7 +16,7 @@ export class SettingPage {
   deviceAutoBlocking = false;
   trainingMode = false;
 
-  constructor(private router: Router, private navCtrl: NavController, private cdr: ChangeDetectorRef) {}
+  constructor(private router: Router, private navCtrl: NavController, private cdr: ChangeDetectorRef, private alertService: AlertService) {}
 
   ionViewWillEnter() {
     this.cdr.detectChanges();
@@ -37,3 +38,5 @@ export class SettingPage {
     this.navCtrl.navigateRoot('pages/' + section);
   }
 }
+
+

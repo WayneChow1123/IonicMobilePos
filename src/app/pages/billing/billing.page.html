@@ -1,4 +1,4 @@
-<ion-content>
+﻿<ion-content>
 
 
   <div [hidden]="currentView !== 'home'" class="page-container">
@@ -280,12 +280,9 @@
     </div>
   </div>
 
-  <ion-alert [isOpen]="showDeletePaymentAlert" header="Delete Payment" message="Are you sure?"
-    [buttons]="deletePaymentButtons" (didDismiss)="showDeletePaymentAlert=false"></ion-alert>
-  <ion-alert [isOpen]="showDeleteCNAlert" header="Delete Credit Note" message="Are you sure?"
-    [buttons]="deleteCNButtons" (didDismiss)="showDeleteCNAlert=false"></ion-alert>
-  <ion-toast [isOpen]="showToast" [message]="toastMessage" duration="2000" position="bottom"
-    (didDismiss)="showToast=false"></ion-toast>
+  
+  
+  
 
 </ion-content>
 
