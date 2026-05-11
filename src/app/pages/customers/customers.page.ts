@@ -17,6 +17,7 @@ export class CustomersPage implements OnInit {
   customers: any[] = [];
   filteredCustomers: any[] = [];
   isLoading = false;
+  isModalLoading = false;
   showSearch = false;
   searchTerm = '';
   activeTab = 'ALL';
@@ -32,12 +33,19 @@ export class CustomersPage implements OnInit {
     code: '', term: 'Cash Sale', sequence: '', category: 'DEFAULT', 
     description: '', processCompany: 'ALL COMPANY', taxStatus: 'Un-Defined', 
     taxDocNo: '', discount: 0, requireDigitSign: false,
-    totalCredit: -23744.66,
-    branchCode: 'BILLING', branchName: 'BILLING', branchAddress: 'NO 2-1 JALAN TTDI GROVE 1/2. TAMAN TTDI GROVE',
-    branchPostcode: '43000', branchCity: 'kajang', branchState: 'Selangor',
-    isDefaultBranch: true
+    totalCredit: 0,
+    branchCode: '', branchName: '', branchAddress: '',
+    branchPostcode: '', branchCity: '', branchState: '',
+    isDefaultBranch: false
   };
   activeSubTab = 'MASTER';
+  activeReport: string | null = null;
+  customerInvoices: any[] = [];
+  customerCNs: any[] = [];
+  customerPayments: any[] = [];
+  allInvoices: any[] = [];
+  allPayments: any[] = [];
+  allCNs: any[] = [];
   deleteButtons = [
     { text: 'Cancel', role: 'cancel' },
     { text: 'Delete', role: 'destructive', handler: () => this.deleteCustomer() }
@@ -46,17 +54,125 @@ export class CustomersPage implements OnInit {
   constructor(private router: Router, private navCtrl: NavController, private api: ApiService, private cdr: ChangeDetectorRef) {}
 
   ionViewWillEnter() {
+    this.showModal = false;
+    this.isEditMode = false;
+    this.isEditing = false;
+    this.showSearch = false;
+    this.searchTerm = '';
+    this.activeSubTab = 'MASTER';
+    this.activeReport = null;
+    this.loadCustomers();
     this.cdr.detectChanges();
+    
+    // Force another check after a short delay to fix potential "partial display" issues
+    setTimeout(() => {
+      this.cdr.detectChanges();
+    }, 100);
   }
 
-  ngOnInit() { this.loadCustomers(); }
+  ngOnInit() { }
 
   loadCustomers() {
     this.isLoading = true;
     this.api.getAllCustomers().subscribe({
-      next: (res) => { this.customers = Array.isArray(res) ? res : []; this.filteredCustomers = [...this.customers]; this.isLoading = false; },
+      next: (res) => { 
+        this.customers = Array.isArray(res) ? res : []; 
+        this.filteredCustomers = [...this.customers]; 
+        this.isLoading = false; 
+        this.loadAllRelatedData();
+      },
       error: () => { this.isLoading = false; this.showToastMsg('Failed to load customers'); }
     });
+  }
+
+  loadAllRelatedData() {
+    this.api.getInvoices().subscribe(res => {
+      this.allInvoices = Array.isArray(res) ? res : [];
+      if (this.selectedCustomer) this.loadCustomerSpecificData(this.selectedCustomer.id);
+    });
+    this.api.getPayments().subscribe(res => {
+      this.allPayments = Array.isArray(res) ? res : [];
+      if (this.selectedCustomer) this.loadCustomerSpecificData(this.selectedCustomer.id);
+    });
+    this.api.getAllCreditNotes().subscribe(res => {
+      this.allCNs = Array.isArray(res) ? res : [];
+      if (this.selectedCustomer) this.loadCustomerSpecificData(this.selectedCustomer.id);
+    });
+  }
+
+  loadCustomerSpecificData(customerId: any) {
+    const id = Number(customerId);
+    const customerName = this.selectedCustomer?.name;
+    
+    // Helper to get ID from various possible field names
+    const getCustId = (obj: any) => obj.customerId || obj.customer_id || obj.CustomerID || obj.CustomerId;
+    const getInvId = (obj: any) => obj.invoiceId || obj.invoice_id || obj.InvoiceId || obj.InvoiceID;
+    const getInvNo = (obj: any) => obj.invoiceNumber || obj.InvoiceNumber || obj.invoice_no;
+
+    // 1. Invoices
+    this.customerInvoices = this.allInvoices.filter(inv => {
+      const cId = getCustId(inv);
+      return (cId && Number(cId) === id);
+    });
+    
+    // 2. Payments
+    this.customerPayments = this.allPayments.filter(p => {
+      const pCustId = getCustId(p);
+      if (pCustId && Number(pCustId) === id) return true;
+      
+      const pCustName = p.customerName || p.CustomerName || p.customer_name;
+      if (customerName && pCustName === customerName) return true;
+      
+      const pInvId = getInvId(p);
+      if (pInvId) {
+        const inv = this.allInvoices.find(i => i.id == pInvId || getInvId(i) == pInvId);
+        if (inv && Number(getCustId(inv)) === id) return true;
+      }
+      
+      const pInvNo = getInvNo(p);
+      if (pInvNo) {
+        const inv = this.allInvoices.find(i => i.invoiceNumber === pInvNo || getInvNo(i) === pInvNo);
+        if (inv && Number(getCustId(inv)) === id) return true;
+      }
+      return false;
+    });
+
+    // 3. Credit Notes
+    this.customerCNs = this.allCNs.filter(cn => {
+      const cId = getCustId(cn);
+      if (cId && Number(cId) === id) return true;
+      
+      const cName = cn.customerName || cn.CustomerName || cn.customer_name;
+      if (customerName && cName === customerName) return true;
+      
+      const cInvId = getInvId(cn);
+      if (cInvId) {
+        const inv = this.allInvoices.find(i => i.id == cInvId || getInvId(i) == cInvId);
+        if (inv && Number(getCustId(inv)) === id) return true;
+      }
+      
+      const cInvNo = getInvNo(cn);
+      if (cInvNo) {
+        const inv = this.allInvoices.find(i => i.invoiceNumber === cInvNo || getInvNo(i) === cInvNo);
+        if (inv && Number(getCustId(inv)) === id) return true;
+      }
+      return false;
+    });
+    
+    // Use invoice.paidAmount directly (more reliable - backend updates this on every payment)
+    const outstanding = this.customerInvoices.reduce((sum, inv) => 
+      sum + ((inv.totalAmount || 0) - (inv.paidAmount || 0)), 0);
+    this.form.totalCredit = -outstanding; // negative = owes money
+    
+    this.cdr.detectChanges();
+  }
+
+  getCustomerCredit(customerId: any): number {
+    const invs = this.allInvoices.filter(inv => inv.customerId == customerId);
+    // Use invoice.paidAmount directly - reliable since backend updates it on every payment
+    const outstanding = invs.reduce((s, inv) => 
+      s + ((inv.totalAmount || 0) - (inv.paidAmount || 0)), 0);
+    return -outstanding; // negative = owes money, positive = overpaid/credit
   }
 
   filterCustomers() {
@@ -98,32 +214,53 @@ export class CustomersPage implements OnInit {
     this.isEditing = true;
     this.isEditMode = false;
     this.selectedCustomer = customer;
-    this.form = {
-      name: customer.name || '',
-      phone: customer.phone || '',
-      email: customer.email || '',
-      address: customer.address || '',
-      code: customer.code || '',
-      term: customer.term || 'Cash Sale',
-      sequence: customer.sequence || '',
-      category: customer.category || 'DEFAULT',
-      description: customer.description || '',
-      processCompany: customer.processCompany || 'ALL COMPANY',
-      taxStatus: customer.taxStatus || 'Un-Defined',
-      taxDocNo: customer.taxDocNo || '',
-      discount: customer.discount || 0,
-      requireDigitSign: customer.requireDigitSign || false,
-      totalCredit: customer.totalCredit || 0,
-      branchCode: customer.branchCode || 'BILLING',
-      branchName: customer.branchName || 'BILLING',
-      branchAddress: customer.branchAddress || 'NO 2-1 JALAN TTDI GROVE 1/2. TAMAN TTDI GROVE',
-      branchPostcode: customer.branchPostcode || '43000',
-      branchCity: customer.branchCity || 'kajang',
-      branchState: customer.branchState || 'Selangor',
-      isDefaultBranch: customer.isDefaultBranch !== undefined ? customer.isDefaultBranch : true
-    };
-    this.showModal = true;
+    this.activeReport = null;
+    this.activeSubTab = 'MASTER';
+    this.isModalLoading = true;
+    this.showModal = true; // show modal immediately with loading spinner inside
+
+    // Fetch FULL customer data (includes branches) via getCustomerById
+    this.api.getCustomerById(customer.id).subscribe({
+      next: (fullCustomer: any) => {
+        this.isModalLoading = false;
+        this.selectedCustomer = fullCustomer;
+        const branch = (fullCustomer.branches && fullCustomer.branches.length > 0) ? fullCustomer.branches[0] : null;
+
+        this.form = {
+          name: fullCustomer.name || '',
+          phone: fullCustomer.phone || '',
+          email: fullCustomer.email || '',
+          address: fullCustomer.address || '',
+          code: fullCustomer.customerCode || '',
+          term: fullCustomer.term || 'Cash Sale',
+          sequence: fullCustomer.sequence || '',
+          category: fullCustomer.customerCategory || 'DEFAULT',
+          description: fullCustomer.description || '',
+          processCompany: fullCustomer.processCompany || 'ALL COMPANY',
+          taxStatus: fullCustomer.taxStatus || 'Un-Defined',
+          taxDocNo: fullCustomer.taxDocNo || '',
+          discount: fullCustomer.discountPercent || 0,
+          requireDigitSign: fullCustomer.requireDigitSign || false,
+          totalCredit: 0,
+          branchCode: branch ? (branch.code || '') : '',
+          branchName: branch ? (branch.name || '') : '',
+          branchAddress: branch ? (branch.address1 || '') : (fullCustomer.address || ''),
+          branchPostcode: branch ? (branch.postcode || '') : '',
+          branchCity: branch ? (branch.city || '') : '',
+          branchState: branch ? (branch.state || '') : '',
+          isDefaultBranch: branch ? (branch.isDefaultBranch || false) : false,
+          _hasBranch: !!branch
+        };
+        this.loadCustomerSpecificData(fullCustomer.id);
+      },
+      error: () => {
+        this.isModalLoading = false;
+        this.showModal = false;
+        this.showToastMsg('Failed to load customer data');
+      }
+    });
   }
+
 
   toggleEditMode() {
     if (this.isEditMode) {
@@ -133,7 +270,11 @@ export class CustomersPage implements OnInit {
     }
   }
 
-  closeModal() { this.showModal = false; this.isEditMode = false; }
+  closeModal() { this.showModal = false; this.isEditMode = false; this.activeReport = null; }
+
+  setActiveReport(report: string | null) {
+    this.activeReport = report;
+  }
 
   viewAllInvoices() {
     if (this.selectedCustomer) {
@@ -143,18 +284,59 @@ export class CustomersPage implements OnInit {
 
   saveCustomer() {
     if (!this.form.name) { this.showToastMsg('Customer name is required'); return; }
+    
+    // Build a clean payload with ONLY the fields the backend expects
+    const branchPayload: any = {
+      code: this.form.branchCode || '',
+      name: this.form.branchName || '',
+      address1: this.form.branchAddress || '',
+      postcode: this.form.branchPostcode || '',
+      city: this.form.branchCity || '',
+      state: this.form.branchState || '',
+      isDefaultBranch: this.form.isDefaultBranch || false
+    };
+
+    const payload: any = {
+      customerCode: this.form.code || '',
+      name: this.form.name,
+      customerCategory: this.form.category || 'DEFAULT',
+      term: this.form.term || 'Cash Sale',
+      sequence: Number(this.form.sequence) || 0,
+      description: this.form.description || '',
+      processCompany: this.form.processCompany || 'ALL COMPANY',
+      taxStatus: this.form.taxStatus || 'Un-Defined',
+      taxDocNo: this.form.taxDocNo || '',
+      discountPercent: Number(this.form.discount) || 0,
+      requireDigitSign: this.form.requireDigitSign || false,
+      phone: this.form.phone || '',
+      email: this.form.email || '',
+      address: this.form.address || ''
+    };
+
+    // Include branches if: (1) customer already has a branch, or (2) user filled in any branch field
+    const hasAnyBranchData = !!(branchPayload.code || branchPayload.name || branchPayload.address || branchPayload.postcode || branchPayload.city || branchPayload.state);
+    const alreadyHasBranch = !!this.form._hasBranch;
+
+    if (hasAnyBranchData || alreadyHasBranch) {
+      // Backend requires Code and Name for branches
+      if (!branchPayload.code) { this.showToastMsg('Branch Code is required'); return; }
+      if (!branchPayload.name) { this.showToastMsg('Branch Name is required'); return; }
+      payload.branches = [branchPayload];
+    }
+
     if (this.isEditing && this.selectedCustomer) {
-      this.api.editCustomer(this.selectedCustomer.id, this.form).subscribe({
+      this.api.editCustomer(this.selectedCustomer.id, payload).subscribe({
         next: () => { this.showToastMsg('Customer updated!'); this.closeModal(); this.loadCustomers(); },
-        error: (err: any) => this.showToastMsg('Failed: ' + (err.error?.message || err.message || 'error'))
+        error: (err: any) => this.showToastMsg('Failed: ' + (err.error?.message || JSON.stringify(err.error) || err.message || 'error'))
       });
     } else {
-      this.api.createCustomer(this.form).subscribe({
+      this.api.createCustomer(payload).subscribe({
         next: () => { this.showToastMsg('Customer created!'); this.closeModal(); this.loadCustomers(); },
-        error: (err: any) => this.showToastMsg('Failed: ' + (err.error?.message || err.message || 'error'))
+        error: (err: any) => this.showToastMsg('Failed: ' + (err.error?.message || JSON.stringify(err.error) || err.message || 'error'))
       });
     }
   }
+
 
   confirmDelete(customer: any) { this.selectedCustomer = customer; this.showDeleteAlert = true; }
 

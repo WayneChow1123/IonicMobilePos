@@ -63,75 +63,103 @@
     </div>
   </div>
 
-  <div *ngIf="showModal && !isEditing" class="page-container">
-    <div class="top-bar">
-      <ion-button fill="clear" class="back-btn" (click)="closeModal()">
-        <ion-icon name="chevron-back-outline"></ion-icon> Back
-      </ion-button>
-      <span class="page-title">New Invoice</span>
-      <ion-button fill="clear" class="icon-btn" (click)="saveInvoice()">
-        <ion-icon name="save-outline"></ion-icon>
-      </ion-button>
-    </div>
-
-    <div class="form-card" style="background:#E8D5D0;">
-      <div class="form-group">
-        <label>CUSTOMER *</label>
-        <select [(ngModel)]="form.customerId" class="form-select" (change)="onCustomerChange()">
-          <option *ngFor="let c of customers" [value]="c.id">{{ c.name }}</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label>INVOICE DATE</label>
-        <input type="datetime-local" [(ngModel)]="form.invoiceDate" class="form-input"/>
-      </div>
-      <div class="form-group">
-        <label>REMARK</label>
-        <input type="text" [(ngModel)]="form.remark" placeholder="Enter remark" class="form-input"/>
-      </div>
-    </div>
-
-    <div *ngIf="availableCredits.length > 0" style="background:#d4edda;border-radius:16px;padding:14px 16px;margin-bottom:12px;">
-      <div style="font-size:13px;font-weight:700;color:#27ae60;margin-bottom:10px;">Available Credits - Select to Use</div>
-      <div *ngFor="let credit of availableCredits" (click)="isCreditUsable(credit.amount) && (selectedCreditNoteId=credit.id) && (form.useCreditBalance=true)" style="background:#fff;border-radius:12px;padding:10px 14px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;" [style.border]="selectedCreditNoteId===credit.id ? '2px solid #27ae60' : '2px solid transparent'">
-        <div>
-          <div style="font-size:13px;font-weight:700;color:#1a1a1a;">{{ credit.cnNumber }}</div>
-          <div style="font-size:11px;color:#888;">{{ credit.invoiceNumber }} | {{ credit.reason }}</div>
-        </div>
-        <div style="text-align:right;">
-          <div style="font-size:14px;font-weight:800;color:#27ae60;">RM {{ credit.amount | number:'1.2-2' }}</div>
-          <div *ngIf="selectedCreditNoteId===credit.id" style="font-size:10px;color:#27ae60;font-weight:700;">Selected</div>
-          <div *ngIf="!isCreditUsable(credit.amount)" style="font-size:10px;color:#e57373;font-weight:700;">Invoice total must be >= RM {{ credit.amount | number:'1.2-2' }}</div>
-        </div>
-      </div>
-      <button *ngIf="selectedCreditNoteId" (click)="selectedCreditNoteId=null; form.useCreditBalance=false;" style="border:none;background:transparent;color:#e57373;font-size:12px;font-weight:700;cursor:pointer;padding:0;font-family:'DM Sans',sans-serif;">Clear Selection</button>
-    </div>
-
-    <div class="section-title">
-      <span>Items</span>
-      <button class="add-item-btn" (click)="addItem()">+ Add Item</button>
-    </div>
-
-    <div *ngFor="let item of form.items; let i = index" class="form-card" style="background:#C5C8E0;">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-        <span style="font-weight:700;font-size:13px;">Item {{ i + 1 }}</span>
-        <ion-button fill="clear" style="--color:#e57373;font-size:18px;" (click)="removeItem(i)">
-          <ion-icon name="trash-outline"></ion-icon>
+  <!-- ═══════════════════════════════════════
+       NEW INVOICE PREMIUM DESIGN
+       ═══════════════════════════════════════ -->
+  <div *ngIf="showModal && !isEditing" class="ni-container">
+    
+    <!-- Top Bar -->
+    <div class="ni-top-bar">
+      <div class="ni-top-left">
+        <ion-button fill="clear" class="ni-back-btn" (click)="closeModal()">
+          <ion-icon name="chevron-back-outline"></ion-icon>
         </ion-button>
+        <span class="ni-page-title">NEW INVOICE</span>
       </div>
-      <div class="form-group">
-        <label>PRODUCT</label>
-        <select [(ngModel)]="item.productId" class="form-select">
-          <option *ngFor="let p of products" [value]="p.id">{{ p.name }}</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label>QUANTITY</label>
-        <input type="number" [(ngModel)]="item.quantity" placeholder="1" class="form-input" min="1" (keydown)="noLeadingZero($event, item.quantity)"/>
+      <div class="ni-top-right">
+        <button class="ni-add-btn green">
+          <ion-icon name="add-outline"></ion-icon>
+          <span>ADD</span>
+        </button>
+        <button class="ni-add-btn black">
+          <ion-icon name="cube-outline"></ion-icon>
+          <span>ADD</span>
+        </button>
+        <button class="ni-add-btn black">
+          <ion-icon name="settings-outline"></ion-icon>
+          <span>ADD</span>
+        </button>
       </div>
     </div>
 
-    <button class="save-btn" (click)="saveInvoice()">CREATE INVOICE</button>
+    <!-- Doc No Row -->
+    <div class="ni-doc-row">
+      <span class="ni-label">DOC NO:</span>
+      <span class="ni-value">S001-2026040303</span>
+    </div>
+
+    <!-- Scroll Content -->
+    <div class="ni-content">
+      
+      <!-- Customer Card -->
+      <div class="ni-card ni-cust-card">
+        <div class="ni-cust-row">
+          <div class="ni-cust-label-box">
+            <div class="ni-icon-circle">
+              <ion-icon name="information-outline"></ion-icon>
+            </div>
+            <span class="ni-label">CUST.</span>
+          </div>
+          
+          <div class="ni-identify-box" (click)="openCustomerSelector()">
+            <span class="ni-identify-text">{{ form.customerId ? 'CHANGE CUSTOMER' : 'IDENTIFY' }}</span>
+          </div>
+
+          <button class="ni-settings-circle" (click)="openCustomerSelector()">
+            <ion-icon name="search-outline"></ion-icon>
+          </button>
+        </div>
+
+        <div class="ni-cust-main">
+          <div class="ni-cust-name">{{ selectedCustomerDetail?.name || 'Walk-in Cash' }}</div>
+          <div class="ni-cust-code">{{ (selectedCustomerDetail?.code || selectedCustomerDetail?.customerCode) || (form.customerId ? 'NO CODE' : 'CASH000001') }}</div>
+        </div>
+      </div>
+
+      <!-- Items List Section (Header only as requested) -->
+      <div class="ni-section-header">
+        <span class="ni-label">ITEMS LIST</span>
+        <span class="ni-count">0 Item</span>
+      </div>
+
+      <!-- Item rows hidden for now as requested -->
+      <div class="ni-empty-space"></div>
+
+    </div>
+
+    <!-- Fixed Footer -->
+    <div class="ni-footer">
+      <div class="ni-summary">
+        <div class="ni-sum-row">
+          <span class="ni-sum-label">GROSS:</span>
+          <span class="ni-sum-val">RM {{ getFormTotal() | number:'1.2-2' }}</span>
+        </div>
+        <div class="ni-sum-row">
+          <span class="ni-sum-label">TAX:</span>
+          <span class="ni-sum-val">RM 0.00</span>
+        </div>
+        <div class="ni-net-row">
+          <span class="ni-net-label">NET:</span>
+          <span class="ni-net-val">RM {{ getFormTotal() | number:'1.2-2' }}</span>
+        </div>
+      </div>
+
+      <button class="ni-pay-btn" (click)="saveInvoice()">
+        <span>PAY</span>
+        <ion-icon name="chevron-forward-outline"></ion-icon>
+      </button>
+    </div>
+
   </div>
 
   <div *ngIf="showModal && isEditing" class="page-container">
@@ -349,6 +377,54 @@
     [buttons]="deleteButtons"
     (didDismiss)="showDeleteAlert=false">
   </ion-alert>
+
+  <div *ngIf="showStockAlert" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:flex-end;">
+    <div style="background:#F0EBE3;border-radius:24px 24px 0 0;padding:24px 20px;width:100%;max-height:80vh;overflow-y:auto;">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+        <ion-icon name="warning-outline" style="font-size:24px;color:#e57373;"></ion-icon>
+        <span style="font-size:17px;font-weight:700;color:#1a1a1a;">Insufficient Stock</span>
+      </div>
+      <div *ngFor="let issue of stockIssues" style="background:#f8d7da;border-radius:12px;padding:12px 14px;margin-bottom:8px;">
+        <div style="font-size:14px;font-weight:700;color:#1a1a1a;">
+          {{ issue.productName }} doesn't have enough quantity as requested.
+        </div>
+        <div style="font-size:12px;color:#888;margin-top:4px;">
+          Requested: <strong>{{ issue.required }}</strong> &nbsp;|&nbsp;
+          Available: <strong style="color:#e57373;">{{ issue.available }}</strong>
+        </div>
+      </div>
+      <button (click)="showStockAlert = false" style="width:100%;background:#1a1a1a;color:#fff;border:none;border-radius:16px;padding:14px;font-size:14px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;margin-top:16px;">OK, UNDERSTOOD</button>
+    </div>
+  </div>
+
+  <!-- Customer Selector Overlay -->
+  <div *ngIf="showCustomerSelector" class="ni-overlay">
+    <div class="ni-overlay-header">
+      <ion-button fill="clear" (click)="showCustomerSelector=false">
+        <ion-icon name="close-outline"></ion-icon>
+      </ion-button>
+      <span class="ni-overlay-title">Select Customer</span>
+      <div style="width:48px;"></div>
+    </div>
+    <div class="ni-overlay-search">
+      <ion-searchbar [(ngModel)]="customerSearchTerm" (ionInput)="filterCustomers()" placeholder="Search name or code..."></ion-searchbar>
+    </div>
+    <div class="ni-overlay-content">
+      <div *ngFor="let c of filteredCustomers" class="ni-cust-item" (click)="selectCustomer(c)">
+        <div class="ni-cust-item-icon">
+          <ion-icon name="person-outline"></ion-icon>
+        </div>
+        <div class="ni-cust-item-info">
+          <div class="ni-cust-item-name">{{ c.name }}</div>
+          <div class="ni-cust-item-code">{{ c.code || 'NO CODE' }}</div>
+        </div>
+        <ion-icon name="chevron-forward-outline" class="ni-cust-arrow"></ion-icon>
+      </div>
+      <div *ngIf="filteredCustomers.length === 0" class="ni-empty-state">
+        <p>No customers found</p>
+      </div>
+    </div>
+  </div>
 
   <ion-toast [isOpen]="showToast" [message]="toastMessage" duration="2000" position="bottom" (didDismiss)="showToast=false"></ion-toast>
 

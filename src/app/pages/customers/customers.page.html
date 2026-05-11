@@ -36,7 +36,12 @@
           <div class="item-avatar"><ion-icon name="person-outline"></ion-icon></div>
           <div>
             <div class="item-name">{{ customer.name }}</div>
-            <div class="item-sub">{{ customer.phone }} | {{ customer.email }}</div>
+            <div class="item-sub-row">
+              <span class="item-code">{{ customer.customerCode || '---' }}</span>
+              <span class="item-credit" [class.credit-neg]="getCustomerCredit(customer.id) < 0" [class.credit-zero]="getCustomerCredit(customer.id) === 0">
+                RM {{ getCustomerCredit(customer.id) | number:'1.2-2' }}
+              </span>
+            </div>
           </div>
         </div>
         <div style="display:flex;gap:4px;">
@@ -61,6 +66,14 @@
   <div *ngIf="showModal" class="cd-container">
     
     <div class="cd-content">
+
+      <!-- Modal Loading Spinner -->
+      <div *ngIf="isModalLoading" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:60vh;gap:16px;">
+        <ion-spinner name="crescent" style="width:40px;height:40px;color:#1a1a1a;"></ion-spinner>
+        <span style="font-size:12px;font-weight:700;color:#aaa;letter-spacing:1px;">LOADING...</span>
+      </div>
+
+      <div *ngIf="!isModalLoading">
       <!-- Top Bar -->
       <div class="cd-top-bar">
         <ion-button fill="clear" class="cd-back-btn" (click)="closeModal()">
@@ -150,7 +163,11 @@
               <div class="cd-icon-box"><ion-icon name="cash-outline"></ion-icon></div>
               DISCOUNT
             </div>
-            <div class="cd-percentage">{{ form.discount }}%</div>
+            <div class="cd-percentage" *ngIf="!isEditMode">{{ form.discount }}%</div>
+            <div class="cd-edit-input-box" *ngIf="isEditMode">
+              <input type="number" [(ngModel)]="form.discount" class="cd-small-input" placeholder="0">
+              <span class="cd-unit">%</span>
+            </div>
           </div>
           
           <div class="cd-divider" *ngIf="isEditMode"></div>
@@ -168,18 +185,74 @@
         </div>
 
         <!-- Bottom Report Grid -->
-        <div class="cd-report-grid">
-          <div class="cd-report-card yellow">
+        <div class="cd-report-grid" *ngIf="!activeReport">
+          <div class="cd-report-card yellow" (click)="setActiveReport('INVOICE')">
             <span class="report-label">INVOICE<br>REPORT</span>
             <ion-icon name="document-outline"></ion-icon>
           </div>
-          <div class="cd-report-card pink">
+          <div class="cd-report-card pink" (click)="setActiveReport('CN')">
             <span class="report-label">C.N.<br>REPORT</span>
             <ion-icon name="copy-outline"></ion-icon>
           </div>
-          <div class="cd-report-card green">
+          <div class="cd-report-card green" (click)="setActiveReport('PAYMENTS')">
             <span class="report-label">PAYMENTS</span>
             <ion-icon name="wallet-outline"></ion-icon>
+          </div>
+        </div>
+
+        <!-- Dynamic Report List View -->
+        <div class="report-view-container" *ngIf="activeReport">
+          <div class="report-view-header">
+            <ion-button fill="clear" (click)="setActiveReport(null)" class="report-back-btn">
+              <ion-icon name="chevron-back-outline"></ion-icon> Back
+            </ion-button>
+            <span class="report-view-title">{{ activeReport === 'CN' ? 'C.N.' : activeReport }} REPORT</span>
+          </div>
+
+          <!-- Invoice List -->
+          <div *ngIf="activeReport === 'INVOICE'">
+            <div *ngFor="let inv of customerInvoices" class="report-list-item">
+              <div class="item-main">
+                <div class="item-icon yellow"><ion-icon name="document-text-outline"></ion-icon></div>
+                <div class="item-details">
+                  <div class="item-title">{{ inv.invoiceNumber }}</div>
+                  <div class="item-sub">{{ inv.invoiceDate | date:'dd/MM/yyyy' }}</div>
+                </div>
+                <div class="item-amount">RM {{ inv.totalAmount | number:'1.2-2' }}</div>
+              </div>
+              <div class="item-status" [class.paid]="inv.status==='Paid'">{{ inv.status }}</div>
+            </div>
+            <div *ngIf="customerInvoices.length === 0" class="report-empty">No invoices found</div>
+          </div>
+
+          <!-- CN List -->
+          <div *ngIf="activeReport === 'CN'">
+            <div *ngFor="let cn of customerCNs" class="report-list-item">
+              <div class="item-main">
+                <div class="item-icon pink"><ion-icon name="copy-outline"></ion-icon></div>
+                <div class="item-details">
+                  <div class="item-title">{{ cn.cnNumber || 'CN-' + cn.id }}</div>
+                  <div class="item-sub">{{ cn.date | date:'dd/MM/yyyy' }} | {{ cn.reason }}</div>
+                </div>
+                <div class="item-amount">- RM {{ cn.amount | number:'1.2-2' }}</div>
+              </div>
+            </div>
+            <div *ngIf="customerCNs.length === 0" class="report-empty">No credit notes found</div>
+          </div>
+
+          <!-- Payment List -->
+          <div *ngIf="activeReport === 'PAYMENTS'">
+            <div *ngFor="let p of customerPayments" class="report-list-item">
+              <div class="item-main">
+                <div class="item-icon green"><ion-icon name="wallet-outline"></ion-icon></div>
+                <div class="item-details">
+                  <div class="item-title">{{ p.method }} | {{ p.referenceNo || 'No Ref' }}</div>
+                  <div class="item-sub">{{ p.paymentDate | date:'dd/MM/yyyy' }}</div>
+                </div>
+                <div class="item-amount">RM {{ p.amount | number:'1.2-2' }}</div>
+              </div>
+            </div>
+            <div *ngIf="customerPayments.length === 0" class="report-empty">No payments found</div>
           </div>
         </div>
       </div>
@@ -249,6 +322,7 @@
         <p>Price settings not implemented yet.</p>
       </div>
     </div>
+    </div> <!-- end *ngIf="!isModalLoading" -->
 
     <!-- Sticky Footer Area (Credit & Sub-Tabs) -->
     <div class="cd-footer">

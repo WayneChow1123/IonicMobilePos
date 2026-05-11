@@ -274,7 +274,13 @@ export class BillingPage implements OnInit {
   }
 
   showToastMsg(msg: string) { this.toastMessage = msg; this.showToast = true; }
-  goTo(path: string) { this.navCtrl.navigateRoot(path); }
+  goTo(path: string, params?: any) { 
+    if (params) {
+      this.navCtrl.navigateRoot(path, { queryParams: params }); 
+    } else {
+      this.navCtrl.navigateRoot(path); 
+    }
+  }
 
   goBack() { this.navCtrl.navigateRoot('pages/home'); }
 }
