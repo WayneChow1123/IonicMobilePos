@@ -1,4 +1,4 @@
-ion-content {
+﻿ion-content {
     --background: #F0EBE3;
 }
 
@@ -356,6 +356,21 @@ ion-content {
     font-family: 'DM Sans', sans-serif;
     color: #1a1a1a;
     padding: 4px 0;
+}
+
+.form-textarea {
+    width: 100%;
+    border: none;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+    outline: none;
+    background: transparent;
+    font-size: 14px;
+    font-weight: 600;
+    font-family: 'DM Sans', sans-serif;
+    color: #1a1a1a;
+    padding: 8px 0;
+    resize: none;
+    min-height: 70px;
 }
 
 .save-btn {
