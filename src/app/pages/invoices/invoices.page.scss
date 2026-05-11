@@ -601,19 +601,19 @@ ion-content { --background: #F0EBE3; }
 .ni-sum-row {
   display: flex;
   gap: 8px;
-  font-size: 10px;
+  font-size: 14px;
   font-weight: 800;
   color: #1a1a1a;
-  .ni-sum-label { color: #aaa; }
+  .ni-sum-label { color: #1a1a1a; }
 }
 
 .ni-net-row {
   display: flex;
   gap: 8px;
-  margin-top: 4px;
+  margin-top: 8px;
   align-items: center;
-  .ni-net-label { font-size: 10px; font-weight: 800; color: #aaa; }
-  .ni-net-val { font-size: 20px; font-weight: 900; color: #1a1a1a; }
+  .ni-net-label { font-size: 16px; font-weight: 800; color: #1a1a1a; }
+  .ni-net-val { font-size: 32px; font-weight: 900; color: #1a1a1a; }
 }
 
 .ni-pay-btn {
@@ -706,7 +706,7 @@ ion-content { --background: #F0EBE3; }
 
 .ni-cust-item-code {
   font-size: 11px;
-  color: #aaa;
+  color: #1a1a1a;
   margin-top: 2px;
   letter-spacing: 0.5px;
 }
@@ -714,4 +714,371 @@ ion-content { --background: #F0EBE3; }
 .ni-cust-arrow {
   font-size: 18px;
   color: #ddd;
+}
+
+/* ─── Item Card Design ─── */
+.ni-item-card {
+  background: #fff;
+  border-radius: 24px;
+  padding: 24px;
+  margin-bottom: 16px;
+  position: relative;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.03);
+}
+
+.ni-item-idx {
+  position: absolute;
+  top: 0; left: 0;
+  background: #1a1a1a;
+  color: #fff;
+  width: 24px;
+  height: 24px;
+  border-radius: 24px 0 24px 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  span { font-size: 10px; font-weight: 800; }
+}
+
+.ni-item-main {
+  display: flex;
+  flex-direction: column;
+}
+
+.ni-item-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+
+.ni-item-name {
+  font-size: 16px;
+  font-weight: 900;
+  color: #1a1a1a;
+  margin-bottom: 4px;
+}
+
+.ni-item-tags {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #1a1a1a;
+  ion-icon { font-size: 14px; }
+}
+
+.ni-tag-text {
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.ni-tag-bold {
+  font-size: 11px;
+  font-weight: 800;
+  color: #1a1a1a;
+}
+
+.ni-tag-val {
+  font-size: 11px;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.ni-item-del {
+  width: 32px;
+  height: 32px;
+  background: #FDEDEC;
+  border: none;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  ion-icon { font-size: 18px; color: #E74C3C; }
+}
+
+.ni-item-price-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #f9f9f9;
+}
+
+.ni-unit-label {
+  font-size: 11px;
+  color: #1a1a1a;
+  font-weight: 700;
+}
+
+.ni-unit-val {
+  color: #1a1a1a;
+  font-size: 14px;
+  margin-left: 4px;
+}
+
+.ni-unit-type {
+  font-size: 10px;
+  font-weight: 800;
+  color: #1a1a1a;
+}
+
+.ni-item-qty-box {
+  background: #F9F9F9;
+  border-radius: 12px;
+  padding: 12px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.ni-qty-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.ni-qty-x { font-size: 14px; color: #1a1a1a; font-weight: 800; }
+.ni-qty-eq { font-size: 14px; color: #1a1a1a; font-weight: 800; }
+
+.ni-qty-input {
+  background: transparent;
+  border: none;
+  width: 40px;
+  font-size: 18px;
+  font-weight: 900;
+  color: #1a1a1a;
+  text-align: center;
+  outline: none;
+}
+
+.ni-qty-total {
+  font-size: 16px;
+  font-weight: 900;
+  color: #1a1a1a;
+}
+
+.ni-item-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+}
+
+.ni-item-remark {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #1a1a1a;
+  ion-icon { font-size: 16px; }
+  span { font-size: 11px; font-weight: 700; font-style: italic; }
+}
+
+.ni-item-sub-total {
+  text-align: right;
+}
+
+.ni-sub-label {
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 1px;
+  color: #1a1a1a;
+  margin-bottom: 2px;
+}
+
+.ni-sub-val {
+  font-size: 20px;
+  font-weight: 900;
+  color: #1a1a1a;
+}
+
+/* ─── Payment Collection Modal ─── */
+.ni-pay-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.4);
+  backdrop-filter: blur(4px);
+  z-index: 3000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.ni-pay-modal {
+  width: 100%;
+  max-width: 400px;
+  background: #F9F7F2;
+  border-radius: 40px;
+  overflow: hidden;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+}
+
+.ni-pay-header {
+  background: #E1E6D9;
+  padding: 18px;
+  text-align: center;
+}
+
+.ni-pay-header-title {
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  color: #1a1a1a;
+}
+
+.ni-pay-body {
+  padding: 30px 24px;
+}
+
+.ni-pay-total-section {
+  text-align: center;
+  margin-bottom: 30px;
+}
+
+.ni-pay-total-label {
+  font-size: 11px;
+  font-weight: 800;
+  color: #1a1a1a;
+  letter-spacing: 1px;
+  margin-bottom: 4px;
+}
+
+.ni-pay-total-val {
+  font-size: 64px;
+  font-weight: 900;
+  color: #1a1a1a;
+  line-height: 1;
+}
+
+.ni-pay-group {
+  margin-bottom: 20px;
+  label {
+    display: block;
+    font-size: 10px;
+    font-weight: 800;
+    color: #1a1a1a;
+    margin-bottom: 8px;
+    letter-spacing: 0.5px;
+  }
+}
+
+.ni-pay-select {
+  background: #fff;
+  border-radius: 16px;
+  padding: 0 20px;
+  height: 56px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  position: relative;
+  ion-icon { font-size: 18px; color: #ddd; cursor: pointer; }
+}
+
+.ni-pay-val-display {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 800;
+  color: #1a1a1a;
+}
+
+.ni-pay-ion-select-hidden {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+  width: 0;
+  height: 0;
+}
+
+.ni-pay-input-box {
+  background: #fff;
+  border-radius: 20px;
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 2px solid transparent;
+  
+  &.active {
+    border-color: #1a1a1a;
+  }
+  
+  &.gray {
+    background: #EBE9E2;
+  }
+}
+
+.ni-pay-curr {
+  font-size: 14px;
+  font-weight: 800;
+  color: #1a1a1a;
+}
+
+.ni-pay-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  font-size: 32px;
+  font-weight: 900;
+  color: #1a1a1a;
+  outline: none;
+  width: 100%;
+}
+
+.ni-pay-display {
+  font-size: 32px;
+  font-weight: 900;
+  color: #1a1a1a;
+}
+
+.ni-pay-clear {
+  font-size: 20px;
+  color: #eee;
+  cursor: pointer;
+}
+
+.ni-pay-toggle-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 10px;
+  margin-bottom: 30px;
+}
+
+.ni-pay-toggle-label {
+  font-size: 11px;
+  font-weight: 800;
+  color: #1a1a1a;
+}
+
+.ni-pay-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.ni-btn-cancel {
+  flex: 1;
+  background: #fff;
+  border: 1px solid #eee;
+  border-radius: 20px;
+  padding: 18px;
+  font-size: 13px;
+  font-weight: 800;
+  color: #aaa;
+}
+
+.ni-btn-pay {
+  flex: 1.4;
+  background: #1a1a1a;
+  color: #fff;
+  border: none;
+  border-radius: 20px;
+  padding: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  span { font-size: 13px; font-weight: 800; }
+  ion-icon { font-size: 16px; }
 }

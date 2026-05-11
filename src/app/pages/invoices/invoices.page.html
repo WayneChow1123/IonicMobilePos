@@ -77,7 +77,7 @@
         <span class="ni-page-title">NEW INVOICE</span>
       </div>
       <div class="ni-top-right">
-        <button class="ni-add-btn green">
+        <button class="ni-add-btn green" (click)="openProductSelector()">
           <ion-icon name="add-outline"></ion-icon>
           <span>ADD</span>
         </button>
@@ -126,14 +126,61 @@
         </div>
       </div>
 
-      <!-- Items List Section (Header only as requested) -->
+      <!-- Items List Section -->
       <div class="ni-section-header">
         <span class="ni-label">ITEMS LIST</span>
-        <span class="ni-count">0 Item</span>
+        <span class="ni-count">{{ form.items.length }} Item{{ form.items.length !== 1 ? 's' : '' }}</span>
       </div>
 
-      <!-- Item rows hidden for now as requested -->
-      <div class="ni-empty-space"></div>
+      <div *ngFor="let item of form.items; let i = index" class="ni-item-card">
+        <div class="ni-item-idx">
+          <span>{{ i + 1 }}</span>
+        </div>
+        
+        <div class="ni-item-main">
+          <div class="ni-item-top">
+            <div class="ni-item-name-box">
+              <div class="ni-item-name">{{ item.productName | uppercase }}</div>
+              <div class="ni-item-tags">
+                <ion-icon name="square-outline"></ion-icon>
+                <span class="ni-tag-text">Incl. 0%</span>
+                <span class="ni-tag-bold">SR</span>
+                <span class="ni-tag-val">[0]</span>
+              </div>
+            </div>
+            <button class="ni-item-del" (click)="removeItem(i)">
+              <ion-icon name="close-outline"></ion-icon>
+            </button>
+          </div>
+
+          <div class="ni-item-price-row">
+            <div class="ni-unit-label">Unit <span class="ni-unit-val">RM {{ item.unitPrice | number:'1.2-2' }}</span></div>
+            <div class="ni-unit-type">/ PCS</div>
+          </div>
+
+          <div class="ni-item-qty-box">
+            <div class="ni-qty-left">
+              <span class="ni-qty-x">×</span>
+              <input type="number" [(ngModel)]="item.quantity" class="ni-qty-input" min="1">
+              <span class="ni-qty-eq">=</span>
+            </div>
+            <div class="ni-qty-total">{{ (item.quantity * item.unitPrice) | number:'1.2-2' }}</div>
+          </div>
+
+          <div class="ni-item-footer">
+            <div class="ni-item-remark">
+              <ion-icon name="document-text-outline"></ion-icon>
+              <span>{{ item.remark || 'No remarks provided...' }}</span>
+            </div>
+            <div class="ni-item-sub-total">
+              <div class="ni-sub-label">TOTAL</div>
+              <div class="ni-sub-val">RM {{ (item.quantity * item.unitPrice) | number:'1.2-2' }}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="ni-empty-space" *ngIf="form.items.length === 0"></div>
 
     </div>
 
@@ -154,7 +201,7 @@
         </div>
       </div>
 
-      <button class="ni-pay-btn" (click)="saveInvoice()">
+      <button class="ni-pay-btn" (click)="openPaymentCollection()">
         <span>PAY</span>
         <ion-icon name="chevron-forward-outline"></ion-icon>
       </button>
@@ -420,7 +467,102 @@
       </div>
     </div>
   </div>
+  <!-- Product Selector Overlay -->
+  <div *ngIf="showProductSelector" class="ni-overlay">
+    <div class="ni-overlay-header">
+      <ion-button fill="clear" (click)="showProductSelector=false">
+        <ion-icon name="close-outline"></ion-icon>
+      </ion-button>
+      <span class="ni-overlay-title">Select Product</span>
+      <div style="width:48px;"></div>
+    </div>
+    <div class="ni-overlay-search">
+      <ion-searchbar [(ngModel)]="productSearchTerm" (ionInput)="filterProductsForSelection()" placeholder="Search product name or code..."></ion-searchbar>
+    </div>
+    <div class="ni-overlay-content">
+      <div *ngFor="let p of filteredProductsForSelection" class="ni-cust-item" (click)="selectProduct(p)">
+        <div class="ni-cust-item-icon">
+          <ion-icon name="cube-outline"></ion-icon>
+        </div>
+        <div class="ni-cust-item-info">
+          <div class="ni-cust-item-name">{{ p.name }}</div>
+          <div class="ni-cust-item-code">RM {{ p.price | number:'1.2-2' }} | Stock: {{ p.stock }}</div>
+        </div>
+        <ion-icon name="chevron-forward-outline" class="ni-cust-arrow"></ion-icon>
+      </div>
+      <div *ngIf="filteredProductsForSelection.length === 0" class="ni-empty-state">
+        <p>No products found</p>
+      </div>
+    </div>
+  </div>
 
+  <!-- Payment Collection Modal -->
+  <div *ngIf="showPaymentCollection" class="ni-pay-overlay">
+    <div class="ni-pay-modal">
+      <div class="ni-pay-header">
+        <span class="ni-pay-header-title">PAYMENT COLLECTION</span>
+      </div>
+      
+      <div class="ni-pay-body">
+        <div class="ni-pay-total-section">
+          <div class="ni-pay-total-label">TOTAL PAYABLE</div>
+          <div class="ni-pay-total-val">{{ getFormTotal() | number:'1.2-2' }}</div>
+        </div>
 
+        <div class="ni-pay-form">
+          <div class="ni-pay-group">
+            <label>TERM TYPE</label>
+            <div class="ni-pay-select">
+              <span class="ni-pay-val-display">{{ termType }}</span>
+              <ion-select #termSelect [(ngModel)]="termType" interface="popover" toggleIcon="none" class="ni-pay-ion-select-hidden">
+                <ion-select-option *ngFor="let t of termTypes" [value]="t">{{ t }}</ion-select-option>
+              </ion-select>
+              <ion-icon name="chevron-down-outline" (click)="termSelect.open()"></ion-icon>
+            </div>
+          </div>
+
+          <div class="ni-pay-group">
+            <label>METHOD</label>
+            <div class="ni-pay-select">
+              <span>{{ paymentMethod }}</span>
+              <ion-icon name="chevron-down-outline"></ion-icon>
+            </div>
+          </div>
+
+          <div class="ni-pay-group">
+            <label>AMOUNT PAID</label>
+            <div class="ni-pay-input-box active">
+              <span class="ni-pay-curr">RM</span>
+              <input type="number" [(ngModel)]="amountPaid" class="ni-pay-input">
+              <ion-icon name="close-circle" class="ni-pay-clear" (click)="amountPaid = 0"></ion-icon>
+            </div>
+          </div>
+
+          <div class="ni-pay-group">
+            <label>CHANGE TO RETURN:</label>
+            <div class="ni-pay-input-box gray">
+              <span class="ni-pay-curr">RM</span>
+              <div class="ni-pay-display">{{ getChangeToReturn() | number:'1.2-2' }}</div>
+            </div>
+          </div>
+
+          <div class="ni-pay-toggle-row">
+            <span class="ni-pay-toggle-label">BILL REMARK</span>
+            <ion-toggle [(ngModel)]="showBillRemark"></ion-toggle>
+          </div>
+        </div>
+
+        <div class="ni-pay-actions">
+          <button class="ni-btn-cancel" (click)="showPaymentCollection = false">CANCEL</button>
+          <button class="ni-btn-pay" (click)="confirmPayment()">
+            <span>PAY NOW</span>
+            <ion-icon name="chevron-forward-outline"></ion-icon>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <ion-toast [isOpen]="showToast" [message]="toastMessage" duration="2000" position="bottom" (didDismiss)="showToast=false"></ion-toast>
 
 </ion-content>

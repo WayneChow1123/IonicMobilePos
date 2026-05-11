@@ -27,8 +27,17 @@ export class InvoicesPage implements OnInit {
   showModal = false;
   isDirectEntry = false; 
   showCustomerSelector = false;
+  showProductSelector = false;
+  showPaymentCollection = false;
+  amountPaid: number = 0;
+  paymentMethod: string = 'CASH';
+  termType: string = 'CASH SALE';
+  termTypes: string[] = ['CASH SALE', 'Net 30 Days', 'On Credit'];
+  showBillRemark: boolean = false;
   customerSearchTerm = '';
+  productSearchTerm = '';
   filteredCustomers: any[] = [];
+  filteredProductsForSelection: any[] = [];
   showSearch = false;
   searchTerm = '';
   isEditing = false;
@@ -39,7 +48,7 @@ export class InvoicesPage implements OnInit {
   selectedCustomerDetail: any = null;
   showCheckPreview = false;
   previewData: any = null;
-  form: any = { customerId: 0, invoiceDate: new Date().toISOString(), remark: '', useCreditBalance: false, items: [{ productId: 0, quantity: 1 }] };
+  form: any = { customerId: 0, invoiceDate: new Date().toISOString(), remark: '', useCreditBalance: false, items: [] };
   editForm: any = { invoiceDate: new Date().toISOString(), remark: '', items: [{ productId: 0, quantity: 1, unitPrice: 0 }] };
   showStockAlert = false;
   stockIssues: any[] = [];
@@ -156,6 +165,33 @@ export class InvoicesPage implements OnInit {
     this.showCustomerSelector = false;
   }
 
+  openProductSelector() {
+    this.productSearchTerm = '';
+    this.filteredProductsForSelection = [...this.products];
+    this.showProductSelector = true;
+  }
+
+  filterProductsForSelection() {
+    const term = this.productSearchTerm.toLowerCase();
+    this.filteredProductsForSelection = this.products.filter(p => 
+      (p.name || '').toLowerCase().includes(term) || 
+      (p.code || '').toLowerCase().includes(term)
+    );
+  }
+
+  selectProduct(product: any) {
+    const newItem = {
+      productId: product.id,
+      productName: product.name,
+      unitPrice: product.price,
+      quantity: 1,
+      remark: ''
+    };
+    this.form.items.push(newItem);
+    this.showProductSelector = false;
+  }
+
+
   onProductChange(item: any) {
     const product = this.products.find((p: any) => p.id == item.productId);
     if (product) item.unitPrice = product.price;
@@ -173,11 +209,11 @@ export class InvoicesPage implements OnInit {
     this.selectedCreditNoteId = null;
     this.availableCredits = [];
     this.form = {
-      customerId: this.customers.length > 0 ? this.customers[0].id : 0,
+      customerId: 0,
       invoiceDate: new Date().toISOString(),
       remark: '',
       useCreditBalance: false,
-      items: [{ productId: this.products.length > 0 ? this.products[0].id : 0, quantity: 1 }]
+      items: []
     };
     if (this.customers.length > 0) {
       this.loadAvailableCredits(Number(this.customers[0].id));
@@ -230,10 +266,34 @@ export class InvoicesPage implements OnInit {
 
   removeItem(index: number) {
     if (this.isEditing) {
-      if (this.editForm.items.length > 1) this.editForm.items.splice(index, 1);
+      this.editForm.items.splice(index, 1);
     } else {
-      if (this.form.items.length > 1) this.form.items.splice(index, 1);
+      this.form.items.splice(index, 1);
     }
+  }
+
+  cycleTermType() {
+    const currentIndex = this.termTypes.indexOf(this.termType);
+    const nextIndex = (currentIndex + 1) % this.termTypes.length;
+    this.termType = this.termTypes[nextIndex];
+  }
+
+  openPaymentCollection() {
+    this.amountPaid = this.getFormTotal();
+    this.showPaymentCollection = true;
+  }
+
+  getChangeToReturn() {
+    const total = this.getFormTotal();
+    const paid = Number(this.amountPaid) || 0;
+    const change = paid - total;
+    return change > 0 ? change : 0;
+  }
+
+  confirmPayment() {
+    // Here we would call the actual save logic
+    this.saveInvoice();
+    this.showPaymentCollection = false;
   }
 
   saveInvoice() {
