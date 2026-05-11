@@ -24,7 +24,7 @@
       <h1>Hello there,<br>What do you need <strong>to bill?</strong></h1>
     </div>
     <div class="cards-grid">
-      <div class="card card-wide card-pink" (click)="goTo('pages/invoices')">
+      <div class="card card-wide card-pink" (click)="goTo('pages/invoices', { action: 'new' })">
         <div class="card-content">
           <span class="card-title">New Invoice</span>
           <ion-icon name="receipt-outline" class="card-icon-bg"></ion-icon>

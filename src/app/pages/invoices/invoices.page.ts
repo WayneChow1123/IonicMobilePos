@@ -1,4 +1,4 @@
-﻿import { AlertService } from '../../services/alert.service';
+import { AlertService } from '../../services/alert.service';
 import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
 import { NavController } from '@ionic/angular';
 import { Router } from '@angular/router';
@@ -6,6 +6,7 @@ import { CommonModule } from '@angular/common';
 import { IonicModule } from '@ionic/angular';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../services/api.service';
+import { ActivatedRoute } from '@angular/router';
 
 @Component({
   standalone: true,
@@ -24,6 +25,10 @@ export class InvoicesPage implements OnInit {
   selectedCreditNoteId: number | null = null;
   isLoading = false;
   showModal = false;
+  isDirectEntry = false; 
+  showCustomerSelector = false;
+  customerSearchTerm = '';
+  filteredCustomers: any[] = [];
   showSearch = false;
   searchTerm = '';
   isEditing = false;
@@ -36,18 +41,35 @@ export class InvoicesPage implements OnInit {
   previewData: any = null;
   form: any = { customerId: 0, invoiceDate: new Date().toISOString(), remark: '', useCreditBalance: false, items: [{ productId: 0, quantity: 1 }] };
   editForm: any = { invoiceDate: new Date().toISOString(), remark: '', items: [{ productId: 0, quantity: 1, unitPrice: 0 }] };
+  showStockAlert = false;
+  stockIssues: any[] = [];
   deleteButtons = [
     { text: 'Cancel', role: 'cancel' },
     { text: 'Delete', role: 'destructive', handler: () => this.deleteInvoice() }
   ];
 
-  constructor(private router: Router, private navCtrl: NavController, private api: ApiService, private cdr: ChangeDetectorRef, private alertService: AlertService) {}
+  constructor(private router: Router, private route: ActivatedRoute, private navCtrl: NavController, private api: ApiService, private cdr: ChangeDetectorRef, private alertService: AlertService) {}
 
   ionViewWillEnter() {
     this.cdr.detectChanges();
   }
 
-  ngOnInit() { this.loadInvoices(); this.loadCustomers(); this.loadProducts(); this.loadAllProducts(); }
+  ngOnInit() { 
+    this.loadInvoices(); 
+    this.loadCustomers(); 
+    this.loadProducts(); 
+    this.loadAllProducts(); 
+    
+    // Check for query parameters to auto-open form
+    this.route.queryParams.subscribe(params => {
+      if (params['action'] === 'new') {
+        this.isDirectEntry = true;
+        this.openAddModal();
+      } else {
+        this.isDirectEntry = false;
+      }
+    });
+  }
 
   loadInvoices() {
     this.isLoading = true;
@@ -59,7 +81,10 @@ export class InvoicesPage implements OnInit {
 
   loadCustomers() {
     this.api.getAllCustomers().subscribe({
-      next: (res) => { this.customers = Array.isArray(res) ? res : []; },
+      next: (res) => { 
+        this.customers = Array.isArray(res) ? res : []; 
+        this.filteredCustomers = [...this.customers];
+      },
       error: () => {}
     });
   }
@@ -109,6 +134,26 @@ export class InvoicesPage implements OnInit {
       this.availableCredits = [];
       this.loadAvailableCredits(Number(this.form.customerId));
     }
+  }
+
+  openCustomerSelector() {
+    this.customerSearchTerm = '';
+    this.filteredCustomers = [...this.customers];
+    this.showCustomerSelector = true;
+  }
+
+  filterCustomers() {
+    const term = this.customerSearchTerm.toLowerCase();
+    this.filteredCustomers = this.customers.filter(c => 
+      (c.name || '').toLowerCase().includes(term) || 
+      (c.code || '').toLowerCase().includes(term)
+    );
+  }
+
+  selectCustomer(customer: any) {
+    this.form.customerId = customer.id;
+    this.onCustomerChange();
+    this.showCustomerSelector = false;
   }
 
   onProductChange(item: any) {
@@ -166,7 +211,13 @@ export class InvoicesPage implements OnInit {
     });
   }
 
-  closeModal() { this.showModal = false; }
+  closeModal() { 
+    if (this.isDirectEntry) {
+      this.goBack(); // Navigate back to Billing
+    } else {
+      this.showModal = false; 
+    }
+  }
 
   addItem() {
     if (this.isEditing) {
@@ -194,15 +245,36 @@ export class InvoicesPage implements OnInit {
       if (this.selectedInvoice.status === 'Paid') { this.showToastMsg('Invoice is fully paid and cannot be modified'); return; }
       this.api.updateInvoice(this.selectedInvoice.id, this.editForm).subscribe({
         next: () => { this.showToastMsg('Invoice updated!'); this.closeModal(); this.loadInvoices(); this.loadCustomers(); },
-        error: (err: any) => this.showToastMsg('Failed: ' + (err.error?.message || err.message || 'error'))
+        error: (err: any) => this.handleInvoiceError(err)
       });
     } else {
       if (!this.form.customerId) { this.showToastMsg('Please select a customer'); return; }
       const payload = { ...this.form, selectedCreditNoteId: this.form.useCreditBalance ? this.selectedCreditNoteId : null };
       this.api.createInvoice(payload).subscribe({
         next: () => { this.showToastMsg('Invoice created!'); this.closeModal(); this.loadInvoices(); this.loadCustomers(); },
-        error: (err: any) => this.showToastMsg('Failed: ' + (err.error?.message || err.message || 'error'))
+        error: (err: any) => this.handleInvoiceError(err)
       });
+    }
+  }
+
+  handleInvoiceError(err: any) {
+    let errBody = err.error;
+    
+    // If it's a structured error
+    if (errBody?.type === 'STOCK_INSUFFICIENT') {
+      this.stockIssues = errBody.stockIssues || [];
+      this.showStockAlert = true;
+    } else {
+      let msg = errBody?.message || (typeof errBody === 'string' ? errBody : null) || err.message || 'error';
+      
+      // Auto-reformat "Insufficient stock for 'Product'. Available: X, Requested: Y"
+      if (msg.toLowerCase().includes('insufficient stock for')) {
+        const match = msg.match(/'([^']+)'/); // Extract product name between single quotes
+        const productName = match ? match[1] : 'The product';
+        msg = `${productName} doesn't have enough quantity as requested.`;
+      }
+      
+      this.showToastMsg(msg);
     }
   }
 
