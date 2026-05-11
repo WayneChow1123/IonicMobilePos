@@ -9,6 +9,23 @@ export class AlertService {
   constructor() { }
 
   toast(title: string, icon: 'success' | 'error' | 'warning' | 'info' = 'success') {
+    // If the message is long, use a center Modal instead of a top-right Toast
+    if (title && title.length > 60) {
+      const isGiantError = title.length > 300;
+      
+      Swal.fire({
+        icon: icon,
+        title: icon === 'error' ? 'Oops...' : (icon === 'warning' ? 'Warning' : 'Info'),
+        html: isGiantError 
+          ? `<div style="max-height: 250px; overflow-y: auto; text-align: left; font-size: 12px; font-family: monospace; background: #f5f5f5; padding: 12px; border-radius: 8px; color: #d32f2f;">${title.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>`
+          : `<div style="text-align: center; font-size: 15px; color: #333;">${title.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>`,
+        confirmButtonColor: '#1a1a1a',
+        confirmButtonText: 'OK',
+        width: isGiantError ? '600px' : '400px'
+      });
+      return;
+    }
+
     const Toast = Swal.mixin({
       toast: true,
       position: 'top-end',

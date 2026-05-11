@@ -1,4 +1,4 @@
-﻿<ion-content [fullscreen]="true">
+<ion-content [fullscreen]="true">
 
   <!-- LIST VIEW -->
   <div *ngIf="!showModal" class="page-container">
@@ -340,7 +340,7 @@
       </div>
 
       <!-- Action Button (Visible when creating or editing) -->
-      <button *ngIf="isEditMode" class="cd-save-btn" (click)="saveCustomer()">
+      <button *ngIf="isEditMode" class="save-btn" (click)="saveCustomer()">
         {{ isEditing ? 'UPDATE CUSTOMER' : 'CREATE CUSTOMER' }}
       </button>
     </div>
