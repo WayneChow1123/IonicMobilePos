@@ -32,7 +32,7 @@ export class AlertService {
       showConfirmButton: false,
       timer: 3000,
       timerProgressBar: true,
-      didOpen: (toast) => {
+      didOpen: (toast: any) => {
         toast.onmouseenter = Swal.stopTimer;
         toast.onmouseleave = Swal.resumeTimer;
       }
@@ -53,7 +53,7 @@ export class AlertService {
       confirmButtonColor: '#e57373',
       cancelButtonColor: '#1a1a1a',
       confirmButtonText: 'Yes, delete it!'
-    }).then((result) => {
+    }).then((result: any) => {
       return result.isConfirmed;
     });
   }
