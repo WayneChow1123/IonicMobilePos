@@ -31,6 +31,7 @@ export class InvoicesPage implements OnInit {
   showPaymentCollection = false;
   amountPaid: number = 0;
   paymentMethod: string = 'CASH';
+  paymentMethods: string[] = ['CASH', 'TRANSFER', 'CHEQUE', 'CARD'];
   termType: string = 'CASH SALE';
   termTypes: string[] = ['CASH SALE', 'Net 30 Days', 'On Credit'];
   showBillRemark: boolean = false;
@@ -143,7 +144,19 @@ export class InvoicesPage implements OnInit {
       this.selectedCreditNoteId = null;
       this.availableCredits = [];
       this.loadAvailableCredits(Number(this.form.customerId));
+      this.applyCustomerDiscount();
     }
+  }
+
+  applyCustomerDiscount() {
+    if (!this.selectedCustomerDetail) return;
+    const discount = this.selectedCustomerDetail.discountPercent || this.selectedCustomerDetail.discount || 0;
+    this.form.items.forEach((item: any) => {
+      const product = this.allProducts.find(p => p.id == item.productId);
+      if (product) {
+        item.unitPrice = product.price * (1 - (discount / 100));
+      }
+    });
   }
 
   openCustomerSelector() {
@@ -156,6 +169,7 @@ export class InvoicesPage implements OnInit {
     const term = this.customerSearchTerm.toLowerCase();
     this.filteredCustomers = this.customers.filter(c => 
       (c.name || '').toLowerCase().includes(term) || 
+      (c.customerCode || '').toLowerCase().includes(term) ||
       (c.code || '').toLowerCase().includes(term)
     );
   }
@@ -181,14 +195,22 @@ export class InvoicesPage implements OnInit {
   }
 
   selectProduct(product: any) {
-    const newItem = {
-      productId: product.id,
-      productName: product.name,
-      unitPrice: product.price,
-      quantity: 1,
-      remark: ''
-    };
-    this.form.items.push(newItem);
+    const existingItem = this.form.items.find((i: any) => i.productId === product.id);
+    if (existingItem) {
+      existingItem.quantity += 1;
+      this.showToastMsg('Increased quantity for ' + product.name);
+    } else {
+      const discount = this.selectedCustomerDetail?.discountPercent || this.selectedCustomerDetail?.discount || 0;
+      const discountedPrice = product.price * (1 - (discount / 100));
+      const newItem = {
+        productId: product.id,
+        productName: product.name,
+        unitPrice: discountedPrice,
+        quantity: 1,
+        remark: ''
+      };
+      this.form.items.push(newItem);
+    }
     this.showProductSelector = false;
   }
 
@@ -282,12 +304,19 @@ export class InvoicesPage implements OnInit {
   }
 
   openPaymentCollection() {
-    this.amountPaid = this.getFormTotal();
+    const net = this.getNetTotal();
+    if (this.form.useCreditBalance && net <= 0) {
+      // Full credit payment
+      this.amountPaid = 0;
+      this.saveInvoice();
+      return;
+    }
+    this.amountPaid = net;
     this.showPaymentCollection = true;
   }
 
   getChangeToReturn() {
-    const total = this.getFormTotal();
+    const total = this.getNetTotal();
     const paid = Number(this.amountPaid) || 0;
     const change = paid - total;
     return change > 0 ? change : 0;
@@ -303,6 +332,11 @@ export class InvoicesPage implements OnInit {
     const items = this.isEditing ? this.editForm.items : this.form.items;
     for (const item of items) {
       if (!item.quantity || item.quantity <= 0) { this.showToastMsg('Quantity must be greater than 0'); return; }
+      if (this.isStockInsufficient(item)) {
+        const prodName = item.productName || this.getProductName(item.productId);
+        this.showToastMsg('Insufficient stock for ' + prodName);
+        return;
+      }
     }
     if (this.isEditing && this.selectedInvoice) {
       if (this.selectedInvoice.status === 'Paid') { this.showToastMsg('Invoice is fully paid and cannot be modified'); return; }
@@ -312,7 +346,17 @@ export class InvoicesPage implements OnInit {
       });
     } else {
       if (!this.form.customerId) { this.showToastMsg('Please select a customer'); return; }
-      const payload = { ...this.form, selectedCreditNoteId: this.form.useCreditBalance ? this.selectedCreditNoteId : null };
+      if (this.isCreditInvalid()) {
+        this.showToastMsg('Invoice total is less than the selected Credit Note amount');
+        return;
+      }
+      const payload = { 
+        ...this.form, 
+        selectedCreditNoteId: this.form.useCreditBalance ? this.selectedCreditNoteId : null,
+        paidAmount: this.amountPaid,
+        paymentMethod: this.paymentMethod,
+        termType: this.termType
+      };
       this.api.createInvoice(payload).subscribe({
         next: () => { this.showToastMsg('Invoice created!'); this.closeModal(); this.loadInvoices(); this.loadCustomers(); },
         error: (err: any) => this.handleInvoiceError(err)
@@ -407,15 +451,85 @@ export class InvoicesPage implements OnInit {
   getFormTotal(): number {
     if (!this.form.items || this.form.items.length === 0) return 0;
     return this.form.items.reduce((sum: number, item: any) => {
-      const product = this.products.find((p: any) => p.id == item.productId);
-      const price = product?.price || 0;
-      return sum + (price * (item.quantity || 0));
+      return sum + ((item.unitPrice || 0) * (item.quantity || 0));
     }, 0);
+  }
+
+  toggleCreditSelection(cn: any) {
+    if (this.selectedCreditNoteId === cn.id) {
+      this.selectedCreditNoteId = null;
+      this.form.useCreditBalance = false;
+    } else {
+      if (!this.isCreditUsable(cn.amount)) {
+        this.showToastMsg('Invoice total must be RM ' + cn.amount.toFixed(2) + ' or more to use this Credit Note');
+        return;
+      }
+      this.selectedCreditNoteId = cn.id;
+      this.form.useCreditBalance = true;
+    }
+  }
+
+  getSelectedCreditAmount(): number {
+    if (!this.form.useCreditBalance || !this.selectedCreditNoteId) return 0;
+    const cn = this.availableCredits.find(c => c.id === this.selectedCreditNoteId);
+    return cn ? cn.amount : 0;
+  }
+
+  getCustomerDiscount(): number {
+    return this.selectedCustomerDetail?.discountPercent || this.selectedCustomerDetail?.discount || 0;
+  }
+
+  getOriginalUnitPrice(productId: any): number {
+    const product = this.allProducts.find(p => p.id == productId);
+    return product ? product.price : 0;
+  }
+
+  getOriginalTotal(): number {
+    if (!this.form.items || this.form.items.length === 0) return 0;
+    return this.form.items.reduce((sum: number, item: any) => {
+      return sum + (this.getOriginalUnitPrice(item.productId) * (item.quantity || 0));
+    }, 0);
+  }
+
+  getDiscountAmount(): number {
+    const original = this.getOriginalTotal();
+    const discounted = this.getFormTotal();
+    return original - discounted;
+  }
+
+  getNetTotal(): number {
+    const gross = this.getFormTotal();
+    const credit = this.getSelectedCreditAmount();
+    const net = gross - credit;
+    return net > 0 ? net : 0;
+  }
+
+  isCreditInvalid(): boolean {
+    if (!this.form.useCreditBalance || !this.selectedCreditNoteId) return false;
+    const creditAmount = this.getSelectedCreditAmount();
+    const gross = this.getFormTotal();
+    return gross < creditAmount;
   }
 
   isCreditUsable(creditAmount: number): boolean {
     const total = this.getFormTotal();
     return total > 0 && creditAmount <= total;
+  }
+
+  isStockInsufficient(item: any): boolean {
+    const product = this.allProducts.find(p => p.id == item.productId);
+    if (!product) return false;
+    return (item.quantity || 0) > (product.stock || 0);
+  }
+
+  getProductStock(productId: any): number {
+    const product = this.allProducts.find(p => p.id == productId);
+    return product ? product.stock : 0;
+  }
+
+  hasAnyStockIssue(): boolean {
+    const items = this.isEditing ? this.editForm.items : this.form.items;
+    return items.some((item: any) => this.isStockInsufficient(item));
   }
 
   noLeadingZero(event: KeyboardEvent, val: any) {
@@ -470,6 +584,4 @@ export class InvoicesPage implements OnInit {
     setTimeout(() => printWindow.print(), 500);
   }
 }
-
-
 

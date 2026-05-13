@@ -123,11 +123,38 @@
 
         <div class="ni-cust-main">
           <div class="ni-cust-name">{{ selectedCustomerDetail?.name || 'Walk-in Cash' }}</div>
-          <div class="ni-cust-code">{{ (selectedCustomerDetail?.code || selectedCustomerDetail?.customerCode) || (form.customerId ? 'NO CODE' : 'CASH000001') }}</div>
+          <div class="ni-cust-code">
+            {{ (selectedCustomerDetail?.code || selectedCustomerDetail?.customerCode) || (form.customerId ? 'NO CODE' : 'CASH000001') }}
+            <span *ngIf="getCustomerDiscount() > 0" style="color: #e67e22; margin-left: 8px; font-weight: 800; background: #FFF3CD; padding: 2px 6px; border-radius: 4px; font-size: 9px;">
+              {{ getCustomerDiscount() }}% DISCOUNT
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Available Credits -->
+      <div *ngIf="availableCredits.length > 0" class="ni-section-header" style="margin-top: 10px;">
+        <span class="ni-label">AVAILABLE CREDITS</span>
+        <span class="ni-count">{{ availableCredits.length }} Note{{ availableCredits.length !== 1 ? 's' : '' }}</span>
+      </div>
+      <div *ngIf="availableCredits.length > 0" class="ni-credits-section">
+        <div *ngFor="let cn of availableCredits" 
+             class="ni-credit-card" 
+             [class.selected]="selectedCreditNoteId === cn.id" 
+             [class.disabled]="!isCreditUsable(cn.amount)"
+             (click)="toggleCreditSelection(cn)">
+          <div class="ni-credit-info">
+            <span class="ni-credit-num">{{ cn.cnNumber || 'CN-' + cn.id }}</span>
+            <span class="ni-credit-amt">RM {{ cn.amount | number:'1.2-2' }}</span>
+          </div>
+          <div class="ni-credit-check" [class.selected]="selectedCreditNoteId === cn.id">
+            <ion-icon name="checkmark-outline" *ngIf="selectedCreditNoteId === cn.id"></ion-icon>
+          </div>
         </div>
       </div>
 
       <!-- Items List Section -->
+
       <div class="ni-section-header">
         <span class="ni-label">ITEMS LIST</span>
         <span class="ni-count">{{ form.items.length }} Item{{ form.items.length !== 1 ? 's' : '' }}</span>
@@ -155,14 +182,20 @@
           </div>
 
           <div class="ni-item-price-row">
-            <div class="ni-unit-label">Unit <span class="ni-unit-val">RM {{ item.unitPrice | number:'1.2-2' }}</span></div>
+            <div class="ni-unit-label">
+              Unit 
+              <span class="ni-unit-val" [style.color]="getCustomerDiscount() > 0 ? '#27ae60' : 'inherit'">RM {{ item.unitPrice | number:'1.2-2' }}</span>
+              <span *ngIf="getCustomerDiscount() > 0" class="ni-original-price">
+                RM {{ getOriginalUnitPrice(item.productId) | number:'1.2-2' }}
+              </span>
+            </div>
             <div class="ni-unit-type">/ PCS</div>
           </div>
 
           <div class="ni-item-qty-box">
             <div class="ni-qty-left">
               <span class="ni-qty-x">×</span>
-              <input type="number" [(ngModel)]="item.quantity" class="ni-qty-input" min="1">
+              <input type="number" [(ngModel)]="item.quantity" class="ni-qty-input" min="1" [class.qty-error]="isStockInsufficient(item)">
               <span class="ni-qty-eq">=</span>
             </div>
             <div class="ni-qty-total">{{ (item.quantity * item.unitPrice) | number:'1.2-2' }}</div>
@@ -170,8 +203,11 @@
 
           <div class="ni-item-footer">
             <div class="ni-item-remark">
-              <ion-icon name="document-text-outline"></ion-icon>
-              <span>{{ item.remark || 'No remarks provided...' }}</span>
+              <ion-icon name="document-text-outline" *ngIf="!isStockInsufficient(item)"></ion-icon>
+              <ion-icon name="warning-outline" *ngIf="isStockInsufficient(item)" style="color: #e57373;"></ion-icon>
+              <span [style.color]="isStockInsufficient(item) ? '#e57373' : 'inherit'" [style.font-weight]="isStockInsufficient(item) ? '700' : 'normal'">
+                {{ isStockInsufficient(item) ? 'Insufficient stock (Available: ' + getProductStock(item.productId) + ')' : (item.remark || 'No remarks provided...') }}
+              </span>
             </div>
             <div class="ni-item-sub-total">
               <div class="ni-sub-label">TOTAL</div>
@@ -189,8 +225,16 @@
     <div class="ni-footer">
       <div class="ni-summary">
         <div class="ni-sum-row">
-          <span class="ni-sum-label">GROSS:</span>
-          <span class="ni-sum-val">RM {{ getFormTotal() | number:'1.2-2' }}</span>
+          <span class="ni-sum-label">SUB-TOTAL:</span>
+          <span class="ni-sum-val">RM {{ getOriginalTotal() | number:'1.2-2' }}</span>
+        </div>
+        <div class="ni-sum-row" *ngIf="getCustomerDiscount() > 0">
+          <span class="ni-sum-label">DISCOUNT ({{ getCustomerDiscount() }}%):</span>
+          <span class="ni-sum-val" style="color: #e67e22;">- RM {{ getDiscountAmount() | number:'1.2-2' }}</span>
+        </div>
+        <div *ngIf="form.useCreditBalance" class="ni-sum-row" style="color: #27ae60;">
+          <span class="ni-sum-label">CREDIT USED:</span>
+          <span class="ni-sum-val">- RM {{ getSelectedCreditAmount() | number:'1.2-2' }}</span>
         </div>
         <div class="ni-sum-row">
           <span class="ni-sum-label">TAX:</span>
@@ -198,12 +242,12 @@
         </div>
         <div class="ni-net-row">
           <span class="ni-net-label">NET:</span>
-          <span class="ni-net-val">RM {{ getFormTotal() | number:'1.2-2' }}</span>
+          <span class="ni-net-val">RM {{ getNetTotal() | number:'1.2-2' }}</span>
         </div>
       </div>
 
-      <button class="ni-pay-btn" (click)="openPaymentCollection()">
-        <span>PAY</span>
+      <button class="ni-pay-btn" [class.disabled]="hasAnyStockIssue() || isCreditInvalid() || form.items.length === 0" (click)="!hasAnyStockIssue() && !isCreditInvalid() && form.items.length > 0 && openPaymentCollection()">
+        <span>{{ hasAnyStockIssue() ? 'STOCK ERROR' : (isCreditInvalid() ? 'CREDIT ERROR' : 'PAY') }}</span>
         <ion-icon name="chevron-forward-outline"></ion-icon>
       </button>
     </div>
@@ -462,7 +506,7 @@
         </div>
         <div class="ni-cust-item-info">
           <div class="ni-cust-item-name">{{ c.name }}</div>
-          <div class="ni-cust-item-code">{{ c.code || 'NO CODE' }}</div>
+          <div class="ni-cust-item-code">{{ c.customerCode || c.code || 'NO CODE' }}</div>
         </div>
         <ion-icon name="chevron-forward-outline" class="ni-cust-arrow"></ion-icon>
       </div>
@@ -510,25 +554,28 @@
       <div class="ni-pay-body">
         <div class="ni-pay-total-section">
           <div class="ni-pay-total-label">TOTAL PAYABLE</div>
-          <div class="ni-pay-total-val">{{ getFormTotal() | number:'1.2-2' }}</div>
+          <div class="ni-pay-total-val">{{ getNetTotal() | number:'1.2-2' }}</div>
         </div>
 
         <div class="ni-pay-form">
           <div class="ni-pay-group">
             <label>TERM TYPE</label>
-            <div class="ni-pay-select">
+            <div class="ni-pay-select" (click)="termSelect.open()">
               <span class="ni-pay-val-display">{{ termType }}</span>
               <ion-select #termSelect [(ngModel)]="termType" interface="popover" toggleIcon="none" class="ni-pay-ion-select-hidden">
                 <ion-select-option *ngFor="let t of termTypes" [value]="t">{{ t }}</ion-select-option>
               </ion-select>
-              <ion-icon name="chevron-down-outline" (click)="termSelect.open()"></ion-icon>
+              <ion-icon name="chevron-down-outline"></ion-icon>
             </div>
           </div>
 
           <div class="ni-pay-group">
             <label>METHOD</label>
-            <div class="ni-pay-select">
-              <span>{{ paymentMethod }}</span>
+            <div class="ni-pay-select" (click)="methodSelect.open()">
+              <span class="ni-pay-val-display">{{ paymentMethod }}</span>
+              <ion-select #methodSelect [(ngModel)]="paymentMethod" interface="popover" toggleIcon="none" class="ni-pay-ion-select-hidden">
+                <ion-select-option *ngFor="let m of paymentMethods" [value]="m">{{ m }}</ion-select-option>
+              </ion-select>
               <ion-icon name="chevron-down-outline"></ion-icon>
             </div>
           </div>

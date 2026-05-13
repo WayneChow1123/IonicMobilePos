@@ -1238,10 +1238,18 @@ ion-content {
   color: #1a1a1a;
 }
 
+.ni-original-price {
+  font-size: 10px;
+  text-decoration: line-through;
+  color: #ccc;
+  margin-left: 6px;
+  font-weight: 500;
+}
+
 .ni-item-qty-box {
   background: #F9F9F9;
-  border-radius: 12px;
-  padding: 12px 20px;
+  border-radius: 16px;
+  padding: 14px 20px;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -1251,30 +1259,60 @@ ion-content {
 .ni-qty-left {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
 
 .ni-qty-x {
-  font-size: 14px;
-  color: #1a1a1a;
-  font-weight: 800;
+  font-size: 16px;
+  color: #ccc;
+  font-weight: 700;
 }
 
 .ni-qty-eq {
-  font-size: 14px;
-  color: #1a1a1a;
-  font-weight: 800;
+  font-size: 16px;
+  color: #ccc;
+  font-weight: 700;
 }
 
 .ni-qty-input {
+  width: auto;
+  min-width: 48px;
   background: transparent;
   border: none;
-  width: 40px;
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 900;
   color: #1a1a1a;
   text-align: center;
   outline: none;
+  padding-bottom: 2px;
+  border-bottom: 2px solid #f0f0f0;
+  font-family: 'DM Sans', sans-serif;
+  transition: all 0.2s ease;
+
+  &:focus {
+    border-bottom-color: #1a1a1a;
+  }
+
+  /* Remove arrows */
+  &::-webkit-inner-spin-button,
+  &::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  -moz-appearance: textfield;
+
+  &.qty-error {
+    color: #e57373;
+    border-bottom-color: #e57373;
+  }
+}
+
+.ni-pay-btn {
+  &.disabled {
+    background: #ccc;
+    cursor: not-allowed;
+    opacity: 0.7;
+  }
 }
 
 .ni-qty-total {
@@ -1408,11 +1446,11 @@ ion-content {
   justify-content: space-between;
   align-items: center;
   position: relative;
+  cursor: pointer;
 
   ion-icon {
     font-size: 18px;
     color: #ddd;
-    cursor: pointer;
   }
 }
 
@@ -1532,3 +1570,75 @@ ion-content {
     font-size: 16px;
   }
 }
+
+/* ─── Available Credits Section ─── */
+.ni-credits-section {
+  padding: 0 4px;
+  margin-bottom: 20px;
+}
+
+.ni-credit-card {
+  background: #fff;
+  border-radius: 16px;
+  padding: 14px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  border: 1px solid transparent;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+  transition: all 0.2s ease;
+
+  &.selected {
+    border-color: #27ae60;
+    background: #f0fff4;
+    box-shadow: 0 4px 12px rgba(39, 174, 96, 0.1);
+  }
+
+  &.disabled {
+    opacity: 0.5;
+    background: #f9f9f9;
+    cursor: not-allowed;
+    pointer-events: none;
+  }
+}
+
+.ni-credit-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ni-credit-num {
+  font-size: 13px;
+  font-weight: 700;
+  color: #1a1a1a;
+}
+
+.ni-credit-amt {
+  font-size: 14px;
+  font-weight: 800;
+  color: #27ae60;
+}
+
+.ni-credit-check {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid #ddd;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  &.selected {
+    background: #27ae60;
+    border-color: #27ae60;
+    color: #fff;
+  }
+
+  ion-icon {
+    font-size: 16px;
+  }
+}
