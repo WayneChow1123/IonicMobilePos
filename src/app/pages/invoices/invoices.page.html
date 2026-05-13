@@ -29,30 +29,31 @@
     <div *ngIf="!isLoading">
       <div *ngFor="let invoice of filteredInvoices" class="list-item">
         <div class="item-info" (click)="openEditModal(invoice)">
-          <div class="item-avatar" [class.paid]="invoice.status==='Paid'" [class.partial]="invoice.status==='Partial'">
+          <div class="item-avatar" [class.paid]="invoice.status==='Paid'" [class.partial]="invoice.status==='Partial'" [class.unpaid]="!invoice.status || invoice.status==='Unpaid'">
             <ion-icon name="receipt-outline"></ion-icon>
           </div>
-          <div>
-            <div class="item-header">
-              <span *ngIf="invoice.hasCreditNote || invoice.HasCreditNote" style="font-size:10px;font-weight:700;padding:2px 6px;border-radius:50px;background:#fff3cd;color:#e67e22;border:1px solid #f39c12;margin-right:4px;">CN</span>
-              <span class="item-name">{{ invoice.invoiceNumber || 'INV-' + invoice.id }}</span>
-              <span class="status-badge" [class.paid]="invoice.status==='Paid'" [class.partial]="invoice.status==='Partial'" [class.unpaid]="invoice.status==='Unpaid'">{{ invoice.status || 'Unpaid' }}</span>
+          <div class="item-info-content">
+            <div class="info-left">
+              <div class="item-name-row">
+                <span *ngIf="invoice.hasCreditNote || invoice.HasCreditNote" class="cn-badge">CN</span>
+                <span class="item-name">{{ invoice.customerName || invoice.CustomerName || getCustomerName(invoice.customerId) }}</span>
+              </div>
+              <div class="item-sub">{{ getCustomerCode(invoice) }}</div>
+              <div class="item-sub"># {{ invoice.invoiceNumber || 'INV-' + invoice.id }}</div>
+              <div class="item-sub-date">{{ invoice.invoiceDate | date:'dd/MM/yyyy HH:mm' }}</div>
             </div>
-            <div class="item-sub">{{ invoice.customerName || getCustomerName(invoice.customerId) }}</div>
-            <div class="item-sub">{{ invoice.invoiceDate | date:'dd/MM/yyyy' }}</div>
-            <div class="amount-row">
-              <span class="item-amount">RM {{ invoice.totalAmount || 0 | number:'1.2-2' }}</span>
-              <span class="paid-amount" *ngIf="invoice.paidAmount > 0">Paid: RM {{ invoice.paidAmount | number:'1.2-2' }}</span>
+            
+            <div class="info-right">
+              <span class="status-badge" [class.paid]="invoice.status==='Paid'" [class.partial]="invoice.status==='Partial'" [class.unpaid]="invoice.status==='Unpaid'">{{ invoice.status || 'Unpaid' }}</span>
+              <div class="amount-box">
+                <span class="paid-amount" [class.partial]="invoice.status !== 'Paid'" *ngIf="invoice.paidAmount > 0">Paid: RM {{ invoice.paidAmount | number:'1.2-2' }}</span>
+                <span class="item-amount">RM {{ invoice.totalAmount || 0 | number:'1.2-2' }}</span>
+              </div>
             </div>
           </div>
         </div>
-        <div style="display:flex;flex-direction:column;gap:4px;align-items:center;">
-          <ion-button fill="clear" style="--color:#5c85d6;" (click)="openEditModal(invoice)">
-            <ion-icon name="create-outline"></ion-icon>
-          </ion-button>
-          <ion-button fill="clear" style="--color:#e57373;" (click)="confirmDelete(invoice)">
-            <ion-icon name="trash-outline"></ion-icon>
-          </ion-button>
+        <div style="display:flex;align-items:center;padding-left:8px;">
+          <ion-icon name="chevron-forward-outline" style="color:#ddd;font-size:20px;"></ion-icon>
         </div>
       </div>
       <div *ngIf="filteredInvoices.length===0" class="empty-state">
@@ -219,8 +220,11 @@
         <ion-button fill="clear" class="icon-btn" (click)="openCheckPreview()">
           <ion-icon name="document-text-outline"></ion-icon>
         </ion-button>
-        <ion-button fill="clear" class="icon-btn" (click)="saveInvoice()">
-          <ion-icon name="save-outline"></ion-icon>
+        <ion-button fill="clear" class="icon-btn" (click)="confirmDeleteInModal()" style="--color:#e57373;">
+          <ion-icon name="trash-outline"></ion-icon>
+        </ion-button>
+        <ion-button fill="clear" class="icon-btn" (click)="toggleEditMode()">
+          <ion-icon [name]="isEditMode ? 'save-outline' : 'create-outline'" [style.color]="isEditMode ? '#27ae60' : '#5c85d6'"></ion-icon>
         </ion-button>
       </div>
     </div>
@@ -280,35 +284,35 @@
     <div class="form-card" style="background:#E8D5D0;">
       <div class="form-group">
         <label>INVOICE DATE</label>
-        <input type="datetime-local" [(ngModel)]="editForm.invoiceDate" class="form-input"/>
+        <input type="datetime-local" [(ngModel)]="editForm.invoiceDate" class="form-input" [readonly]="!isEditMode"/>
       </div>
       <div class="form-group">
         <label>REMARK</label>
-        <input type="text" [(ngModel)]="editForm.remark" placeholder="Enter remark" class="form-input"/>
+        <input type="text" [(ngModel)]="editForm.remark" placeholder="Enter remark" class="form-input" [readonly]="!isEditMode"/>
       </div>
     </div>
 
     <div class="section-title">
       <span>Items</span>
-      <button class="add-item-btn" (click)="addItem()">+ Add Item</button>
+      <button *ngIf="isEditMode" class="add-item-btn" (click)="addItem()">+ Add Item</button>
     </div>
 
     <div *ngFor="let item of editForm.items; let i = index" class="form-card" style="background:#C5C8E0;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
         <span style="font-weight:700;font-size:13px;">Item {{ i + 1 }}</span>
-        <ion-button fill="clear" style="--color:#e57373;font-size:18px;" (click)="removeItem(i)">
+        <ion-button *ngIf="isEditMode" fill="clear" style="--color:#e57373;font-size:18px;" (click)="removeItem(i)">
           <ion-icon name="trash-outline"></ion-icon>
         </ion-button>
       </div>
       <div class="form-group">
         <label>PRODUCT</label>
-        <select [(ngModel)]="item.productId" class="form-select" (change)="onProductChange(item)">
+        <select [(ngModel)]="item.productId" class="form-select" (change)="onProductChange(item)" [disabled]="!isEditMode">
           <option *ngFor="let p of products" [value]="p.id">{{ p.name }}</option>
         </select>
       </div>
       <div class="form-group">
         <label>QUANTITY</label>
-        <input type="number" [(ngModel)]="item.quantity" placeholder="1" class="form-input" min="1" (keydown)="noLeadingZero($event, item.quantity)"/>
+        <input type="number" [(ngModel)]="item.quantity" placeholder="1" class="form-input" min="1" (keydown)="noLeadingZero($event, item.quantity)" [readonly]="!isEditMode"/>
       </div>
       <div class="form-group">
         <label>UNIT PRICE (RM)</label>
@@ -316,7 +320,7 @@
       </div>
     </div>
 
-    <button class="save-btn" (click)="saveInvoice()">UPDATE INVOICE</button>
+    <button *ngIf="isEditMode" class="save-btn" (click)="saveInvoice()">UPDATE INVOICE</button>
   </div>
 
   <div *ngIf="showCheckPreview" class="receipt-overlay">

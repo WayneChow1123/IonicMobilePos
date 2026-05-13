@@ -41,6 +41,7 @@ export class InvoicesPage implements OnInit {
   showSearch = false;
   searchTerm = '';
   isEditing = false;
+  isEditMode = false;
   selectedInvoice: any = null;
   showDeleteAlert = false;
   showToast = false;
@@ -204,6 +205,7 @@ export class InvoicesPage implements OnInit {
 
   openAddModal() {
     this.isEditing = false;
+    this.isEditMode = true;
     this.selectedInvoice = null;
     this.selectedCustomerDetail = this.customers.length > 0 ? this.customers[0] : null;
     this.selectedCreditNoteId = null;
@@ -223,6 +225,7 @@ export class InvoicesPage implements OnInit {
 
   openEditModal(invoice: any) {
     this.isEditing = true;
+    this.isEditMode = false;
     this.selectedInvoice = null;
     this.isLoading = true;
     this.api.getInvoiceDetails(invoice.id).subscribe({
@@ -343,9 +346,23 @@ export class InvoicesPage implements OnInit {
   deleteInvoice() {
     if (!this.selectedInvoice) return;
     this.api.deleteInvoice(this.selectedInvoice.id).subscribe({
-      next: () => { this.showToastMsg('Invoice deleted!'); this.loadInvoices(); },
+      next: () => { this.showToastMsg('Invoice deleted!'); this.closeModal(); this.loadInvoices(); },
       error: (err: any) => this.showToastMsg('Failed: ' + (err.error?.message || err.message || 'error'))
     });
+  }
+
+  toggleEditMode() {
+    if (this.isEditMode) {
+      this.saveInvoice();
+    } else {
+      this.isEditMode = true;
+    }
+  }
+
+  confirmDeleteInModal() {
+    if (this.selectedInvoice) {
+      this.confirmDelete(this.selectedInvoice);
+    }
   }
 
   getTotalCN(): number {
@@ -364,8 +381,17 @@ export class InvoicesPage implements OnInit {
     return this.getReceiptCreditNotes().reduce((sum: number, cn: any) => sum + (cn.amount || 0), 0);
   }
 
+  getCustomerCode(invoice: any) {
+    if (invoice.customerCode) return invoice.customerCode;
+    if (invoice.CustomerCode) return invoice.CustomerCode;
+    if (invoice.customer_code) return invoice.customer_code;
+    const c = this.getCustomer(invoice.customerId);
+    if (c) return c.customerCode || c.code || 'NO CODE';
+    return invoice.customerId ? 'NO CODE' : 'CASH000001';
+  }
+
   getCustomerName(id: any) {
-    const c = this.customers.find((c: any) => c.id == id);
+    const c = this.getCustomer(id);
     return c ? c.name : 'Customer #' + id;
   }
 
