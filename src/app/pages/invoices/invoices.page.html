@@ -261,6 +261,9 @@
       </ion-button>
       <span class="page-title">Edit Invoice</span>
       <div class="top-bar-actions">
+        <ion-button fill="clear" class="icon-btn" (click)="goToCreateCN()" style="--color: #e67e22;">
+          <ion-icon name="receipt-outline"></ion-icon>
+        </ion-button>
         <ion-button fill="clear" class="icon-btn" (click)="openCheckPreview()">
           <ion-icon name="document-text-outline"></ion-icon>
         </ion-button>
@@ -413,8 +416,9 @@
           <span class="to-label">TO:</span>
           <div class="to-box">
             <strong>{{ selectedInvoice?.customerName || getCustomerName(selectedInvoice?.customerId) }}</strong>
-            <br *ngIf="getCustomer(selectedInvoice?.customerId)?.address" />
-            <span *ngIf="getCustomer(selectedInvoice?.customerId)?.address">{{ getCustomer(selectedInvoice?.customerId)?.address }}</span>
+            <div *ngIf="getCustomerFullAddress(selectedInvoice?.customerId)" style="margin-top: 4px; font-size: 11px; line-height: 1.4;">
+              {{ getCustomerFullAddress(selectedInvoice?.customerId) }}
+            </div>
           </div>
         </div>
         <div class="receipt-divider-thin"></div>
@@ -585,7 +589,7 @@
             <label>TERM TYPE</label>
             <div class="ni-pay-select" (click)="termSelect.open()">
               <span class="ni-pay-val-display">{{ termType }}</span>
-              <ion-select #termSelect [(ngModel)]="termType" interface="popover" toggleIcon="none" class="ni-pay-ion-select-hidden">
+              <ion-select #termSelect [(ngModel)]="termType" (ngModelChange)="onTermTypeChange()" interface="popover" toggleIcon="none" class="ni-pay-ion-select-hidden">
                 <ion-select-option *ngFor="let t of termTypes" [value]="t">{{ t }}</ion-select-option>
               </ion-select>
               <ion-icon name="chevron-down-outline"></ion-icon>
@@ -603,22 +607,24 @@
             </div>
           </div>
 
-          <div class="ni-pay-group">
-            <label>AMOUNT PAID</label>
-            <div class="ni-pay-input-box active">
-              <span class="ni-pay-curr">RM</span>
-              <input type="number" [(ngModel)]="amountPaid" class="ni-pay-input">
-              <ion-icon name="close-circle" class="ni-pay-clear" (click)="amountPaid = 0"></ion-icon>
+          <ng-container *ngIf="termType === 'CASH SALE'">
+            <div class="ni-pay-group">
+              <label>AMOUNT PAID</label>
+              <div class="ni-pay-input-box active">
+                <span class="ni-pay-curr">RM</span>
+                <input type="number" [(ngModel)]="amountPaid" class="ni-pay-input">
+                <ion-icon name="close-circle" class="ni-pay-clear" (click)="amountPaid = 0"></ion-icon>
+              </div>
             </div>
-          </div>
 
-          <div class="ni-pay-group">
-            <label>CHANGE TO RETURN:</label>
-            <div class="ni-pay-input-box gray">
-              <span class="ni-pay-curr">RM</span>
-              <div class="ni-pay-display">{{ getChangeToReturn() | number:'1.2-2' }}</div>
+            <div class="ni-pay-group">
+              <label>CHANGE TO RETURN:</label>
+              <div class="ni-pay-input-box gray">
+                <span class="ni-pay-curr">RM</span>
+                <div class="ni-pay-display">{{ getChangeToReturn() | number:'1.2-2' }}</div>
+              </div>
             </div>
-          </div>
+          </ng-container>
 
           <div class="ni-pay-toggle-row">
             <span class="ni-pay-toggle-label">BILL REMARK</span>

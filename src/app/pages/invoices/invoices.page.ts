@@ -322,6 +322,15 @@ export class InvoicesPage implements OnInit {
     const currentIndex = this.termTypes.indexOf(this.termType);
     const nextIndex = (currentIndex + 1) % this.termTypes.length;
     this.termType = this.termTypes[nextIndex];
+    this.onTermTypeChange();
+  }
+
+  onTermTypeChange() {
+    if (this.termType === 'CASH SALE') {
+      this.amountPaid = this.getNetTotal();
+    } else {
+      this.amountPaid = 0;
+    }
   }
 
   openPaymentCollection() {
@@ -332,7 +341,7 @@ export class InvoicesPage implements OnInit {
       this.saveInvoice();
       return;
     }
-    this.amountPaid = net;
+    this.amountPaid = this.termType === 'CASH SALE' ? net : 0;
     this.showPaymentCollection = true;
   }
 
@@ -376,7 +385,8 @@ export class InvoicesPage implements OnInit {
         selectedCreditNoteId: this.form.useCreditBalance ? this.selectedCreditNoteId : null,
         paidAmount: this.amountPaid,
         paymentMethod: this.paymentMethod,
-        termType: this.termType
+        termType: this.termType,
+        status: (this.termType === 'Net 30 Days' || this.termType === 'On Credit') ? 'Unpaid' : 'Paid'
       };
       this.api.createInvoice(payload).subscribe({
         next: () => { this.showToastMsg('Invoice created!'); this.closeModal(); this.loadInvoices(); this.loadCustomers(); },
@@ -499,6 +509,48 @@ export class InvoicesPage implements OnInit {
 
   getCustomer(id: any) {
     return this.customers.find((c: any) => c.id == id);
+  }
+
+  getCustomerFullAddress(id: any): string {
+    const c = this.getCustomer(id);
+    if (!c) return '';
+    
+    // Check for branch data
+    const branch = (c.branches && c.branches.length > 0) 
+      ? (c.branches.find((b: any) => b.isDefaultBranch) || c.branches[0]) 
+      : null;
+      
+    if (branch) {
+      const parts = [branch.address1, branch.city, branch.postcode, branch.state].filter(p => !!p);
+      return parts.join(', ');
+    }
+    
+    return c.address || '';
+  }
+
+  getCustomerFullAddressHtml(id: any): string {
+    const c = this.getCustomer(id);
+    if (!c) return '';
+    
+    const branch = (c.branches && c.branches.length > 0) 
+      ? (c.branches.find((b: any) => b.isDefaultBranch) || c.branches[0]) 
+      : null;
+      
+    if (branch) {
+      const addr1 = branch.address1 || '';
+      const city = branch.city || '';
+      const postcode = branch.postcode || '';
+      const state = branch.state || '';
+      
+      let lines = [];
+      if (addr1) lines.push(addr1);
+      const line2 = [city, postcode, state].filter(p => !!p).join(', ');
+      if (line2) lines.push(line2);
+      
+      return lines.map(l => `<div style="margin-top:2px;">${l}</div>`).join('');
+    }
+    
+    return c.address ? `<div style="margin-top:2px;">${c.address}</div>` : '';
   }
 
   getProductName(id: any) {
@@ -642,7 +694,7 @@ export class InvoicesPage implements OnInit {
     const paidAmount = inv?.paidAmount || 0;
     const paymentStatus = inv?.status === 'Paid' ? 'PAID' : inv?.status === 'Partial' ? 'PARTIALLY PAID' : 'UNPAID';
     const paymentDetailHtml = inv?.status === 'Partial' ? `<div style="padding:8px 20px;border:1px dashed #ddd;border-top:none;border-radius:0 0 8px 8px;margin-bottom:16px;"><div style="display:flex;justify-content:space-between;font-size:12px;font-weight:700;padding:3px 0;"><span>PAID</span><span>RM ${paidAmount.toFixed(2)}</span></div><div style="display:flex;justify-content:space-between;font-size:13px;font-weight:800;padding:6px 0 3px;border-top:1px solid #eee;margin-top:4px;"><span>BALANCE</span><span>RM ${(netAmount - paidAmount).toFixed(2)}</span></div></div>` : '';
-    printWindow.document.write(`<!DOCTYPE html><html><head><title>Invoice ${inv?.invoiceNumber || ''}</title>${styles}</head><body><div class="receipt"><span class="receipt-type">TAX INVOICE</span><div class="divider"></div><div class="company">${pd?.companyName || 'B JAYA TRADING'}</div><span class="co-reg">(${pd?.companyReg || '001188861-T'})</span><span class="address">${pd?.companyAddress || 'NO. 467, JALAN PALAS 13, TAMAN PELANGI,'}</span><span class="address">${pd?.companyCity || '70400 SEREMBAN N.S, SEREMBAN, N.S, MALAYSIA'}</span><span class="contact">TEL: ${pd?.companyTel || '012-6988080'} GST: ${pd?.companyGst || '000134806856'}</span><div style="margin-top:20px;"><div class="doc-row"><span class="doc-label">DOC NO</span><span class="doc-value">: ${inv?.invoiceNumber || 'S001-' + inv?.id}</span></div><div class="doc-row"><span class="doc-label">DATE</span><span class="doc-value">: ${dateStr}</span></div></div><div class="to-section"><span class="to-label">TO:</span><div class="to-box"><strong>${inv?.customerName || this.getCustomerName(inv?.customerId)}</strong></div></div><div class="divider-thin"></div><div class="table-header"><span>DESCRIPTION</span><span>GST SUBTOTAL</span></div><div class="divider-thin"></div>${itemsHtml}<div class="divider-thin"></div><div class="total-row"><span>GROSS TOTAL</span><span>RM ${(inv?.totalAmount || 0).toFixed(2)}</span></div>${cnHtml}${cnListHtml}<div class="net-bar"><span class="net-label">NET AMOUNT</span><span class="net-value">RM ${netAmount.toFixed(2)}</span></div><div style="display:flex;justify-content:space-between;padding:12px 20px;border:1px dashed #ddd;border-radius:8px;margin-bottom:0;"><span style="font-size:11px;font-weight:700;letter-spacing:2px;color:#888;">PAYMENT STATUS</span><span style="font-size:14px;font-weight:800;">${paymentStatus}</span></div>${paymentDetailHtml}<div class="due-box"><span class="due-label">PAYMENT DUE</span><span class="due-date">${dueStr}</span></div><div class="sig-box"><span class="sig-label">SIGNATURE</span></div><div class="thanks">THANK YOU</div></div></body></html>`);
+    printWindow.document.write(`<!DOCTYPE html><html><head><title>Invoice ${inv?.invoiceNumber || ''}</title>${styles}</head><body><div class="receipt"><span class="receipt-type">TAX INVOICE</span><div class="divider"></div><div class="company">${pd?.companyName || 'B JAYA TRADING'}</div><span class="co-reg">(${pd?.companyReg || '001188861-T'})</span><span class="address">${pd?.companyAddress || 'NO. 467, JALAN PALAS 13, TAMAN PELANGI,'}</span><span class="address">${pd?.companyCity || '70400 SEREMBAN N.S, SEREMBAN, N.S, MALAYSIA'}</span><span class="contact">TEL: ${pd?.companyTel || '012-6988080'} GST: ${pd?.companyGst || '000134806856'}</span><div style="margin-top:20px;"><div class="doc-row"><span class="doc-label">DOC NO</span><span class="doc-value">: ${inv?.invoiceNumber || 'S001-' + inv?.id}</span></div><div class="doc-row"><span class="doc-label">DATE</span><span class="doc-value">: ${dateStr}</span></div></div><div class="to-section"><span class="to-label">TO:</span><div class="to-box"><strong>${inv?.customerName || this.getCustomerName(inv?.customerId)}</strong>${this.getCustomerFullAddressHtml(inv?.customerId)}</div></div><div class="divider-thin"></div><div class="table-header"><span>DESCRIPTION</span><span>GST SUBTOTAL</span></div><div class="divider-thin"></div>${itemsHtml}<div class="divider-thin"></div><div class="total-row"><span>GROSS TOTAL</span><span>RM ${(inv?.totalAmount || 0).toFixed(2)}</span></div>${cnHtml}${cnListHtml}<div class="net-bar"><span class="net-label">NET AMOUNT</span><span class="net-value">RM ${netAmount.toFixed(2)}</span></div><div style="display:flex;justify-content:space-between;padding:12px 20px;border:1px dashed #ddd;border-radius:8px;margin-bottom:0;"><span style="font-size:11px;font-weight:700;letter-spacing:2px;color:#888;">PAYMENT STATUS</span><span style="font-size:14px;font-weight:800;">${paymentStatus}</span></div>${paymentDetailHtml}<div class="due-box"><span class="due-label">PAYMENT DUE</span><span class="due-date">${dueStr}</span></div><div class="sig-box"><span class="sig-label">SIGNATURE</span></div><div class="thanks">THANK YOU</div></div></body></html>`);
     printWindow.document.close();
     setTimeout(() => printWindow.print(), 500);
   }
