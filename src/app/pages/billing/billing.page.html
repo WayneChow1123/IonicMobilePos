@@ -1,4 +1,4 @@
-﻿<ion-content>
+<ion-content>
 
 
   <div [hidden]="currentView !== 'home'" class="page-container">
@@ -82,30 +82,30 @@
         <select [(ngModel)]="paymentForm.invoiceId" class="form-select" (change)="onInvoiceChange()">
           <option value="0">Select Invoice</option>
           <option *ngFor="let inv of invoices" [value]="inv.id">{{ inv.invoiceNumber }} (RM {{ inv.totalAmount |
-            number:'1.2-2' }}) - {{ inv.status }}</option>
+            number:'1.2-2' }}) ({{ inv.status }})</option>
         </select>
       </div>
     </div>
     <div *ngIf="selectedInvoiceDetail"
       style="background:#fff3cd;border-radius:16px;padding:14px 16px;margin-bottom:12px;">
       <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
-        <span style="font-size:13px;color:#888;">Total Invoice</span>
-        <span style="font-size:13px;font-weight:700;">RM {{ selectedInvoiceDetail.totalAmount | number:'1.2-2' }}</span>
+        <span style="font-size:15px;color:#888;">Total Invoice</span>
+        <span style="font-size:15px;font-weight:700;">RM {{ selectedInvoiceDetail.totalAmount | number:'1.2-2' }}</span>
       </div>
       <div *ngIf="getTotalCNForPayment() > 0" style="display:flex;justify-content:space-between;margin-bottom:6px;">
-        <span style="font-size:13px;color:#e67e22;">Credit Notes</span>
-        <span style="font-size:13px;font-weight:700;color:#e67e22;">- RM {{ getTotalCNForPayment() | number:'1.2-2'
+        <span style="font-size:15px;color:#e67e22;">Credit Notes</span>
+        <span style="font-size:15px;font-weight:700;color:#e67e22;">- RM {{ getTotalCNForPayment() | number:'1.2-2'
           }}</span>
       </div>
       <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
-        <span style="font-size:13px;color:#888;">Already Paid</span>
-        <span style="font-size:13px;font-weight:700;color:#27ae60;">RM {{ selectedInvoiceDetail.paidAmount |
+        <span style="font-size:15px;color:#888;">Already Paid</span>
+        <span style="font-size:15px;font-weight:700;color:#27ae60;">RM {{ selectedInvoiceDetail.paidAmount |
           number:'1.2-2' }}</span>
       </div>
       <div style="height:1px;background:rgba(0,0,0,0.1);margin:8px 0;"></div>
       <div style="display:flex;justify-content:space-between;">
-        <span style="font-size:14px;font-weight:800;color:#1a1a1a;">Balance Due</span>
-        <span style="font-size:14px;font-weight:800;color:#e57373;">RM {{ getBalanceForPayment() | number:'1.2-2'
+        <span style="font-size:17px;font-weight:800;color:#1a1a1a;">Balance Due</span>
+        <span style="font-size:17px;font-weight:800;color:#e57373;">RM {{ getBalanceForPayment() | number:'1.2-2'
           }}</span>
       </div>
     </div>
@@ -142,18 +142,91 @@
     </div>
     <div class="form-card" style="background:#C5C8E0;">
       <div class="form-group">
-        <label>INVOICE *</label>
-        <select [(ngModel)]="cnForm.invoiceId" class="form-select">
-          <option value="0">Select Invoice</option>
-          <option *ngFor="let inv of invoices" [value]="inv.id">{{ inv.invoiceNumber }} - {{ inv.customerName }} (RM {{
-            inv.totalAmount | number:'1.2-2' }})</option>
+        <label>CUSTOMER *</label>
+        <select [(ngModel)]="cnForm.customerId" class="form-select" (change)="onCNCustomerChange()">
+          <option [ngValue]="0">All Customers</option>
+          <option *ngFor="let c of customers" [ngValue]="c.id">{{ c.name }}</option>
         </select>
       </div>
+
       <div class="form-group">
-        <label>AMOUNT (RM) *</label>
-        <input type="number" [(ngModel)]="cnForm.amount" (keydown)="noLeadingZero($event, cnForm.amount)"
-          placeholder="0.00" class="form-input" min="0" />
+        <label>INVOICE *</label>
+        <div style="display:flex;gap:8px;">
+          <select [(ngModel)]="cnForm.invoiceId" class="form-select" (change)="onCNInvoiceChange()" style="flex:1;">
+            <option [ngValue]="0">Select Invoice</option>
+            <option *ngFor="let inv of cnFilteredInvoices" [ngValue]="inv.id">{{ inv.invoiceNumber }} - {{ inv.customerName }} (RM {{
+              inv.totalAmount | number:'1.2-2' }}) ({{ inv.status }})</option>
+          </select>
+          <button (click)="loadPurchaseHistory()" 
+            style="background:#6c5ce7;color:#fff;border:none;border-radius:8px;padding:0 12px;font-size:12px;font-weight:700;white-space:nowrap;">
+            HISTORY
+          </button>
+        </div>
       </div>
+
+      <div *ngIf="selectedCNInvoiceDetail" style="margin-bottom:20px;">
+        <!-- Financial Summary Card -->
+        <div style="background:#fff; border-radius:18px; padding:16px; margin-bottom:16px; box-shadow:0 4px 12px rgba(0,0,0,0.05); border-left:6px solid #6c5ce7;">
+          <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
+            <div style="font-size:12px; color:#a4b0be; font-weight:700; text-transform:uppercase;">Invoice Financials</div>
+            <div style="font-size:12px; font-weight:800; color:#6c5ce7;">{{ (selectedCNInvoiceDetail.paidAmount / selectedCNInvoiceDetail.totalAmount * 100) | number:'1.0-0' }}% PAID</div>
+          </div>
+          <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px;">
+            <div>
+              <div style="font-size:10px; color:#747d8c; font-weight:600;">Total</div>
+              <div style="font-size:14px; font-weight:800; color:#2f3542;">RM {{ selectedCNInvoiceDetail.totalAmount | number:'1.2-2' }}</div>
+            </div>
+            <div>
+              <div style="font-size:10px; color:#747d8c; font-weight:600;">Paid</div>
+              <div style="font-size:14px; font-weight:800; color:#00b894;">RM {{ selectedCNInvoiceDetail.paidAmount | number:'1.2-2' }}</div>
+            </div>
+            <div>
+              <div style="font-size:10px; color:#747d8c; font-weight:600;">Balance</div>
+              <div style="font-size:14px; font-weight:800; color:#ff7675;">RM {{ (selectedCNInvoiceDetail.totalAmount - selectedCNInvoiceDetail.paidAmount) | number:'1.2-2' }}</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Debt Offset Reminder -->
+        <div *ngIf="(selectedCNInvoiceDetail.totalAmount - selectedCNInvoiceDetail.paidAmount) > 0" 
+          style="background:#fff9db; border:1px solid #ffec99; border-radius:12px; padding:12px; margin-bottom:16px; display:flex; align-items:center; gap:10px;">
+          <ion-icon name="information-circle" style="color:#f08c00; font-size:20px;"></ion-icon>
+          <span style="font-size:12px; color:#5c5f66; font-weight:700;">
+            Note: This invoice has <span style="color:#e03131;">RM {{ (selectedCNInvoiceDetail.totalAmount - selectedCNInvoiceDetail.paidAmount) | number:'1.2-2' }}</span> unpaid. 
+            Returns will first offset this debt.
+          </span>
+        </div>
+
+        <label style="font-size:12px;color:#888;font-weight:700;margin-bottom:10px;display:block;text-transform:uppercase;letter-spacing:1px;">Products to Return</label>
+        <div *ngFor="let item of cnForm.items"
+          style="background:#fff;border-radius:12px;padding:12px;margin-bottom:8px;box-shadow:0 2px 4px rgba(0,0,0,0.05);">
+          <div style="margin-bottom:12px;">
+            <div style="font-size:16px; font-weight:800; color:#2f3542; margin-bottom:4px;">{{ item.productName }}</div>
+            <div style="font-size:13px; font-weight:700; color:#747d8c; margin-bottom:12px;">
+              Total <span style="color:#2f3542;">{{ item.maxQuantity + (item.returnedQuantity || 0) }}</span> on Invoice • 
+              Already returned <span style="color:#ff7675;">{{ item.returnedQuantity || 0 }}</span>
+            </div>
+            <!-- Stock & Payment Info -->
+            <div style="font-size:12px; color:#a4b0be; font-weight:700; margin-top:-8px; margin-bottom:12px; display:flex; gap:12px; flex-wrap:wrap;">
+              <span style="background:#e8f8f5; color:#1abc9c; padding:2px 8px; border-radius:6px;">Paid (Stock Out): <strong>{{ ((item.maxQuantity + (item.returnedQuantity || 0)) * (selectedCNInvoiceDetail.paidAmount / selectedCNInvoiceDetail.totalAmount)) | number:'1.0-0' }}</strong></span>
+              <span style="background:#fef9e7; color:#f39c12; padding:2px 8px; border-radius:6px;">Unpaid (In Warehouse): <strong>{{ ((item.maxQuantity + (item.returnedQuantity || 0)) * ((selectedCNInvoiceDetail.totalAmount - selectedCNInvoiceDetail.paidAmount) / selectedCNInvoiceDetail.totalAmount)) | number:'1.0-0' }}</strong></span>
+            </div>
+          </div>
+          <div style="display:flex; align-items:center; gap:16px; padding-top:12px; border-top:1px dashed #f1f2f6;">
+            <div style="flex:1; position:relative;">
+              <input type="number" [(ngModel)]="item.returnQuantity" 
+                style="width:100%; border:none; border-bottom:2px solid #6c5ce7; padding:8px 0; outline:none; font-size:18px; font-weight:800; color:#6c5ce7; background:transparent;"
+                [max]="item.maxQuantity" min="0">
+              <div style="font-size:10px; color:#a4b0be; font-weight:700; margin-top:4px; text-transform:uppercase; letter-spacing:0.5px;">Return Qty</div>
+            </div>
+            <div *ngIf="selectedCNInvoiceDetail.status === 'Paid'" style="display:flex; align-items:center; gap:8px; background:#f8f9fa; padding:8px 12px; border-radius:12px;">
+              <span style="font-size:11px; color:#747d8c; font-weight:700;">Return to Stock?</span>
+              <ion-toggle [(ngModel)]="item.returnToStock" style="--handle-background-checked:#6c5ce7; --background-checked:rgba(108, 92, 231, 0.3);"></ion-toggle>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div class="form-group">
         <label>REASON *</label>
         <textarea [(ngModel)]="cnForm.reason" placeholder="Enter reason for credit note..."
@@ -280,10 +353,65 @@
     </div>
   </div>
 
-  
-  
-  
 
+
+
+
+  <!-- Purchase History Modal (Standard Ionic Modal) -->
+  <ion-modal [isOpen]="showHistoryModal" (didDismiss)="showHistoryModal = false" style="--border-radius: 24px; --height: 90vh; --width: 98vw; --max-width: 600px;">
+    <ng-template>
+      <div style="height:100%; display:flex; flex-direction:column; background:#fdfdfd;">
+        <div class="modal-header" style="background:#6c5ce7; padding:20px; display:flex; justify-content:space-between; align-items:center; color:#fff;">
+          <h2 style="margin:0; font-size:22px; font-weight:800; letter-spacing:1px;">Purchase History</h2>
+          <ion-button fill="clear" (click)="showHistoryModal = false" style="--color:#fff; margin:0;">
+            <ion-icon name="close-outline" slot="icon-only" style="font-size:28px;"></ion-icon>
+          </ion-button>
+        </div>
+        
+        <div style="padding:24px; flex:1; display:flex; flex-direction:column;">
+          <div class="search-box" style="margin-bottom:24px; background:#f1f2f6; border-radius:16px; padding:6px 16px; display:flex; align-items:center;">
+            <ion-icon name="search-outline" style="color:#a4b0be; font-size:24px;"></ion-icon>
+            <input type="text" [(ngModel)]="historySearchTerm" (input)="filterHistory()" 
+              placeholder="Search product..." 
+              style="border:none; background:transparent; padding:14px; flex:1; outline:none; font-size:16px; color:#2f3542;"/>
+          </div>
+
+          <div style="flex:1; overflow-y:auto; padding-right:6px;">
+            <div *ngFor="let h of filteredHistory; let i = index" (click)="selectHistoryItem(h)"
+              style="background:#fff; border-radius:20px; padding:20px; margin-bottom:16px; border:1px solid #f1f2f6; transition:all 0.2s ease; cursor:pointer; position:relative;"
+              class="history-item">
+              
+              <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:10px;">
+                <div>
+                  <div style="font-size:16px; font-weight:800; color:#2f3542; margin-bottom:2px;">{{ h.productName }}</div>
+                  <div style="font-size:11px; color:#6c5ce7; font-weight:700;">Latest Inv: {{ h.latestInvoiceNumber }}</div>
+                </div>
+                <div style="text-align:right;">
+                  <div style="font-size:15px; font-weight:900; color:#2f3542;">RM {{ h.latestUnitPrice | number:'1.2-2' }}</div>
+                </div>
+              </div>
+
+              <div style="display:flex; justify-content:space-between; align-items:center; padding-top:12px; border-top:1px dashed #f1f2f6; margin-top:8px;">
+                <div style="font-size:11px; font-weight:600; color:#747d8c;">
+                  Bought <span style="color:#2f3542;">{{ h.totalBought }}</span> • 
+                  Returned <span style="color:#ff7675;">{{ h.totalReturned }}</span> •
+                  Remaining <span style="color:#00b894;">{{ h.remaining }}</span>
+                </div>
+                <div style="font-size:10px; font-weight:700; color:#a4b0be; letter-spacing:0.5px;">
+                  {{ h.latestInvoiceDate | date:'dd MMM yyyy' }}
+                </div>
+              </div>
+            </div>
+
+            <div *ngIf="filteredHistory.length === 0" style="text-align:center; color:#a4b0be; padding:40px 20px;">
+              <ion-icon name="receipt-outline" style="font-size:48px; display:block; margin:0 auto 12px; opacity:0.3;"></ion-icon>
+              No purchase history found.
+            </div>
+          </div>
+        </div>
+      </div>
+    </ng-template>
+  </ion-modal>
 </ion-content>
 
 <div *ngIf="currentView==='home'" class="bottom-nav">

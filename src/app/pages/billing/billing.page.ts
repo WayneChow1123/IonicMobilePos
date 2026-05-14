@@ -3,7 +3,7 @@ import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
 import { NavController } from '@ionic/angular';
 
 
-import { Router } from '@angular/router';
+import { Router, ActivatedRoute } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { IonicModule } from '@ionic/angular';
 import { FormsModule } from '@angular/forms';
@@ -39,13 +39,15 @@ export class BillingPage implements OnInit {
   selectedPayment: any = null;
   selectedCN: any = null;
   selectedInvoiceDetail: any = null;
+  selectedCNInvoiceDetail: any = null;
+  cnFilteredInvoices: any[] = [];
   stockIssues: any[] = [];
   pendingPayload: any = null;
   waitingInvoiceId: number | null = null;
   paymentSearchTerm = '';
   cnSearchTerm = '';
   paymentForm: any = { customerId: 0, invoiceId: 0, amount: 0, method: 'Cash', referenceNo: '' };
-  cnForm: any = { invoiceId: 0, amount: 0, reason: '' };
+  cnForm: any = { customerId: 0, invoiceId: 0, reason: '', items: [] };
   paymentMethods = ['Cash', 'Card', 'Online Transfer', 'Cheque'];
 
   deletePaymentButtons = [
@@ -57,12 +59,75 @@ export class BillingPage implements OnInit {
     { text: 'Delete', role: 'destructive', handler: () => this.deleteCreditNote() }
   ];
 
-  constructor(private router: Router, private navCtrl: NavController, private api: ApiService, private cdr: ChangeDetectorRef, private alertService: AlertService) {}
+  showHistoryModal = false;
+  purchaseHistory: any[] = [];
+  filteredHistory: any[] = [];
+  historySearchTerm = '';
+
+  loadPurchaseHistory() {
+    if (!this.cnForm.customerId || this.cnForm.customerId == 0) {
+      this.showToastMsg('Please select a customer first');
+      return;
+    }
+    this.isLoading = true;
+    this.api.getCustomerPurchaseHistory(this.cnForm.customerId).subscribe({
+      next: (res: any) => {
+        this.purchaseHistory = res || [];
+        this.filteredHistory = [...this.purchaseHistory];
+        this.showHistoryModal = true;
+        this.isLoading = false;
+      },
+      error: () => { this.isLoading = false; this.showToastMsg('Failed to load history'); }
+    });
+  }
+
+  filterHistory() {
+    const term = this.historySearchTerm.toLowerCase();
+    this.filteredHistory = this.purchaseHistory.filter(h =>
+      (h.productName || '').toLowerCase().includes(term) ||
+      (h.invoiceNumber || '').toLowerCase().includes(term)
+    );
+  }
+
+  selectHistoryItem(item: any) {
+    this.cnForm.customerId = Number(item.customerId) || this.cnForm.customerId; 
+    this.cnForm.invoiceId = item.latestInvoiceId; // 使用最近一次购买该商品的发票 ID
+    this.showHistoryModal = false;
+    this.onCNInvoiceChange();
+    
+    setTimeout(() => {
+      const found = this.cnForm.items.find((i: any) => i.productId === item.productId);
+      if (found) {
+        found.returnQuantity = 1; 
+      }
+    }, 600);
+  }
+
+  constructor(private router: Router, private route: ActivatedRoute, private navCtrl: NavController, private api: ApiService, private cdr: ChangeDetectorRef, private alertService: AlertService) {}
 
 
 
 
-  ngOnInit() { this.loadCustomers(); }
+  ngOnInit() { 
+    this.loadCustomers(); 
+    this.loadAllInvoices();
+
+    this.route.queryParams.subscribe(params => {
+      if (params['action'] === 'newCN') {
+        const custId = Number(params['customerId']);
+        const invId = Number(params['invoiceId']);
+        
+        // Short delay to ensure data is loaded
+        setTimeout(() => {
+          this.currentView = 'newCN';
+          this.cnForm.customerId = custId;
+          this.onCNCustomerChange();
+          this.cnForm.invoiceId = invId;
+          this.onCNInvoiceChange();
+        }, 300);
+      }
+    });
+  }
 
   loadCustomers() {
     this.api.getAllCustomers().subscribe({
@@ -73,7 +138,10 @@ export class BillingPage implements OnInit {
 
   loadAllInvoices() {
     this.api.getInvoices().subscribe({
-      next: (res) => { this.invoices = Array.isArray(res) ? res : []; },
+      next: (res) => { 
+        this.invoices = Array.isArray(res) ? res : []; 
+        this.cnFilteredInvoices = [...this.invoices];
+      },
       error: () => {}
     });
   }
@@ -129,7 +197,9 @@ export class BillingPage implements OnInit {
 
   openNewCN() {
     this.loadAllInvoices();
-    this.cnForm = { invoiceId: 0, amount: 0, reason: '' };
+    this.cnForm = { customerId: 0, invoiceId: 0, reason: '', items: [] };
+    this.cnFilteredInvoices = [...this.invoices];
+    this.selectedCNInvoiceDetail = null;
     this.currentView = 'newCN';
   }
 
@@ -155,10 +225,52 @@ export class BillingPage implements OnInit {
     }
   }
 
+  onCNCustomerChange() {
+    this.cnForm.invoiceId = 0;
+    this.cnForm.items = [];
+    this.selectedCNInvoiceDetail = null;
+    if (this.cnForm.customerId && this.cnForm.customerId != 0) {
+      this.cnFilteredInvoices = this.invoices.filter((inv: any) => inv.customerId == this.cnForm.customerId);
+    } else {
+      this.cnFilteredInvoices = [...this.invoices];
+    }
+  }
+
+  onCNInvoiceChange() {
+    if (this.cnForm.invoiceId && this.cnForm.invoiceId != 0) {
+      this.api.getInvoiceDetails(Number(this.cnForm.invoiceId)).subscribe({
+        next: (res: any) => {
+          this.selectedCNInvoiceDetail = res;
+          // ✅ 双重保险：优先取顶层 customerId，取不到就取 res.customer.id
+          const cid = res.customerId || (res.customer ? res.customer.id : 0);
+          this.cnForm.customerId = Number(cid); 
+          this.cnForm.items = [];
+          if (res.items && res.items.length > 0) {
+            res.items.forEach((item: any) => {
+              const remainingQty = item.quantity - (item.returnedQuantity || 0);
+              if (remainingQty > 0) {
+                this.cnForm.items.push({
+                  productId: item.productId,
+                  productName: item.productName,
+                  maxQuantity: remainingQty,
+                  returnedQuantity: item.returnedQuantity || 0,
+                  returnQuantity: 0,
+                  returnToStock: false
+                });
+              }
+            });
+          }
+        },
+        error: () => { this.selectedCNInvoiceDetail = null; }
+      });
+    } else {
+      this.selectedCNInvoiceDetail = null;
+    }
+  }
+
   getTotalCNForPayment(): number {
     if (!this.selectedInvoiceDetail?.creditNotes) return 0;
     return this.selectedInvoiceDetail.creditNotes
-      .filter((cn: any) => !cn.createdAfterPayment)
       .reduce((sum: number, cn: any) => sum + (cn.amount || 0), 0);
   }
 
@@ -237,12 +349,31 @@ export class BillingPage implements OnInit {
 
   saveCreditNote() {
     if (!this.cnForm.invoiceId || this.cnForm.invoiceId == 0) { this.showToastMsg('Please select an invoice'); return; }
-    if (!this.cnForm.amount || this.cnForm.amount <= 0 || isNaN(this.cnForm.amount)) { this.showToastMsg('Amount must be greater than 0'); return; }
     if (!this.cnForm.reason) { this.showToastMsg('Please enter reason'); return; }
-    const payload = { amount: Number(this.cnForm.amount), reason: this.cnForm.reason };
+    
+    const itemsToReturn = this.cnForm.items.filter((i: any) => i.returnQuantity > 0);
+    if (itemsToReturn.length === 0) {
+      this.showToastMsg('Please select at least one item to return');
+      return;
+    }
+
+    for (const item of itemsToReturn) {
+      if (Number(item.returnQuantity) > item.maxQuantity) {
+        this.showToastMsg(`Cannot return ${item.returnQuantity} units of ${item.productName}. Only ${item.maxQuantity} remaining.`);
+        return;
+      }
+    }
+
+    const payloadItems = itemsToReturn.map((i: any) => ({
+      productId: i.productId,
+      quantity: Number(i.returnQuantity),
+      returnToStock: i.returnToStock
+    }));
+
+    const payload = { reason: this.cnForm.reason, items: payloadItems };
     this.api.createCreditNote(Number(this.cnForm.invoiceId), payload).subscribe({
       next: () => { this.showToastMsg('Credit Note created!'); this.openCNList(); },
-      error: (err: any) => this.showToastMsg('Failed: ' + (err.error || err.message || 'error'))
+      error: (err: any) => this.showToastMsg('Failed: ' + (err.error?.message || err.error || err.message || 'error'))
     });
   }
 

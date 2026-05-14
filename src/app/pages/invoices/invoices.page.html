@@ -273,9 +273,12 @@
       </div>
     </div>
 
-    <div *ngIf="selectedInvoice?.status === 'Paid'" style="background:#f8d7da;border-radius:16px;padding:14px 16px;margin-bottom:12px;display:flex;align-items:center;gap:10px;">
-      <ion-icon name="lock-closed-outline" style="font-size:20px;color:#c0392b;"></ion-icon>
-      <span style="font-size:14px;font-weight:700;color:#c0392b;">This invoice is fully paid and cannot be edited</span>
+    <div *ngIf="selectedInvoice?.status === 'Paid'" style="background:#f8d7da;border-radius:16px;padding:14px 16px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;gap:10px;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <ion-icon name="lock-closed-outline" style="font-size:20px;color:#c0392b;"></ion-icon>
+        <span style="font-size:14px;font-weight:700;color:#c0392b;">This invoice is fully paid and cannot be edited</span>
+      </div>
+      <button class="save-btn" style="margin:0;padding:8px 12px;font-size:11px;background:#c0392b;width:auto;" (click)="goToCreateCN()">RETURN ITEMS (CREATE CN)</button>
     </div>
 
     <div *ngIf="selectedInvoice?.creditUsed > 0" style="background:#d4edda;border-radius:16px;padding:12px 16px;margin-bottom:12px;">
@@ -293,7 +296,7 @@
 
     <div *ngIf="selectedInvoice?.creditNotes?.length > 0" style="margin-bottom:12px;">
       <div class="section-title"><span>Credit Notes</span></div>
-      <div *ngFor="let cn of selectedInvoice.creditNotes" class="list-item" style="background:#fff3cd;">
+      <div *ngFor="let cn of selectedInvoice.creditNotes; let i = index" class="list-item" style="background:#fff3cd;">
         <div class="item-info">
           <div class="item-avatar" style="background:#fff;"><ion-icon name="document-outline" style="color:#f39c12;"></ion-icon></div>
           <div>
@@ -303,24 +306,32 @@
             <div class="item-sub">{{ cn.createdAt | date:'dd/MM/yyyy' }}</div>
             <div *ngIf="cn.createdAfterPayment" style="margin-top:4px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
               <span style="background:#fff3cd;border-radius:6px;padding:3px 8px;font-size:10px;font-weight:700;color:#f39c12;">Created after partial payment</span>
-              <span [style.background]="cn.isUsed ? '#e0e0e0' : '#00bcd4'" [style.color]="cn.isUsed ? '#888' : '#fff'" style="font-size:10px;font-weight:700;padding:3px 8px;border-radius:6px;">{{ cn.isUsed ? "Credit Used" : "Credit Active" }}</span>
+              <span [style.background]="getCNStatusColor(cn, i)" [style.color]="getCNStatusTextColor(cn, i)" style="font-size:10px;font-weight:700;padding:3px 8px;border-radius:6px;">{{ getCNStatusLabel(cn, i) }}</span>
             </div>
           </div>
         </div>
       </div>
       <div class="form-card" style="background:#fff3cd;margin-top:8px;">
         <div style="display:flex;justify-content:space-between;align-items:center;">
-          <span style="font-weight:700;color:#1a1a1a;">Original Amount</span>
-          <span style="font-weight:700;">RM {{ selectedInvoice.totalAmount | number:'1.2-2' }}</span>
+          <span style="font-weight:700;color:#1a1a1a;font-size:15px;">Original Amount</span>
+          <span style="font-weight:700;font-size:15px;">RM {{ selectedInvoice.totalAmount | number:'1.2-2' }}</span>
         </div>
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;">
-          <span style="font-weight:700;color:#e67e22;">Credit Notes</span>
-          <span style="font-weight:700;color:#e67e22;">- RM {{ getTotalCN() | number:'1.2-2' }}</span>
+        <div *ngIf="getTotalCN() > 0" style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;">
+          <span style="font-weight:700;color:#e67e22;font-size:15px;">Returns (CN)</span>
+          <span style="font-weight:700;color:#e67e22;font-size:15px;">- RM {{ getTotalCN() | number:'1.2-2' }}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;border-top:1px dashed rgba(0,0,0,0.1);padding-top:6px;">
+          <span style="font-weight:800;color:#1a1a1a;font-size:16px;">Final Bill</span>
+          <span style="font-weight:800;font-size:16px;">RM {{ (selectedInvoice.totalAmount - getTotalCN()) | number:'1.2-2' }}</span>
         </div>
         <div style="height:1px;background:rgba(0,0,0,0.1);margin:8px 0;"></div>
         <div style="display:flex;justify-content:space-between;align-items:center;">
-          <span style="font-weight:800;color:#1a1a1a;font-size:16px;">Net Total</span>
-          <span style="font-weight:800;font-size:16px;">RM {{ (selectedInvoice.totalAmount - getTotalCN()) | number:'1.2-2' }}</span>
+          <span style="font-weight:700;color:#2ecc71;font-size:15px;">Paid Amount</span>
+          <span style="font-weight:700;color:#2ecc71;font-size:15px;">RM {{ selectedInvoice.paidAmount | number:'1.2-2' }}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;">
+          <span style="font-weight:800;color:#1a1a1a;font-size:16px;">Customer Credit</span>
+          <span style="font-weight:800;color:#e74c3c;font-size:16px;">RM {{ (selectedInvoice.paidAmount - (selectedInvoice.totalAmount - getTotalCN())) | number:'1.2-2' }}</span>
         </div>
       </div>
     </div>
@@ -341,9 +352,15 @@
       <button *ngIf="isEditMode" class="add-item-btn" (click)="addItem()">+ Add Item</button>
     </div>
 
-    <div *ngFor="let item of editForm.items; let i = index" class="form-card" style="background:#C5C8E0;">
+    <div *ngFor="let item of editForm.items; let i = index" class="form-card" 
+      [style.background]="(item.returnedQuantity || 0) >= item.quantity ? '#f1f1f1' : '#C5C8E0'"
+      [style.opacity]="(item.returnedQuantity || 0) >= item.quantity ? '0.6' : '1'">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-        <span style="font-weight:700;font-size:13px;">Item {{ i + 1 }}</span>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="font-weight:700;font-size:13px;">Item {{ i + 1 }}</span>
+          <span *ngIf="(item.returnedQuantity || 0) >= item.quantity" style="background:#e74c3c;color:#fff;font-size:12px;padding:3px 10px;border-radius:10px;font-weight:800;">FULLY RETURNED</span>
+          <span *ngIf="(item.returnedQuantity || 0) > 0 && (item.returnedQuantity || 0) < item.quantity" style="background:#e67e22;color:#fff;font-size:12px;padding:3px 10px;border-radius:10px;font-weight:800;">PARTIALLY RETURNED ({{item.returnedQuantity}} pcs)</span>
+        </div>
         <ion-button *ngIf="isEditMode" fill="clear" style="--color:#e57373;font-size:18px;" (click)="removeItem(i)">
           <ion-icon name="trash-outline"></ion-icon>
         </ion-button>
@@ -426,12 +443,18 @@
         <div *ngIf="getReceiptCreditNotes().length > 0" class="receipt-divider-thin"></div>
         <div *ngIf="getReceiptCreditNotes().length > 0" class="receipt-cn-section">
           <div class="cn-header">CREDIT NOTE(S)</div>
-          <div *ngFor="let cn of getReceiptCreditNotes()" class="cn-row">
+          <div *ngFor="let cn of getReceiptCreditNotes()" class="cn-row" style="border-bottom:1px solid #f1f2f6; padding-bottom:8px; margin-bottom:8px;">
             <div class="cn-row-left">
-              <span class="cn-number">{{ cn.cnNumber || 'CN-' + cn.id }}</span>
-              <span class="cn-reason">{{ cn.reason }}</span>
+              <span class="cn-number" style="display:block;">{{ cn.cnNumber || 'CN-' + cn.id }}</span>
+              <span class="cn-reason" style="display:block; font-style:italic;">{{ cn.reason }}</span>
+              <!-- 新增：展示具体退货商品 -->
+              <div *ngIf="cn.items && cn.items.length > 0" style="margin-top:6px;">
+                <div *ngFor="let cni of cn.items" style="font-size:12px; color:#2f3542; margin-left:8px; font-weight:600;">
+                  • {{ cni.productName }} x {{ cni.quantity }}
+                </div>
+              </div>
             </div>
-            <span class="cn-amount">- RM {{ cn.amount | number:'1.2-2' }}</span>
+            <span class="cn-amount" style="font-weight:800;">- RM {{ cn.amount | number:'1.2-2' }}</span>
           </div>
         </div>
         <div *ngIf="selectedInvoice?.creditUsed > 0" style="background:#d4edda;border-radius:12px;padding:10px 16px;margin-bottom:8px;">

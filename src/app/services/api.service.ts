@@ -38,6 +38,7 @@ export class ApiService {
   createCustomerProductPrice(customerId: any, data: any): Observable<any> { return this.http.post(this.baseUrl + '/Customer/CreateCustomerProductPrice/customers/' + customerId + '/product-prices', data); }
   updateCustomerProductPrice(customerId: any, productId: any, data: any): Observable<any> { return this.http.patch(this.baseUrl + '/Customer/UpdateCustomerProductPrice/customers/' + customerId + '/product-prices/' + productId, data); }
   deleteCustomerProductPrice(customerId: any, productId: any): Observable<any> { return this.http.delete(this.baseUrl + '/Customer/DeleteCustomerProductPrice/customers/' + customerId + '/product-prices/' + productId, { responseType: 'text' }); }
+  getCustomerPurchaseHistory(customerId: any): Observable<any> { return this.http.get(this.baseUrl + '/Customer/GetCustomerPurchaseHistory/customers/' + customerId + '/purchase-history'); }
 
   createInvoice(data: any): Observable<any> { return this.http.post(this.baseUrl + '/Invoice/CreateInvoice/invoices', data); }
   getStockReadyInvoices(): Observable<any> { return this.http.get(this.baseUrl + '/Invoice/GetStockReadyInvoices/invoices/stock-ready'); }

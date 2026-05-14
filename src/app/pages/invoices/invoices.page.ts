@@ -25,7 +25,7 @@ export class InvoicesPage implements OnInit {
   selectedCreditNoteId: number | null = null;
   isLoading = false;
   showModal = false;
-  isDirectEntry = false; 
+  isDirectEntry = false;
   showCustomerSelector = false;
   showProductSelector = false;
   showPaymentCollection = false;
@@ -50,8 +50,8 @@ export class InvoicesPage implements OnInit {
   selectedCustomerDetail: any = null;
   showCheckPreview = false;
   previewData: any = null;
-  form: any = { customerId: 0, invoiceDate: new Date().toISOString(), remark: '', useCreditBalance: false, items: [] };
-  editForm: any = { invoiceDate: new Date().toISOString(), remark: '', items: [{ productId: 0, quantity: 1, unitPrice: 0 }] };
+  form: any = { customerId: 0, invoiceDate: this.getMYSDate(), remark: '', useCreditBalance: false, items: [] };
+  editForm: any = { invoiceDate: this.getMYSDate(), remark: '', items: [{ productId: 0, quantity: 1, unitPrice: 0 }] };
   showStockAlert = false;
   stockIssues: any[] = [];
   deleteButtons = [
@@ -59,18 +59,18 @@ export class InvoicesPage implements OnInit {
     { text: 'Delete', role: 'destructive', handler: () => this.deleteInvoice() }
   ];
 
-  constructor(private router: Router, private route: ActivatedRoute, private navCtrl: NavController, private api: ApiService, private cdr: ChangeDetectorRef, private alertService: AlertService) {}
+  constructor(private router: Router, private route: ActivatedRoute, private navCtrl: NavController, private api: ApiService, private cdr: ChangeDetectorRef, private alertService: AlertService) { }
 
   ionViewWillEnter() {
     this.cdr.detectChanges();
   }
 
-  ngOnInit() { 
-    this.loadInvoices(); 
-    this.loadCustomers(); 
-    this.loadProducts(); 
-    this.loadAllProducts(); 
-    
+  ngOnInit() {
+    this.loadInvoices();
+    this.loadCustomers();
+    this.loadProducts();
+    this.loadAllProducts();
+
     // Check for query parameters to auto-open form
     this.route.queryParams.subscribe(params => {
       if (params['action'] === 'new') {
@@ -92,11 +92,11 @@ export class InvoicesPage implements OnInit {
 
   loadCustomers() {
     this.api.getAllCustomers().subscribe({
-      next: (res) => { 
-        this.customers = Array.isArray(res) ? res : []; 
+      next: (res) => {
+        this.customers = Array.isArray(res) ? res : [];
         this.filteredCustomers = [...this.customers];
       },
-      error: () => {}
+      error: () => { }
     });
   }
 
@@ -106,14 +106,14 @@ export class InvoicesPage implements OnInit {
         const all = Array.isArray(res) ? res : [];
         this.products = all.filter((p: any) => p.stock > 0 && p.isActive !== false);
       },
-      error: () => {}
+      error: () => { }
     });
   }
 
   loadAllProducts() {
     this.api.getProducts().subscribe({
       next: (res) => { this.allProducts = (Array.isArray(res) ? res : []).filter((p: any) => p.isActive !== false); },
-      error: () => {}
+      error: () => { }
     });
   }
 
@@ -167,8 +167,8 @@ export class InvoicesPage implements OnInit {
 
   filterCustomers() {
     const term = this.customerSearchTerm.toLowerCase();
-    this.filteredCustomers = this.customers.filter(c => 
-      (c.name || '').toLowerCase().includes(term) || 
+    this.filteredCustomers = this.customers.filter(c =>
+      (c.name || '').toLowerCase().includes(term) ||
       (c.customerCode || '').toLowerCase().includes(term) ||
       (c.code || '').toLowerCase().includes(term)
     );
@@ -188,8 +188,8 @@ export class InvoicesPage implements OnInit {
 
   filterProductsForSelection() {
     const term = this.productSearchTerm.toLowerCase();
-    this.filteredProductsForSelection = this.products.filter(p => 
-      (p.name || '').toLowerCase().includes(term) || 
+    this.filteredProductsForSelection = this.products.filter(p =>
+      (p.name || '').toLowerCase().includes(term) ||
       (p.code || '').toLowerCase().includes(term)
     );
   }
@@ -234,7 +234,7 @@ export class InvoicesPage implements OnInit {
     this.availableCredits = [];
     this.form = {
       customerId: 0,
-      invoiceDate: new Date().toISOString(),
+      invoiceDate: this.getMYSDate(),
       remark: '',
       useCreditBalance: false,
       items: []
@@ -255,28 +255,49 @@ export class InvoicesPage implements OnInit {
         this.isLoading = false;
         this.selectedInvoice = { ...res, customerName: res.customerName || invoice.customerName, customerId: res.customerId ?? invoice.customerId };
         this.editForm = {
-          invoiceDate: res.invoiceDate || new Date().toISOString(),
+          invoiceDate: res.invoiceDate || this.getMYSDate(),
           remark: res.remark || '',
-          items: (res.items && res.items.length > 0)
-            ? res.items.map((i: any) => ({ productId: i.productId || 0, quantity: i.quantity || 1, unitPrice: i.unitPrice || 0, productName: i.productName || '' }))
-            : [{ productId: this.products.length > 0 ? this.products[0].id : 0, quantity: 1, unitPrice: 0, productName: '' }]
+          items: ((res.items || res.Items) && (res.items || res.Items).length > 0)
+            ? (res.items || res.Items).map((i: any) => ({
+              productId: i.productId ?? i.ProductId ?? 0,
+              quantity: i.quantity ?? i.Quantity ?? 1,
+              unitPrice: i.unitPrice ?? i.UnitPrice ?? 0,
+              productName: i.productName ?? i.ProductName ?? '',
+              returnedQuantity: i.returnedQuantity ?? i.ReturnedQuantity ?? 0
+            }))
+            : [{ productId: this.products.length > 0 ? this.products[0].id : 0, quantity: 1, unitPrice: 0, productName: '', returnedQuantity: 0 }]
         };
         this.showModal = true;
       },
       error: () => {
         this.isLoading = false;
         this.selectedInvoice = invoice;
-        this.editForm = { invoiceDate: invoice.invoiceDate || new Date().toISOString(), remark: invoice.remark || '', items: [{ productId: this.products.length > 0 ? this.products[0].id : 0, quantity: 1, unitPrice: 0, productName: '' }] };
+        this.editForm = { invoiceDate: invoice.invoiceDate || this.getMYSDate(), remark: invoice.remark || '', items: [{ productId: this.products.length > 0 ? this.products[0].id : 0, quantity: 1, unitPrice: 0, productName: '' }] };
         this.showModal = true;
       }
     });
   }
 
-  closeModal() { 
+  goToCreateCN() {
+    if (!this.selectedInvoice) return;
+    const invId = this.selectedInvoice.id;
+    const custId = this.selectedInvoice.customerId;
+    this.showModal = false;
+    // We navigate to billing with query params
+    this.navCtrl.navigateRoot('pages/billing', {
+      queryParams: {
+        action: 'newCN',
+        invoiceId: invId,
+        customerId: custId
+      }
+    });
+  }
+
+  closeModal() {
     if (this.isDirectEntry) {
       this.goBack(); // Navigate back to Billing
     } else {
-      this.showModal = false; 
+      this.showModal = false;
     }
   }
 
@@ -350,8 +371,8 @@ export class InvoicesPage implements OnInit {
         this.showToastMsg('Invoice total is less than the selected Credit Note amount');
         return;
       }
-      const payload = { 
-        ...this.form, 
+      const payload = {
+        ...this.form,
         selectedCreditNoteId: this.form.useCreditBalance ? this.selectedCreditNoteId : null,
         paidAmount: this.amountPaid,
         paymentMethod: this.paymentMethod,
@@ -366,26 +387,26 @@ export class InvoicesPage implements OnInit {
 
   handleInvoiceError(err: any) {
     let errBody = err.error;
-    
+
     // If it's a structured error
     if (errBody?.type === 'STOCK_INSUFFICIENT') {
       this.stockIssues = errBody.stockIssues || [];
       this.showStockAlert = true;
     } else {
       let msg = errBody?.message || (typeof errBody === 'string' ? errBody : null) || err.message || 'error';
-      
+
       // Auto-reformat "Insufficient stock for 'Product'. Available: X, Requested: Y"
       if (msg.toLowerCase().includes('insufficient stock for')) {
         const match = msg.match(/'([^']+)'/); // Extract product name between single quotes
         const productName = match ? match[1] : 'The product';
         msg = `${productName} doesn't have enough quantity as requested.`;
       }
-      
+
       this.showToastMsg(msg);
     }
   }
 
-  confirmDelete(invoice: any) { this.selectedInvoice = invoice; this.alertService.confirm('Delete Invoice', 'Delete ' + (invoice.invoiceNumber || 'INV-'+invoice.id) + '?').then(c => { if(c) this.deleteInvoice(); }); }
+  confirmDelete(invoice: any) { this.selectedInvoice = invoice; this.alertService.confirm('Delete Invoice', 'Delete ' + (invoice.invoiceNumber || 'INV-' + invoice.id) + '?').then(c => { if (c) this.deleteInvoice(); }); }
 
   deleteInvoice() {
     if (!this.selectedInvoice) return;
@@ -412,17 +433,54 @@ export class InvoicesPage implements OnInit {
   getTotalCN(): number {
     if (!this.selectedInvoice?.creditNotes) return 0;
     return this.selectedInvoice.creditNotes
-      .filter((cn: any) => !cn.createdAfterPayment)
       .reduce((sum: number, cn: any) => sum + (cn.amount || 0), 0);
   }
 
   getReceiptCreditNotes(): any[] {
     if (!this.selectedInvoice?.creditNotes) return [];
-    return this.selectedInvoice.creditNotes.filter((cn: any) => !cn.createdAfterPayment);
+    return this.selectedInvoice.creditNotes;
   }
 
   getReceiptTotalCN(): number {
     return this.getReceiptCreditNotes().reduce((sum: number, cn: any) => sum + (cn.amount || 0), 0);
+  }
+
+  // ✅ 新增：判断 CN 的真实状态（抵债还是产生点数）
+  getCNStatusLabel(cn: any, index: number): string {
+    if (cn.isUsed) return "Credit Used";
+    if (!this.selectedInvoice) return "Credit Active";
+    
+    // 计算在这笔 CN 之前（包括这笔）的总退款额
+    const allCNs = this.selectedInvoice.creditNotes || [];
+    let cumulativeCN = 0;
+    for (let i = 0; i <= index; i++) {
+      cumulativeCN += (allCNs[i].amount || 0);
+    }
+
+    const originalTotal = this.selectedInvoice.totalAmount || 0;
+    const paidAmount = this.selectedInvoice.paidAmount || 0;
+    
+    // 如果“已付金额”还没有超过“折后余额”，说明这笔钱还在抵债阶段
+    const balanceAfterCN = originalTotal - cumulativeCN;
+    if (paidAmount <= balanceAfterCN) {
+      return "Debt Offset";
+    } else {
+      return "Credit Active";
+    }
+  }
+
+  getCNStatusColor(cn: any, index: number): string {
+    const label = this.getCNStatusLabel(cn, index);
+    if (label === "Credit Used") return "#e0e0e0";
+    if (label === "Debt Offset") return "#ffeaa7"; // 暖黄色，表示抵债
+    return "#00bcd4"; // 青色，表示活跃点数
+  }
+
+  getCNStatusTextColor(cn: any, index: number): string {
+    const label = this.getCNStatusLabel(cn, index);
+    if (label === "Credit Used") return "#888";
+    if (label === "Debt Offset") return "#d35400"; // 深橙色
+    return "#fff";
   }
 
   getCustomerCode(invoice: any) {
@@ -573,6 +631,11 @@ export class InvoicesPage implements OnInit {
       cnListHtml = `<div class="divider-thin"></div><div class="cn-header">CREDIT NOTE(S)</div>`;
       cns.forEach((cn: any) => {
         cnListHtml += `<div class="cn-row"><span class="cn-number">${cn.cnNumber || 'CN-' + cn.id}${cn.reason ? ' (' + cn.reason + ')' : ''}</span><span class="cn-amount">- RM ${(cn.amount || 0).toFixed(2)}</span></div>`;
+        if (cn.items && cn.items.length > 0) {
+          cn.items.forEach((item: any) => {
+            cnListHtml += `<div style="font-size:10px;color:#666;padding-left:20px;margin-bottom:2px;">• ${item.productName} (${item.quantity} x ${item.unitPrice.toFixed(2)})</div>`;
+          });
+        }
       });
     }
     const netAmount = (inv?.totalAmount || 0) - totalCN;
@@ -583,5 +646,12 @@ export class InvoicesPage implements OnInit {
     printWindow.document.close();
     setTimeout(() => printWindow.print(), 500);
   }
-}
 
+  getMYSDate() {
+    const now = new Date();
+    // Offset for Malaysia is UTC+8
+    const mysOffset = 8 * 60 * 60 * 1000;
+    const localNow = new Date(now.getTime() + mysOffset);
+    return localNow.toISOString().split('.')[0];
+  }
+} 
