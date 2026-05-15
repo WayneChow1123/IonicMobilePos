@@ -46,8 +46,10 @@
             <div class="info-right">
               <span class="status-badge" [class.paid]="invoice.status==='Paid'" [class.partial]="invoice.status==='Partial'" [class.unpaid]="invoice.status==='Unpaid'">{{ invoice.status || 'Unpaid' }}</span>
               <div class="amount-box">
-                <span class="paid-amount" [class.partial]="invoice.status !== 'Paid'" *ngIf="invoice.paidAmount > 0">Paid: RM {{ invoice.paidAmount | number:'1.2-2' }}</span>
-                <span class="item-amount">RM {{ invoice.totalAmount || 0 | number:'1.2-2' }}</span>
+                <span class="paid-amount" style="color: #6c5ce7;" *ngIf="invoice.creditUsed > 0 || invoice.CreditUsed > 0">Credit: RM {{ (invoice.creditUsed || invoice.CreditUsed) | number:'1.2-2' }}</span>
+                <span class="paid-amount" [class.partial]="invoice.status !== 'Paid'" *ngIf="(invoice.paidAmount || invoice.PaidAmount) > 0">Paid: RM {{ (invoice.paidAmount || invoice.PaidAmount) | number:'1.2-2' }}</span>
+                <span class="paid-amount" style="color: #ff7675; font-weight: 800;" *ngIf="(invoice.balance || invoice.Balance) > 0">Owe: RM {{ (invoice.balance || invoice.Balance) | number:'1.2-2' }}</span>
+                <span class="item-amount">RM {{ (invoice.totalAmount || invoice.TotalAmount || 0) | number:'1.2-2' }}</span>
               </div>
             </div>
           </div>
@@ -246,8 +248,8 @@
         </div>
       </div>
 
-      <button class="ni-pay-btn" [class.disabled]="hasAnyStockIssue() || isCreditInvalid() || form.items.length === 0" (click)="!hasAnyStockIssue() && !isCreditInvalid() && form.items.length > 0 && openPaymentCollection()">
-        <span>{{ hasAnyStockIssue() ? 'STOCK ERROR' : (isCreditInvalid() ? 'CREDIT ERROR' : 'PAY') }}</span>
+      <button class="ni-pay-btn" [class.disabled]="hasAnyStockIssue() || form.items.length === 0" (click)="!hasAnyStockIssue() && form.items.length > 0 && openPaymentCollection()">
+        <span>{{ hasAnyStockIssue() ? 'STOCK ERROR' : 'PAY' }}</span>
         <ion-icon name="chevron-forward-outline"></ion-icon>
       </button>
     </div>
@@ -329,12 +331,16 @@
         </div>
         <div style="height:1px;background:rgba(0,0,0,0.1);margin:8px 0;"></div>
         <div style="display:flex;justify-content:space-between;align-items:center;">
-          <span style="font-weight:700;color:#2ecc71;font-size:15px;">Paid Amount</span>
-          <span style="font-weight:700;color:#2ecc71;font-size:15px;">RM {{ selectedInvoice.paidAmount | number:'1.2-2' }}</span>
+          <span style="font-weight:700;color:#2ecc71;font-size:15px;">Paid Amount (Received)</span>
+          <span style="font-weight:700;color:#2ecc71;font-size:15px;">RM {{ (selectedInvoice.paidAmount + getChangeCN()) | number:'1.2-2' }}</span>
         </div>
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;">
-          <span style="font-weight:800;color:#1a1a1a;font-size:16px;">Customer Credit</span>
-          <span style="font-weight:800;color:#e74c3c;font-size:16px;">RM {{ (selectedInvoice.paidAmount - (selectedInvoice.totalAmount - getTotalCN())) | number:'1.2-2' }}</span>
+        <div *ngIf="getChangeCN() > 0" style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;">
+          <span style="font-weight:700;color:#888;font-size:14px;font-style:italic;">- Change (To Credit)</span>
+          <span style="font-weight:700;color:#888;font-size:14px;">RM {{ getChangeCN() | number:'1.2-2' }}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;border-top:1px solid #eee;padding-top:4px;">
+          <span style="font-weight:800;color:#1a1a1a;font-size:15px;">Applied to Bill</span>
+          <span style="font-weight:800;color:#2ecc71;font-size:15px;">RM {{ selectedInvoice.paidAmount | number:'1.2-2' }}</span>
         </div>
       </div>
     </div>
@@ -442,16 +448,19 @@
         <div class="receipt-totals">
           <div class="total-row"><span>GROSS TOTAL</span><span>RM {{ selectedInvoice?.totalAmount | number:'1.2-2' }}</span></div>
           <div class="total-row"><span>TAX TOTAL</span><span>RM {{ previewData?.taxTotal || '0.00' }}</span></div>
-          <div *ngIf="getReceiptTotalCN() > 0" class="total-row cn-deduct"><span>CREDIT NOTE</span><span>- RM {{ getReceiptTotalCN() | number:'1.2-2' }}</span></div>
+          <!-- 退货行 (如果有) -->
+          <div *ngIf="getTotalCN() > 0" class="total-row cn-deduct">
+            <span>RETURNS (CN)</span>
+            <span>- RM {{ getTotalCN() | number:'1.2-2' }}</span>
+          </div>
         </div>
         <div *ngIf="getReceiptCreditNotes().length > 0" class="receipt-divider-thin"></div>
         <div *ngIf="getReceiptCreditNotes().length > 0" class="receipt-cn-section">
-          <div class="cn-header">CREDIT NOTE(S)</div>
+          <div class="cn-header">TRANSACTION DETAILS</div>
           <div *ngFor="let cn of getReceiptCreditNotes()" class="cn-row" style="border-bottom:1px solid #f1f2f6; padding-bottom:8px; margin-bottom:8px;">
             <div class="cn-row-left">
-              <span class="cn-number" style="display:block;">{{ cn.cnNumber || 'CN-' + cn.id }}</span>
+              <span class="cn-number" style="display:block;">{{ cn.cnNumber || 'CN-' + cn.id }} [{{ (cn.cnNumber || '').startsWith('CN-CHG') ? 'CHANGE SAVED' : 'RETURNED' }}]</span>
               <span class="cn-reason" style="display:block; font-style:italic;">{{ cn.reason }}</span>
-              <!-- 新增：展示具体退货商品 -->
               <div *ngIf="cn.items && cn.items.length > 0" style="margin-top:6px;">
                 <div *ngFor="let cni of cn.items" style="font-size:12px; color:#2f3542; margin-left:8px; font-weight:600;">
                   • {{ cni.productName }} x {{ cni.quantity }}
@@ -461,24 +470,27 @@
             <span class="cn-amount" style="font-weight:800;">- RM {{ cn.amount | number:'1.2-2' }}</span>
           </div>
         </div>
-        <div *ngIf="selectedInvoice?.creditUsed > 0" style="background:#d4edda;border-radius:12px;padding:10px 16px;margin-bottom:8px;">
-          <div style="display:flex;justify-content:space-between;">
-            <span style="font-size:12px;font-weight:700;color:#27ae60;">Credit Balance Used</span>
-            <span style="font-size:12px;font-weight:800;color:#27ae60;">RM {{ selectedInvoice.creditUsed | number:'1.2-2' }}</span>
-          </div>
-          <div *ngIf="selectedInvoice.creditCNNumber" style="font-size:10px;color:#27ae60;margin-top:2px;">CN: {{ selectedInvoice.creditCNNumber }}</div>
-        </div>
         <div class="receipt-net">
           <span class="net-label">NET AMOUNT</span>
-          <span class="net-value">RM {{ (selectedInvoice?.totalAmount - getReceiptTotalCN()) | number:'1.2-2' }}</span>
+          <span class="net-value">RM {{ (selectedInvoice?.totalAmount - getTotalCN()) | number:'1.2-2' }}</span>
         </div>
         <div class="receipt-payment-status">
           <span class="payment-status-label">PAYMENT STATUS</span>
           <span class="payment-status-value">{{ selectedInvoice?.status === 'Paid' ? 'PAID' : selectedInvoice?.status === 'Partial' ? 'PARTIALLY PAID' : 'UNPAID' }}</span>
         </div>
-        <div *ngIf="selectedInvoice?.status === 'Partial'" class="receipt-payment-detail">
-          <div class="payment-detail-row"><span>PAID</span><span>RM {{ selectedInvoice?.paidAmount | number:'1.2-2' }}</span></div>
-          <div class="payment-detail-row balance"><span>BALANCE</span><span>RM {{ ((selectedInvoice?.totalAmount - getReceiptTotalCN()) - (selectedInvoice?.paidAmount || 0)) | number:'1.2-2' }}</span></div>
+        <div class="receipt-payment-detail" style="border: 1px dashed #ddd; padding: 10px; border-radius: 8px;">
+          <div class="payment-detail-row">
+            <span style="font-weight:700;">PAID AMOUNT (RECEIVED)</span>
+            <span style="font-weight:700;">RM {{ (selectedInvoice?.paidAmount + getChangeCN()) | number:'1.2-2' }}</span>
+          </div>
+          <div *ngIf="getChangeCN() > 0" class="payment-detail-row" style="color:#888; font-style:italic;">
+            <span>CHANGE (TO CREDIT)</span>
+            <span>- RM {{ getChangeCN() | number:'1.2-2' }}</span>
+          </div>
+          <div class="payment-detail-row balance" style="border-top: 1px solid #eee; margin-top: 5px; padding-top: 5px;">
+            <span style="font-weight:800;">BALANCE</span>
+            <span style="font-weight:800;">RM {{ ((selectedInvoice?.totalAmount - getTotalCN()) - (selectedInvoice?.paidAmount || 0)) | number:'1.2-2' }}</span>
+          </div>
         </div>
         <div class="receipt-due-box">
           <span class="due-label">PAYMENT DUE</span>

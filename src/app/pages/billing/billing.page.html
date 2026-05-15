@@ -171,43 +171,55 @@
             <div style="font-size:12px; color:#a4b0be; font-weight:700; text-transform:uppercase;">Invoice Financials</div>
             <div style="font-size:12px; font-weight:800; color:#6c5ce7;">{{ (selectedCNInvoiceDetail.paidAmount / selectedCNInvoiceDetail.totalAmount * 100) | number:'1.0-0' }}% PAID</div>
           </div>
-          <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px;">
+          <div style="display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:12px;">
             <div>
               <div style="font-size:10px; color:#747d8c; font-weight:600;">Total</div>
               <div style="font-size:14px; font-weight:800; color:#2f3542;">RM {{ selectedCNInvoiceDetail.totalAmount | number:'1.2-2' }}</div>
             </div>
+            <div *ngIf="selectedCNInvoiceDetail.creditUsed > 0">
+              <div style="font-size:10px; color:#747d8c; font-weight:600;">Credit</div>
+              <div style="font-size:14px; font-weight:800; color:#6c5ce7;">- RM {{ selectedCNInvoiceDetail.creditUsed | number:'1.2-2' }}</div>
+            </div>
             <div>
-              <div style="font-size:10px; color:#747d8c; font-weight:600;">Paid</div>
+              <div style="font-size:10px; color:#747d8c; font-weight:600;">Cash Paid</div>
               <div style="font-size:14px; font-weight:800; color:#00b894;">RM {{ selectedCNInvoiceDetail.paidAmount | number:'1.2-2' }}</div>
             </div>
             <div>
               <div style="font-size:10px; color:#747d8c; font-weight:600;">Balance</div>
-              <div style="font-size:14px; font-weight:800; color:#ff7675;">RM {{ (selectedCNInvoiceDetail.totalAmount - selectedCNInvoiceDetail.paidAmount) | number:'1.2-2' }}</div>
+              <div style="font-size:14px; font-weight:800; color:#ff7675;">RM {{ selectedCNInvoiceDetail.balance | number:'1.2-2' }}</div>
             </div>
           </div>
         </div>
 
         <!-- Debt Offset Reminder -->
-        <div *ngIf="(selectedCNInvoiceDetail.totalAmount - selectedCNInvoiceDetail.paidAmount) > 0" 
+        <div *ngIf="selectedCNInvoiceDetail.balance > 0" 
           style="background:#fff9db; border:1px solid #ffec99; border-radius:12px; padding:12px; margin-bottom:16px; display:flex; align-items:center; gap:10px;">
           <ion-icon name="information-circle" style="color:#f08c00; font-size:20px;"></ion-icon>
           <span style="font-size:12px; color:#5c5f66; font-weight:700;">
-            Note: This invoice has <span style="color:#e03131;">RM {{ (selectedCNInvoiceDetail.totalAmount - selectedCNInvoiceDetail.paidAmount) | number:'1.2-2' }}</span> unpaid. 
+            Note: This invoice has <span style="color:#e03131;">RM {{ selectedCNInvoiceDetail.balance | number:'1.2-2' }}</span> unpaid. 
             Returns will first offset this debt.
           </span>
         </div>
+      </div>
 
+      <div *ngIf="cnForm.items.length > 0" style="margin-bottom:20px;">
         <label style="font-size:12px;color:#888;font-weight:700;margin-bottom:10px;display:block;text-transform:uppercase;letter-spacing:1px;">Products to Return</label>
-        <div *ngFor="let item of cnForm.items"
-          style="background:#fff;border-radius:12px;padding:12px;margin-bottom:8px;box-shadow:0 2px 4px rgba(0,0,0,0.05);">
+        <div *ngFor="let item of cnForm.items; let idx = index"
+          style="background:#fff;border-radius:12px;padding:12px;margin-bottom:8px;box-shadow:0 2px 4px rgba(0,0,0,0.05); position:relative;">
+          
+          <ion-button *ngIf="item.isGlobal" fill="clear" (click)="cnForm.items.splice(idx, 1)" 
+            style="position:absolute; top:0; right:0; --color:#ff7675;">
+            <ion-icon name="close-circle-outline" slot="icon-only"></ion-icon>
+          </ion-button>
+
           <div style="margin-bottom:12px;">
-            <div style="font-size:16px; font-weight:800; color:#2f3542; margin-bottom:4px;">{{ item.productName }}</div>
+            <div style="font-size:16px; font-weight:800; color:#2f3542; margin-bottom:4px; padding-right:30px;">{{ item.productName }}</div>
             <div style="font-size:13px; font-weight:700; color:#747d8c; margin-bottom:12px;">
-              Total <span style="color:#2f3542;">{{ item.maxQuantity + (item.returnedQuantity || 0) }}</span> on Invoice • 
-              Already returned <span style="color:#ff7675;">{{ item.returnedQuantity || 0 }}</span>
+              Total Purchased: <span style="color:#2f3542;">{{ item.maxQuantity + (item.returnedQuantity || 0) }}</span> • 
+              Remaining: <span style="color:#00b894;">{{ item.maxQuantity }}</span>
             </div>
-            <!-- Stock & Payment Info -->
-            <div style="font-size:12px; color:#a4b0be; font-weight:700; margin-top:-8px; margin-bottom:12px; display:flex; gap:12px; flex-wrap:wrap;">
+            <!-- Stock & Payment Info (Only for single invoice mode) -->
+            <div *ngIf="selectedCNInvoiceDetail" style="font-size:12px; color:#a4b0be; font-weight:700; margin-top:-8px; margin-bottom:12px; display:flex; gap:12px; flex-wrap:wrap;">
               <span style="background:#e8f8f5; color:#1abc9c; padding:2px 8px; border-radius:6px;">Paid (Stock Out): <strong>{{ ((item.maxQuantity + (item.returnedQuantity || 0)) * (selectedCNInvoiceDetail.paidAmount / selectedCNInvoiceDetail.totalAmount)) | number:'1.0-0' }}</strong></span>
               <span style="background:#fef9e7; color:#f39c12; padding:2px 8px; border-radius:6px;">Unpaid (In Warehouse): <strong>{{ ((item.maxQuantity + (item.returnedQuantity || 0)) * ((selectedCNInvoiceDetail.totalAmount - selectedCNInvoiceDetail.paidAmount) / selectedCNInvoiceDetail.totalAmount)) | number:'1.0-0' }}</strong></span>
             </div>
@@ -219,7 +231,7 @@
                 [max]="item.maxQuantity" min="0">
               <div style="font-size:10px; color:#a4b0be; font-weight:700; margin-top:4px; text-transform:uppercase; letter-spacing:0.5px;">Return Qty</div>
             </div>
-            <div *ngIf="selectedCNInvoiceDetail.status === 'Paid'" style="display:flex; align-items:center; gap:8px; background:#f8f9fa; padding:8px 12px; border-radius:12px;">
+            <div style="display:flex; align-items:center; gap:8px; background:#f8f9fa; padding:8px 12px; border-radius:12px;">
               <span style="font-size:11px; color:#747d8c; font-weight:700;">Return to Stock?</span>
               <ion-toggle [(ngModel)]="item.returnToStock" style="--handle-background-checked:#6c5ce7; --background-checked:rgba(108, 92, 231, 0.3);"></ion-toggle>
             </div>

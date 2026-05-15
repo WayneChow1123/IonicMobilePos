@@ -91,16 +91,31 @@ export class BillingPage implements OnInit {
 
   selectHistoryItem(item: any) {
     this.cnForm.customerId = Number(item.customerId) || this.cnForm.customerId; 
-    this.cnForm.invoiceId = item.latestInvoiceId; // 使用最近一次购买该商品的发票 ID
     this.showHistoryModal = false;
-    this.onCNInvoiceChange();
+
+    // Check if item already exists in the list
+    const found = this.cnForm.items.find((i: any) => i.productId === item.productId);
+    if (found) {
+      found.returnQuantity += 1;
+      // 允许增加到历史记录里的最大剩余量
+      found.maxQuantity = item.remaining;
+      if (found.returnQuantity > item.remaining) found.returnQuantity = item.remaining;
+    } else {
+      this.cnForm.items.push({
+        productId: item.productId,
+        productName: item.productName,
+        maxQuantity: item.remaining, 
+        returnedQuantity: item.totalReturned,
+        returnQuantity: 1,
+        returnToStock: false,
+        isGlobal: true 
+      });
+    }
     
-    setTimeout(() => {
-      const found = this.cnForm.items.find((i: any) => i.productId === item.productId);
-      if (found) {
-        found.returnQuantity = 1; 
-      }
-    }, 600);
+    // Force UI update
+    this.cnForm.items = [...this.cnForm.items];
+    this.showToastMsg(`Added ${item.productName} from history`);
+    this.cdr.detectChanges();
   }
 
   constructor(private router: Router, private route: ActivatedRoute, private navCtrl: NavController, private api: ApiService, private cdr: ChangeDetectorRef, private alertService: AlertService) {}
@@ -348,7 +363,15 @@ export class BillingPage implements OnInit {
   }
 
   saveCreditNote() {
-    if (!this.cnForm.invoiceId || this.cnForm.invoiceId == 0) { this.showToastMsg('Please select an invoice'); return; }
+    if (!this.cnForm.customerId || this.cnForm.customerId == 0) {
+      // If no customer selected, try to get from items
+      if (this.cnForm.items.length > 0) {
+        // Already set in selectHistoryItem
+      } else {
+        this.showToastMsg('Please select a customer'); return; 
+      }
+    }
+    
     if (!this.cnForm.reason) { this.showToastMsg('Please enter reason'); return; }
     
     const itemsToReturn = this.cnForm.items.filter((i: any) => i.returnQuantity > 0);
@@ -371,10 +394,27 @@ export class BillingPage implements OnInit {
     }));
 
     const payload = { reason: this.cnForm.reason, items: payloadItems };
-    this.api.createCreditNote(Number(this.cnForm.invoiceId), payload).subscribe({
-      next: () => { this.showToastMsg('Credit Note created!'); this.openCNList(); },
-      error: (err: any) => this.showToastMsg('Failed: ' + (err.error?.message || err.error || err.message || 'error'))
-    });
+
+    // ✅ 智能切换：如果列表里有来自“历史记录”的商品，或者根本没选发票，就走全局接口
+    const hasGlobalItems = itemsToReturn.some((i: any) => i.isGlobal);
+    const useGlobalMode = !this.cnForm.invoiceId || this.cnForm.invoiceId == 0 || hasGlobalItems;
+
+    if (!useGlobalMode) {
+      // 纯单号模式：所有商品都来自当前选中的发票
+      this.api.createCreditNote(Number(this.cnForm.invoiceId), payload).subscribe({
+        next: () => { this.showToastMsg('Credit Note created!'); this.openCNList(); },
+        error: (err: any) => this.showToastMsg('Failed: ' + (err.error?.message || err.error || err.message || 'error'))
+      });
+    } else {
+      // 智能全局模式：支持跨单退货
+      const cid = this.cnForm.customerId || (this.selectedCNInvoiceDetail?.customerId) || 0;
+      if (!cid || cid == 0) { this.showToastMsg('Customer ID is required for global return'); return; }
+
+      this.api.createGlobalCreditNote(Number(cid), payload).subscribe({
+        next: () => { this.showToastMsg('Global Credit Note created successfully!'); this.openCNList(); },
+        error: (err: any) => this.showToastMsg('Failed: ' + (err.error?.message || err.error || err.message || 'error'))
+      });
+    }
   }
 
   confirmDeletePayment(payment: any) { this.selectedPayment = payment; this.alertService.confirm('Delete Payment', 'Are you sure?').then(c => { if(c) this.deletePayment(); }); }

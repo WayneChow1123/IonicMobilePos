@@ -335,12 +335,6 @@ export class InvoicesPage implements OnInit {
 
   openPaymentCollection() {
     const net = this.getNetTotal();
-    if (this.form.useCreditBalance && net <= 0) {
-      // Full credit payment
-      this.amountPaid = 0;
-      this.saveInvoice();
-      return;
-    }
     this.amountPaid = this.termType === 'CASH SALE' ? net : 0;
     this.showPaymentCollection = true;
   }
@@ -376,10 +370,7 @@ export class InvoicesPage implements OnInit {
       });
     } else {
       if (!this.form.customerId) { this.showToastMsg('Please select a customer'); return; }
-      if (this.isCreditInvalid()) {
-        this.showToastMsg('Invoice total is less than the selected Credit Note amount');
-        return;
-      }
+      
       const payload = {
         ...this.form,
         selectedCreditNoteId: this.form.useCreditBalance ? this.selectedCreditNoteId : null,
@@ -442,7 +433,17 @@ export class InvoicesPage implements OnInit {
 
   getTotalCN(): number {
     if (!this.selectedInvoice?.creditNotes) return 0;
+    // 只计算退货，不计算找零
     return this.selectedInvoice.creditNotes
+      .filter((cn: any) => !(cn.cnNumber || '').startsWith('CN-CHG'))
+      .reduce((sum: number, cn: any) => sum + (cn.amount || 0), 0);
+  }
+
+  getChangeCN(): number {
+    if (!this.selectedInvoice?.creditNotes) return 0;
+    // 只计算找零转入的点数
+    return this.selectedInvoice.creditNotes
+      .filter((cn: any) => (cn.cnNumber || '').startsWith('CN-CHG'))
       .reduce((sum: number, cn: any) => sum + (cn.amount || 0), 0);
   }
 
@@ -617,15 +618,12 @@ export class InvoicesPage implements OnInit {
   }
 
   isCreditInvalid(): boolean {
-    if (!this.form.useCreditBalance || !this.selectedCreditNoteId) return false;
-    const creditAmount = this.getSelectedCreditAmount();
-    const gross = this.getFormTotal();
-    return gross < creditAmount;
+    return false; // ✅ 允许点数比物价多，反正后端会只扣需要的部分
   }
 
   isCreditUsable(creditAmount: number): boolean {
     const total = this.getFormTotal();
-    return total > 0 && creditAmount <= total;
+    return total > 0;
   }
 
   isStockInsufficient(item: any): boolean {
@@ -684,13 +682,25 @@ export class InvoicesPage implements OnInit {
     const dateStr = invoiceDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
     const dueStr = pd?.paymentDue || invoiceDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
     const cns = this.getReceiptCreditNotes();
-    const totalCN = this.getReceiptTotalCN();
-    const cnHtml = totalCN > 0 ? `<div class="total-row cn-deduct"><span>CREDIT NOTE</span><span>- RM ${totalCN.toFixed(2)}</span></div>` : '';
+    const totalCN = this.getReceiptTotalCN(); // This is the total of ALL CNs
+    
+    // ✅ 区分退货和找零，让收据更直观
+    const changeCNs = cns.filter((cn: any) => (cn.cnNumber || '').startsWith('CN-CHG'));
+    const returnCNs = cns.filter((cn: any) => !(cn.cnNumber || '').startsWith('CN-CHG'));
+    
+    const totalChange = changeCNs.reduce((sum: number, cn: any) => sum + (cn.amount || 0), 0);
+    const totalReturns = returnCNs.reduce((sum: number, cn: any) => sum + (cn.amount || 0), 0);
+
+    const returnsHtml = totalReturns > 0 ? `<div class="total-row cn-deduct"><span>RETURNS (CN)</span><span>- RM ${totalReturns.toFixed(2)}</span></div>` : '';
+    const changeRowHtml = totalChange > 0 ? `<div class="total-row" style="color:#888;font-style:italic;"><span>CHANGE (TO CREDIT)</span><span>- RM ${totalChange.toFixed(2)}</span></div>` : '';
+
     let cnListHtml = '';
     if (cns.length > 0) {
-      cnListHtml = `<div class="divider-thin"></div><div class="cn-header">CREDIT NOTE(S)</div>`;
+      cnListHtml = `<div class="divider-thin"></div><div class="cn-header">TRANSACTION DETAILS</div>`;
       cns.forEach((cn: any) => {
-        cnListHtml += `<div class="cn-row"><span class="cn-number">${cn.cnNumber || 'CN-' + cn.id}${cn.reason ? ' (' + cn.reason + ')' : ''}</span><span class="cn-amount">- RM ${(cn.amount || 0).toFixed(2)}</span></div>`;
+        const isCHG = (cn.cnNumber || '').startsWith('CN-CHG');
+        const label = isCHG ? 'CHANGE SAVED' : 'RETURNED';
+        cnListHtml += `<div class="cn-row"><span class="cn-number">${cn.cnNumber || 'CN-' + cn.id} [${label}]</span><span class="cn-amount">- RM ${(cn.amount || 0).toFixed(2)}</span></div>`;
         if (cn.items && cn.items.length > 0) {
           cn.items.forEach((item: any) => {
             cnListHtml += `<div style="font-size:10px;color:#666;padding-left:20px;margin-bottom:2px;">• ${item.productName} (${item.quantity} x ${item.unitPrice.toFixed(2)})</div>`;
@@ -698,11 +708,19 @@ export class InvoicesPage implements OnInit {
         }
       });
     }
-    const netAmount = (inv?.totalAmount || 0) - totalCN;
-    const paidAmount = inv?.paidAmount || 0;
+
+    // 重新计算收据上的 Net 和 Paid
+    const netAmount = (inv?.totalAmount || 0) - totalReturns; // 最终账单应该是 原价 - 退货
+    const displayedPaid = (inv?.paidAmount || 0) + totalChange; // 展示给客户的实收 = 账单实收 + 找零点数
+    
     const paymentStatus = inv?.status === 'Paid' ? 'PAID' : inv?.status === 'Partial' ? 'PARTIALLY PAID' : 'UNPAID';
-    const paymentDetailHtml = inv?.status === 'Partial' ? `<div style="padding:8px 20px;border:1px dashed #ddd;border-top:none;border-radius:0 0 8px 8px;margin-bottom:16px;"><div style="display:flex;justify-content:space-between;font-size:12px;font-weight:700;padding:3px 0;"><span>PAID</span><span>RM ${paidAmount.toFixed(2)}</span></div><div style="display:flex;justify-content:space-between;font-size:13px;font-weight:800;padding:6px 0 3px;border-top:1px solid #eee;margin-top:4px;"><span>BALANCE</span><span>RM ${(netAmount - paidAmount).toFixed(2)}</span></div></div>` : '';
-    printWindow.document.write(`<!DOCTYPE html><html><head><title>Invoice ${inv?.invoiceNumber || ''}</title>${styles}</head><body><div class="receipt"><span class="receipt-type">TAX INVOICE</span><div class="divider"></div><div class="company">${pd?.companyName || 'B JAYA TRADING'}</div><span class="co-reg">(${pd?.companyReg || '001188861-T'})</span><span class="address">${pd?.companyAddress || 'NO. 467, JALAN PALAS 13, TAMAN PELANGI,'}</span><span class="address">${pd?.companyCity || '70400 SEREMBAN N.S, SEREMBAN, N.S, MALAYSIA'}</span><span class="contact">TEL: ${pd?.companyTel || '012-6988080'} GST: ${pd?.companyGst || '000134806856'}</span><div style="margin-top:20px;"><div class="doc-row"><span class="doc-label">DOC NO</span><span class="doc-value">: ${inv?.invoiceNumber || 'S001-' + inv?.id}</span></div><div class="doc-row"><span class="doc-label">DATE</span><span class="doc-value">: ${dateStr}</span></div></div><div class="to-section"><span class="to-label">TO:</span><div class="to-box"><strong>${inv?.customerName || this.getCustomerName(inv?.customerId)}</strong>${this.getCustomerFullAddressHtml(inv?.customerId)}</div></div><div class="divider-thin"></div><div class="table-header"><span>DESCRIPTION</span><span>GST SUBTOTAL</span></div><div class="divider-thin"></div>${itemsHtml}<div class="divider-thin"></div><div class="total-row"><span>GROSS TOTAL</span><span>RM ${(inv?.totalAmount || 0).toFixed(2)}</span></div>${cnHtml}${cnListHtml}<div class="net-bar"><span class="net-label">NET AMOUNT</span><span class="net-value">RM ${netAmount.toFixed(2)}</span></div><div style="display:flex;justify-content:space-between;padding:12px 20px;border:1px dashed #ddd;border-radius:8px;margin-bottom:0;"><span style="font-size:11px;font-weight:700;letter-spacing:2px;color:#888;">PAYMENT STATUS</span><span style="font-size:14px;font-weight:800;">${paymentStatus}</span></div>${paymentDetailHtml}<div class="due-box"><span class="due-label">PAYMENT DUE</span><span class="due-date">${dueStr}</span></div><div class="sig-box"><span class="sig-label">SIGNATURE</span></div><div class="thanks">THANK YOU</div></div></body></html>`);
+    const paymentDetailHtml = `<div style="padding:8px 20px;border:1px dashed #ddd;border-top:none;border-radius:0 0 8px 8px;margin-bottom:16px;">
+        <div style="display:flex;justify-content:space-between;font-size:12px;font-weight:700;padding:3px 0;"><span>PAID AMOUNT</span><span>RM ${displayedPaid.toFixed(2)}</span></div>
+        ${changeRowHtml}
+        <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:800;padding:6px 0 3px;border-top:1px solid #eee;margin-top:4px;"><span>BALANCE</span><span>RM ${(netAmount - (inv?.paidAmount || 0)).toFixed(2)}</span></div>
+    </div>`;
+
+    printWindow.document.write(`<!DOCTYPE html><html><head><title>Invoice ${inv?.invoiceNumber || ''}</title>${styles}</head><body><div class="receipt"><span class="receipt-type">TAX INVOICE</span><div class="divider"></div><div class="company">${pd?.companyName || 'B JAYA TRADING'}</div><span class="co-reg">(${pd?.companyReg || '001188861-T'})</span><span class="address">${pd?.companyAddress || 'NO. 467, JALAN PALAS 13, TAMAN PELANGI,'}</span><span class="address">${pd?.companyCity || '70400 SEREMBAN N.S, SEREMBAN, N.S, MALAYSIA'}</span><span class="contact">TEL: ${pd?.companyTel || '012-6988080'} GST: ${pd?.companyGst || '000134806856'}</span><div style="margin-top:20px;"><div class="doc-row"><span class="doc-label">DOC NO</span><span class="doc-value">: ${inv?.invoiceNumber || 'S001-' + inv?.id}</span></div><div class="doc-row"><span class="doc-label">DATE</span><span class="doc-value">: ${dateStr}</span></div></div><div class="to-section"><span class="to-label">TO:</span><div class="to-box"><strong>${inv?.customerName || this.getCustomerName(inv?.customerId)}</strong>${this.getCustomerFullAddressHtml(inv?.customerId)}</div></div><div class="divider-thin"></div><div class="table-header"><span>DESCRIPTION</span><span>GST SUBTOTAL</span></div><div class="divider-thin"></div>${itemsHtml}<div class="divider-thin"></div><div class="total-row"><span>GROSS TOTAL</span><span>RM ${(inv?.totalAmount || 0).toFixed(2)}</span></div>${returnsHtml}${cnListHtml}<div class="net-bar"><span class="net-label">NET AMOUNT</span><span class="net-value">RM ${netAmount.toFixed(2)}</span></div><div style="display:flex;justify-content:space-between;padding:12px 20px;border:1px dashed #ddd;border-radius:8px;margin-bottom:0;"><span style="font-size:11px;font-weight:700;letter-spacing:2px;color:#888;">PAYMENT STATUS</span><span style="font-size:14px;font-weight:800;">${paymentStatus}</span></div>${paymentDetailHtml}<div class="due-box"><span class="due-label">PAYMENT DUE</span><span class="due-date">${dueStr}</span></div><div class="sig-box"><span class="sig-label">SIGNATURE</span></div><div class="thanks">THANK YOU</div></div></body></html>`);
     printWindow.document.close();
     setTimeout(() => printWindow.print(), 500);
   }
