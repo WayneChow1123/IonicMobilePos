@@ -612,7 +612,7 @@
               <label>AMOUNT PAID</label>
               <div class="ni-pay-input-box active">
                 <span class="ni-pay-curr">RM</span>
-                <input type="number" [(ngModel)]="amountPaid" class="ni-pay-input">
+                <input type="number" [(ngModel)]="amountPaid" (blur)="formatAmountPaid()" step="0.01" class="ni-pay-input">
                 <ion-icon name="close-circle" class="ni-pay-clear" (click)="amountPaid = 0"></ion-icon>
               </div>
             </div>

@@ -560,9 +560,10 @@ export class InvoicesPage implements OnInit {
 
   getFormTotal(): number {
     if (!this.form.items || this.form.items.length === 0) return 0;
-    return this.form.items.reduce((sum: number, item: any) => {
+    const total = this.form.items.reduce((sum: number, item: any) => {
       return sum + ((item.unitPrice || 0) * (item.quantity || 0));
     }, 0);
+    return Math.round((total + Number.EPSILON) * 100) / 100;
   }
 
   toggleCreditSelection(cn: any) {
@@ -582,7 +583,7 @@ export class InvoicesPage implements OnInit {
   getSelectedCreditAmount(): number {
     if (!this.form.useCreditBalance || !this.selectedCreditNoteId) return 0;
     const cn = this.availableCredits.find(c => c.id === this.selectedCreditNoteId);
-    return cn ? cn.amount : 0;
+    return cn ? Math.round((cn.amount + Number.EPSILON) * 100) / 100 : 0;
   }
 
   getCustomerDiscount(): number {
@@ -596,22 +597,23 @@ export class InvoicesPage implements OnInit {
 
   getOriginalTotal(): number {
     if (!this.form.items || this.form.items.length === 0) return 0;
-    return this.form.items.reduce((sum: number, item: any) => {
+    const total = this.form.items.reduce((sum: number, item: any) => {
       return sum + (this.getOriginalUnitPrice(item.productId) * (item.quantity || 0));
     }, 0);
+    return Math.round((total + Number.EPSILON) * 100) / 100;
   }
 
   getDiscountAmount(): number {
     const original = this.getOriginalTotal();
     const discounted = this.getFormTotal();
-    return original - discounted;
+    return Math.round((original - discounted + Number.EPSILON) * 100) / 100;
   }
 
   getNetTotal(): number {
     const gross = this.getFormTotal();
     const credit = this.getSelectedCreditAmount();
     const net = gross - credit;
-    return net > 0 ? net : 0;
+    return net > 0 ? Math.round((net + Number.EPSILON) * 100) / 100 : 0;
   }
 
   isCreditInvalid(): boolean {
@@ -645,6 +647,12 @@ export class InvoicesPage implements OnInit {
   noLeadingZero(event: KeyboardEvent, val: any) {
     if ((val === 0 || val === '' || val === null || val === undefined) && event.key === '0') {
       event.preventDefault();
+    }
+  }
+
+  formatAmountPaid() {
+    if (this.amountPaid) {
+      this.amountPaid = Math.round((this.amountPaid + Number.EPSILON) * 100) / 100;
     }
   }
 
