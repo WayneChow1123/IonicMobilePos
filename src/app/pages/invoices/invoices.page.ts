@@ -54,6 +54,16 @@ export class InvoicesPage implements OnInit {
   editForm: any = { invoiceDate: this.getMYSDate(), remark: '', items: [{ productId: 0, quantity: 1, unitPrice: 0 }] };
   showStockAlert = false;
   stockIssues: any[] = [];
+  showAvailableCredits = true;
+  
+  getGrandNetTotal() {
+    return (this.filteredInvoices || []).reduce((sum, inv) => sum + (inv.netTotal || inv.NetTotal || inv.totalAmount || 0), 0);
+  }
+
+  getGrandTotalBills() {
+    return (this.filteredInvoices || []).length;
+  }
+
   deleteButtons = [
     { text: 'Cancel', role: 'cancel' },
     { text: 'Delete', role: 'destructive', handler: () => this.deleteInvoice() }
@@ -449,10 +459,12 @@ export class InvoicesPage implements OnInit {
 
   getReceiptCreditNotes(): any[] {
     if (!this.selectedInvoice?.creditNotes) return [];
-    return this.selectedInvoice.creditNotes;
+    // CN-CHG is an internal change-to-credit record, not shown on customer receipt
+    return this.selectedInvoice.creditNotes.filter((cn: any) => !(cn.cnNumber || '').startsWith('CN-CHG'));
   }
 
   getReceiptTotalCN(): number {
+    // Only count return CNs, not CN-CHG (change saved as credit)
     return this.getReceiptCreditNotes().reduce((sum: number, cn: any) => sum + (cn.amount || 0), 0);
   }
 
@@ -692,7 +704,7 @@ export class InvoicesPage implements OnInit {
     const totalReturns = returnCNs.reduce((sum: number, cn: any) => sum + (cn.amount || 0), 0);
 
     const returnsHtml = totalReturns > 0 ? `<div class="total-row cn-deduct"><span>RETURNS (CN)</span><span>- RM ${totalReturns.toFixed(2)}</span></div>` : '';
-    const changeRowHtml = totalChange > 0 ? `<div class="total-row" style="color:#888;font-style:italic;"><span>CHANGE (TO CREDIT)</span><span>- RM ${totalChange.toFixed(2)}</span></div>` : '';
+    const changeRowHtml = totalChange > 0 ? `<div class="total-row" style="color:#888;font-style:italic;"><span>CHANGE SAVED AS CREDIT</span><span>+ RM ${totalChange.toFixed(2)}</span></div>` : '';
 
     let cnListHtml = '';
     if (cns.length > 0) {

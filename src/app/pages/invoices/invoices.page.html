@@ -49,7 +49,8 @@
                 <span class="paid-amount" style="color: #6c5ce7;" *ngIf="invoice.creditUsed > 0 || invoice.CreditUsed > 0">Credit: RM {{ (invoice.creditUsed || invoice.CreditUsed) | number:'1.2-2' }}</span>
                 <span class="paid-amount" [class.partial]="invoice.status !== 'Paid'" *ngIf="(invoice.paidAmount || invoice.PaidAmount) > 0">Paid: RM {{ (invoice.paidAmount || invoice.PaidAmount) | number:'1.2-2' }}</span>
                 <span class="paid-amount" style="color: #ff7675; font-weight: 800;" *ngIf="(invoice.balance || invoice.Balance) > 0">Owe: RM {{ (invoice.balance || invoice.Balance) | number:'1.2-2' }}</span>
-                <span class="item-amount">RM {{ (invoice.totalAmount || invoice.TotalAmount || 0) | number:'1.2-2' }}</span>
+                <span class="item-amount">RM {{ (invoice.netTotal || invoice.NetTotal || invoice.totalAmount || 0) | number:'1.2-2' }}</span>
+                <span *ngIf="invoice.hasCreditNote || invoice.HasCreditNote" style="font-size: 10px; color: #999; text-decoration: line-through; text-align: right;">RM {{ (invoice.totalAmount || invoice.TotalAmount) | number:'1.2-2' }}</span>
               </div>
             </div>
           </div>
@@ -58,6 +59,28 @@
           <ion-icon name="chevron-forward-outline" style="color:#ddd;font-size:20px;"></ion-icon>
         </div>
       </div>
+      
+      <!-- Spacer to prevent overlap with fixed footer -->
+      <div *ngIf="filteredInvoices.length > 0" class="gs-spacer"></div>
+
+      <div *ngIf="filteredInvoices.length > 0" class="grand-summary-card">
+        <div class="gs-left">
+          <div class="gs-label">
+            <span class="gs-dot"></span>
+            NET TOTAL
+          </div>
+          <div class="gs-amount">
+            <span class="gs-currency">RM</span> {{ getGrandNetTotal() | number:'1.2-2' }}
+          </div>
+        </div>
+        <div class="gs-right">
+          <div class="gs-bills-pill">
+            <div class="gs-bills-label">TOTAL BILLS</div>
+            <div class="gs-bills-value">{{ getGrandTotalBills() }} <span class="gs-bills-unit">BILLS</span></div>
+          </div>
+        </div>
+      </div>
+
       <div *ngIf="filteredInvoices.length===0" class="empty-state">
         <ion-icon name="receipt-outline"></ion-icon>
         <p>No invoices found</p>
@@ -135,11 +158,14 @@
       </div>
 
       <!-- Available Credits -->
-      <div *ngIf="availableCredits.length > 0" class="ni-section-header" style="margin-top: 10px;">
+      <div *ngIf="availableCredits.length > 0" class="ni-section-header" style="margin-top: 10px;" (click)="showAvailableCredits = !showAvailableCredits">
         <span class="ni-label">AVAILABLE CREDITS</span>
-        <span class="ni-count">{{ availableCredits.length }} Note{{ availableCredits.length !== 1 ? 's' : '' }}</span>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span class="ni-count">{{ availableCredits.length }} Note{{ availableCredits.length !== 1 ? 's' : '' }}</span>
+          <ion-icon [name]="showAvailableCredits ? 'chevron-up-outline' : 'chevron-down-outline'" style="font-size:16px;color:#888;"></ion-icon>
+        </div>
       </div>
-      <div *ngIf="availableCredits.length > 0" class="ni-credits-section">
+      <div *ngIf="availableCredits.length > 0 && showAvailableCredits" class="ni-credits-section">
         <div *ngFor="let cn of availableCredits" 
              class="ni-credit-card" 
              [class.selected]="selectedCreditNoteId === cn.id" 
@@ -459,7 +485,7 @@
           <div class="cn-header">TRANSACTION DETAILS</div>
           <div *ngFor="let cn of getReceiptCreditNotes()" class="cn-row" style="border-bottom:1px solid #f1f2f6; padding-bottom:8px; margin-bottom:8px;">
             <div class="cn-row-left">
-              <span class="cn-number" style="display:block;">{{ cn.cnNumber || 'CN-' + cn.id }} [{{ (cn.cnNumber || '').startsWith('CN-CHG') ? 'CHANGE SAVED' : 'RETURNED' }}]</span>
+              <span class="cn-number" style="display:block;">{{ cn.cnNumber || 'CN-' + cn.id }} [{{ (cn.cnNumber || '').startsWith('CN-CHG') ? 'CHANGE SAVED' : 'Refund' }}]</span>
               <span class="cn-reason" style="display:block; font-style:italic;">{{ cn.reason }}</span>
               <div *ngIf="cn.items && cn.items.length > 0" style="margin-top:6px;">
                 <div *ngFor="let cni of cn.items" style="font-size:12px; color:#2f3542; margin-left:8px; font-weight:600;">
@@ -484,8 +510,8 @@
             <span style="font-weight:700;">RM {{ (selectedInvoice?.paidAmount + getChangeCN()) | number:'1.2-2' }}</span>
           </div>
           <div *ngIf="getChangeCN() > 0" class="payment-detail-row" style="color:#888; font-style:italic;">
-            <span>CHANGE (TO CREDIT)</span>
-            <span>- RM {{ getChangeCN() | number:'1.2-2' }}</span>
+            <span>CHANGE SAVED AS CREDIT</span>
+            <span>+ RM {{ getChangeCN() | number:'1.2-2' }}</span>
           </div>
           <div class="payment-detail-row balance" style="border-top: 1px solid #eee; margin-top: 5px; padding-top: 5px;">
             <span style="font-weight:800;">BALANCE</span>

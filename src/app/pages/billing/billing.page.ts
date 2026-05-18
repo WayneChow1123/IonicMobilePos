@@ -64,6 +64,57 @@ export class BillingPage implements OnInit {
   filteredHistory: any[] = [];
   historySearchTerm = '';
 
+  showProductModal = false;
+  allProducts: any[] = [];
+  filteredProductsSelection: any[] = [];
+  productSearchTerm = '';
+
+  loadAllProducts() {
+    this.isLoading = true;
+    this.api.getProducts().subscribe({
+      next: (res: any) => {
+        this.allProducts = res || [];
+        this.filteredProductsSelection = [...this.allProducts];
+        this.showProductModal = true;
+        this.isLoading = false;
+      },
+      error: () => { this.isLoading = false; this.showToastMsg('Failed to load products'); }
+    });
+  }
+
+  filterProductsForSelection() {
+    const term = this.productSearchTerm.toLowerCase();
+    this.filteredProductsSelection = this.allProducts.filter(p =>
+      (p.name || '').toLowerCase().includes(term) ||
+      (p.productCode || p.code || '').toLowerCase().includes(term)
+    );
+  }
+
+  selectProduct(product: any) {
+    this.showProductModal = false;
+
+    // Check if item already exists in the list
+    const found = this.cnForm.items.find((i: any) => i.productId === product.id);
+    if (found) {
+      found.returnQuantity += 1;
+    } else {
+      this.cnForm.items.push({
+        productId: product.id,
+        productName: product.name,
+        maxQuantity: 9999, // Allow large return if selected from all products
+        returnedQuantity: 0,
+        returnQuantity: 1,
+        returnToStock: false,
+        isGlobal: true 
+      });
+    }
+    
+    // Force UI update
+    this.cnForm.items = [...this.cnForm.items];
+    this.showToastMsg(`Added ${product.name}`);
+    this.cdr.detectChanges();
+  }
+
   loadPurchaseHistory() {
     if (!this.cnForm.customerId || this.cnForm.customerId == 0) {
       this.showToastMsg('Please select a customer first');
@@ -407,10 +458,16 @@ export class BillingPage implements OnInit {
       });
     } else {
       // 智能全局模式：支持跨单退货
+      const payloadGlobal = { 
+        reason: this.cnForm.reason, 
+        items: payloadItems, 
+        isManual: true,
+        preferredInvoiceId: this.cnForm.invoiceId && this.cnForm.invoiceId != 0 ? Number(this.cnForm.invoiceId) : null
+      };
       const cid = this.cnForm.customerId || (this.selectedCNInvoiceDetail?.customerId) || 0;
       if (!cid || cid == 0) { this.showToastMsg('Customer ID is required for global return'); return; }
 
-      this.api.createGlobalCreditNote(Number(cid), payload).subscribe({
+      this.api.createGlobalCreditNote(Number(cid), payloadGlobal).subscribe({
         next: () => { this.showToastMsg('Global Credit Note created successfully!'); this.openCNList(); },
         error: (err: any) => this.showToastMsg('Failed: ' + (err.error?.message || err.error || err.message || 'error'))
       });

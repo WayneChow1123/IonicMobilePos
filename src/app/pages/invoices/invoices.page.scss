@@ -732,6 +732,108 @@ ion-content {
   padding-bottom: 8px;
 }
 
+/* ─── Grand Summary Card ─── */
+.grand-summary-card {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 999;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(15px);
+  -webkit-backdrop-filter: blur(15px);
+  border-radius: 24px 24px 0 0;
+  padding: 16px 24px 24px 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 -10px 30px rgba(0,0,0,0.1);
+  border-top: 1px solid rgba(255,255,255,0.8);
+}
+
+.gs-spacer {
+  height: 120px; /* 为固定卡片留出空间 */
+  width: 100%;
+}
+
+.gs-left {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.gs-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  color: #1a1a1a;
+}
+
+.gs-dot {
+  width: 6px;
+  height: 6px;
+  background: #27ae60;
+  border-radius: 50%;
+}
+
+.gs-amount {
+  font-size: 32px;
+  font-weight: 900;
+  color: #1a1a1a;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-family: 'DM Sans', sans-serif;
+}
+
+.gs-currency {
+  font-size: 16px;
+  color: #1a1a1a;
+  font-weight: 700;
+}
+
+.gs-right {
+  display: flex;
+  align-items: center;
+}
+
+.gs-bills-pill {
+  background: #fff5f5;
+  border: 1px solid #ffe3e3;
+  border-radius: 16px;
+  padding: 10px 18px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 90px;
+}
+
+.gs-bills-label {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: #ff7675;
+  margin-bottom: 2px;
+}
+
+.gs-bills-value {
+  font-size: 24px;
+  font-weight: 900;
+  color: #ff4757;
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  font-family: 'DM Sans', sans-serif;
+}
+
+.gs-bills-unit {
+  font-size: 10px;
+  font-weight: 800;
+}
+
 
 /* ═══════════════════════════════════════
    NEW INVOICE PREMIUM DESIGN (ni- prefix)
