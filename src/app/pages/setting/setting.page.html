@@ -1,4 +1,4 @@
-﻿<ion-content [fullscreen]="true">
+<ion-content [fullscreen]="true">
   <div class="setting-container">
 
     <!-- Top Bar -->
@@ -26,7 +26,7 @@
           <div class="list-item-text">
             <span class="list-item-title">Device Auto-Blocking</span>
             <span class="list-item-sub">
-              STATUS: 
+              STATUS:
               <span [class.status-enabled]="deviceAutoBlocking" [class.status-disabled]="!deviceAutoBlocking">
                 {{ deviceAutoBlocking ? 'ENABLED' : 'DISABLED' }}
               </span>

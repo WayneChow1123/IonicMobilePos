@@ -67,7 +67,7 @@
         <div class="gs-left">
           <div class="gs-label">
             <span class="gs-dot"></span>
-            NET TOTAL
+            PAID NET TOTAL
           </div>
           <div class="gs-amount">
             <span class="gs-currency">RM</span> {{ getGrandNetTotal() | number:'1.2-2' }}
@@ -154,6 +154,15 @@
               {{ getCustomerDiscount() }}% DISCOUNT
             </span>
           </div>
+
+          <!-- Invoice Remark Toggle -->
+          <div class="ni-invoice-remark-toggle" (click)="showInvoiceRemark = !showInvoiceRemark" style="margin-top: 12px; display: flex; align-items: center; justify-content: center; gap: 6px; cursor: pointer; padding: 4px;">
+             <span style="font-size: 10px; font-weight: 700; color: #888; letter-spacing: 1px;">{{ form.remark ? 'EDIT INVOICE REMARK' : 'ADD INVOICE REMARK' }}</span>
+             <ion-icon [name]="showInvoiceRemark ? 'chevron-up-outline' : 'chevron-down-outline'" style="font-size: 14px; color: #888;"></ion-icon>
+          </div>
+          <div class="ni-invoice-remark-input" *ngIf="showInvoiceRemark" style="margin-top: 8px; margin-bottom: 4px; padding: 0 12px;">
+             <input type="text" [(ngModel)]="form.remark" placeholder="Type invoice remark here..." style="width: 100%; border: 1px solid #ddd; border-radius: 8px; padding: 8px 12px; font-size: 12px; font-weight: 600; outline: none; text-align: center; color: #1a1a1a; font-family: 'DM Sans', sans-serif; background: #f9f9f9;" />
+          </div>
         </div>
       </div>
 
@@ -229,13 +238,21 @@
             <div class="ni-qty-total">{{ (item.quantity * item.unitPrice) | number:'1.2-2' }}</div>
           </div>
 
-          <div class="ni-item-footer">
-            <div class="ni-item-remark">
-              <ion-icon name="document-text-outline" *ngIf="!isStockInsufficient(item)"></ion-icon>
-              <ion-icon name="warning-outline" *ngIf="isStockInsufficient(item)" style="color: #e57373;"></ion-icon>
-              <span [style.color]="isStockInsufficient(item) ? '#e57373' : 'inherit'" [style.font-weight]="isStockInsufficient(item) ? '700' : 'normal'">
-                {{ isStockInsufficient(item) ? 'Insufficient stock (Available: ' + getProductStock(item.productId) + ')' : (item.remark || 'No remarks provided...') }}
-              </span>
+          <div class="ni-item-footer" style="align-items: flex-start;">
+            <div class="ni-item-remark-wrapper" style="flex: 1; margin-right: 12px; display: flex; flex-direction: column; gap: 6px;">
+              <div class="ni-item-remark" (click)="!isStockInsufficient(item) && (item.showRemark = !item.showRemark)">
+                <div style="display:flex; align-items:center; gap: 8px;">
+                  <ion-icon name="document-text-outline" *ngIf="!isStockInsufficient(item)" style="color:#888; font-size:16px;"></ion-icon>
+                  <ion-icon name="warning-outline" *ngIf="isStockInsufficient(item)" style="color: #e57373; font-size:16px;"></ion-icon>
+                  <span [style.color]="isStockInsufficient(item) ? '#e57373' : 'inherit'" [style.font-weight]="isStockInsufficient(item) ? '700' : 'normal'">
+                    {{ isStockInsufficient(item) ? 'Insufficient stock (Available: ' + getProductStock(item.productId) + ')' : (item.remark || 'No remarks provided...') }}
+                  </span>
+                </div>
+                <ion-icon [name]="item.showRemark ? 'chevron-up-outline' : 'chevron-down-outline'" class="ni-remark-arrow" *ngIf="!isStockInsufficient(item)"></ion-icon>
+              </div>
+              <div class="ni-remark-input-container" *ngIf="item.showRemark && !isStockInsufficient(item)">
+                <input type="text" [(ngModel)]="item.remark" placeholder="Type remark..." class="ni-remark-inline-input" />
+              </div>
             </div>
             <div class="ni-item-sub-total">
               <div class="ni-sub-label">TOTAL</div>
@@ -372,6 +389,10 @@
     </div>
 
     <div class="form-card" style="background:#E8D5D0;">
+      <div class="form-group" *ngIf="selectedInvoice">
+        <label>INVOICE NUMBER</label>
+        <div style="font-size:16px; font-weight:800; color:#1a1a1a; padding:6px 0;">{{ selectedInvoice.invoiceNumber }}</div>
+      </div>
       <div class="form-group">
         <label>INVOICE DATE</label>
         <input type="datetime-local" [(ngModel)]="editForm.invoiceDate" class="form-input" [readonly]="!isEditMode"/>
@@ -379,6 +400,25 @@
       <div class="form-group">
         <label>REMARK</label>
         <input type="text" [(ngModel)]="editForm.remark" placeholder="Enter remark" class="form-input" [readonly]="!isEditMode"/>
+      </div>
+    </div>
+
+    <!-- CUSTOMER CARD -->
+    <div *ngIf="selectedInvoice" class="form-card" style="background:#fff; border-radius:16px; padding:20px; box-shadow:0 4px 20px rgba(0,0,0,0.03); margin-top:12px; border: 1px solid #f0f0f0;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+        <span style="font-size:11px; font-weight:800; letter-spacing:2px; color:#1a1a1a;">CUSTOMER</span>
+        <div style="width:24px; height:2px; background:#1a1a1a;"></div>
+      </div>
+      <div style="margin-bottom:16px;">
+        <div style="font-size:10px; font-weight:700; color:#aaa; letter-spacing:1px; margin-bottom:4px;">ACCOUNT NAME</div>
+        <div style="font-size:16px; font-weight:800; color:#1a1a1a; margin-bottom:8px; line-height:1.2;">{{ selectedCustomerDetail?.name || selectedInvoice.customerName || 'Walk-in Cash' }}</div>
+        <div style="display:inline-block; background:#1a1a1a; color:#fff; font-size:10px; font-weight:700; letter-spacing:1px; padding:4px 10px; border-radius:20px;">
+          {{ getCustomerCodeForDetails() }}
+        </div>
+      </div>
+      <div>
+        <div style="font-size:10px; font-weight:700; color:#aaa; letter-spacing:1px; margin-bottom:4px;">BILLING ADDRESS</div>
+        <div style="font-size:13px; font-weight:800; color:#1a1a1a; line-height:1.4;">{{ getCustomerAddressForDetails() }}</div>
       </div>
     </div>
 
@@ -413,6 +453,10 @@
       <div class="form-group">
         <label>UNIT PRICE (RM)</label>
         <div style="font-size:14px;font-weight:600;color:#888;padding:4px 0;border-bottom:1px solid rgba(0,0,0,0.1);">RM {{ item.unitPrice | number:'1.2-2' }}</div>
+      </div>
+      <div class="form-group">
+        <label>ITEM REMARK</label>
+        <input type="text" [(ngModel)]="item.remark" placeholder="No remark" class="form-input" [readonly]="!isEditMode"/>
       </div>
     </div>
 
@@ -468,6 +512,9 @@
           <div class="item-calc-row">
             <span>{{ item.quantity }} x {{ (item.unitPrice || 0) | number:'1.2-2' }}</span>
             <span class="item-subtotal">{{ ((item.quantity || 0) * (item.unitPrice || 0)) | number:'1.2-2' }}</span>
+          </div>
+          <div *ngIf="item.remark" style="font-size: 10px; color: #555; font-style: italic; margin-top: 2px; padding-left: 16px;">
+            * {{ item.remark }}
           </div>
         </div>
         <div class="receipt-divider-thin" style="margin-top:16px;"></div>

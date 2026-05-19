@@ -224,29 +224,3 @@ ion-content {
   color: #E07B3A;
 }
 
-/* ── Bottom Nav ── */
-.bottom-nav {
-  position: fixed;
-  bottom: 16px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: #1a1a1a;
-  border-radius: 50px;
-  padding: 8px 16px;
-  display: flex;
-  gap: 8px;
-  z-index: 999;
-
-  .nav-btn {
-    --color: rgba(255, 255, 255, 0.5);
-    font-size: 22px;
-    --padding-start: 12px;
-    --padding-end: 12px;
-
-    &.active {
-      --color: #ffffff;
-      background: rgba(255, 255, 255, 0.15);
-      border-radius: 50px;
-    }
-  }
-}

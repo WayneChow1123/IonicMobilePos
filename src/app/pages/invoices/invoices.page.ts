@@ -55,9 +55,12 @@ export class InvoicesPage implements OnInit {
   showStockAlert = false;
   stockIssues: any[] = [];
   showAvailableCredits = true;
+  showInvoiceRemark = false;
   
   getGrandNetTotal() {
-    return (this.filteredInvoices || []).reduce((sum, inv) => sum + (inv.netTotal || inv.NetTotal || inv.totalAmount || 0), 0);
+    return (this.filteredInvoices || [])
+      .filter(inv => inv.status === 'Paid')
+      .reduce((sum, inv) => sum + (inv.netTotal || inv.NetTotal || inv.totalAmount || 0), 0);
   }
 
   getGrandTotalBills() {
@@ -260,6 +263,8 @@ export class InvoicesPage implements OnInit {
     this.isEditMode = false;
     this.selectedInvoice = null;
     this.isLoading = true;
+    this.selectedCustomerDetail = this.customers.find(c => c.id === invoice.customerId);
+
     this.api.getInvoiceDetails(invoice.id).subscribe({
       next: (res: any) => {
         this.isLoading = false;
@@ -273,19 +278,45 @@ export class InvoicesPage implements OnInit {
               quantity: i.quantity ?? i.Quantity ?? 1,
               unitPrice: i.unitPrice ?? i.UnitPrice ?? 0,
               productName: i.productName ?? i.ProductName ?? '',
-              returnedQuantity: i.returnedQuantity ?? i.ReturnedQuantity ?? 0
+              returnedQuantity: i.returnedQuantity ?? i.ReturnedQuantity ?? 0,
+              remark: i.remark ?? i.Remark ?? ''
             }))
             : [{ productId: this.products.length > 0 ? this.products[0].id : 0, quantity: 1, unitPrice: 0, productName: '', returnedQuantity: 0 }]
         };
         this.showModal = true;
       },
-      error: () => {
+      error: (err) => {
         this.isLoading = false;
-        this.selectedInvoice = invoice;
-        this.editForm = { invoiceDate: invoice.invoiceDate || this.getMYSDate(), remark: invoice.remark || '', items: [{ productId: this.products.length > 0 ? this.products[0].id : 0, quantity: 1, unitPrice: 0, productName: '' }] };
-        this.showModal = true;
+        console.error(err);
       }
     });
+  }
+
+  getCustomerCodeForDetails(): string {
+    if (this.selectedCustomerDetail && this.selectedCustomerDetail.customerCode) {
+      return this.selectedCustomerDetail.customerCode;
+    }
+    if (this.selectedCustomerDetail && this.selectedCustomerDetail.code) {
+      return this.selectedCustomerDetail.code;
+    }
+    return this.selectedInvoice?.customerId ? 'NO CODE' : 'CASH000001';
+  }
+
+  getCustomerAddressForDetails(): string {
+    if (!this.selectedCustomerDetail) {
+      return this.selectedInvoice?.customer?.address || 'NO ADDRESS PROVIDED';
+    }
+    const c = this.selectedCustomerDetail;
+    if (c.branches && c.branches.length > 0) {
+      const b = c.branches.find((br: any) => br.isDefaultBranch) || c.branches[0];
+      let parts = [];
+      if (b.address1) parts.push(b.address1);
+      if (b.city) parts.push(b.city);
+      if (b.postcode) parts.push(b.postcode);
+      if (b.state) parts.push(b.state);
+      if (parts.length > 0) return parts.join(', ');
+    }
+    return c.address || c.billingAddress || 'NO ADDRESS PROVIDED';
   }
 
   goToCreateCN() {
@@ -688,7 +719,8 @@ export class InvoicesPage implements OnInit {
     items.forEach((item: any, i: number) => {
       const subtotal = ((item.quantity || 0) * (item.unitPrice || 0)).toFixed(2);
       const prodName = item.productName || this.getProductName(item.productId);
-      itemsHtml += `<div class="item-row"><div class="item-desc"><span>${i + 1}. ${prodName} (${item.uom || 'UNIT'})</span><span>[${item.taxType || 'SR'}]</span></div><div class="item-calc"><span>${item.quantity} x ${(item.unitPrice || 0).toFixed(2)}</span><span>${subtotal}</span></div></div>`;
+      const remarkHtml = item.remark ? `<div style="font-size:10px; color:#555; font-style:italic; margin-top:2px;">* ${item.remark}</div>` : '';
+      itemsHtml += `<div class="item-row"><div class="item-desc"><span>${i + 1}. ${prodName} (${item.uom || 'UNIT'})</span><span>[${item.taxType || 'SR'}]</span></div><div class="item-calc"><span>${item.quantity} x ${(item.unitPrice || 0).toFixed(2)}</span><span>${subtotal}</span></div>${remarkHtml}</div>`;
     });
     const invoiceDate = inv?.invoiceDate ? new Date(inv.invoiceDate) : new Date();
     const dateStr = invoiceDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });

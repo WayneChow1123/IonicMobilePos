@@ -1,4 +1,4 @@
-﻿<ion-content>
+<ion-content>
 
   <div [hidden]="showExportModal" class="pref-container">
 
@@ -21,10 +21,6 @@
       </div>
     </div>
 
-    <div class="header">
-      <p class="section-label">PREFERENCES</p>
-      <h1>Adjust settings based on<br><strong>your workflow</strong></h1>
-    </div>
 
     <div class="cards-grid">
       <div class="card card-half card-yellow" (click)="backupFull()">
@@ -54,7 +50,7 @@
   </div>
 
   <!-- EXPORT PAGE -->
-  <div *ngIf="showExportModal" style="padding:16px 20px 100px;">
+  <div *ngIf="showExportModal" class="pref-container">
 
     <div style="display:flex;align-items:center;margin-bottom:24px;">
       <ion-button fill="clear" style="--color:#1a1a1a;--padding-start:0;font-size:15px;font-weight:600;" (click)="closeExportModal()">
@@ -144,17 +140,6 @@
 
 </ion-content>
 
-<div *ngIf="!showExportModal" class="bottom-nav">
-  <ion-button fill="clear" class="nav-btn" (click)="goTo('pages/home')">
-    <ion-icon name="home-outline"></ion-icon>
-  </ion-button>
-  <ion-button fill="clear" class="nav-btn" (click)="goTo('pages/billing')">
-    <ion-icon name="swap-horizontal-outline"></ion-icon>
-  </ion-button>
-  <ion-button fill="clear" class="nav-btn active" (click)="goTo('pages/preferences')">
-    <ion-icon name="options-outline"></ion-icon>
-  </ion-button>
-</div>
 
 
 

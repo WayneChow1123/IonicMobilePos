@@ -4,6 +4,8 @@ ion-content {
 
 .pref-container {
   padding: 16px 20px 100px;
+  max-width: 1100px;
+  margin: 0 auto;
 }
 
 .top-bar {
@@ -91,12 +93,12 @@ ion-content {
 
 .card {
   border-radius: 20px;
-  padding: 16px;
+  padding: 26px 20px;
   position: relative;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  min-height: 130px;
+  min-height: 156px;
   cursor: pointer;
 
   &.card-half { width: calc(50% - 6px); }
@@ -104,18 +106,18 @@ ion-content {
   &.card-yellow { background: #DDD9A3; }
 
   .card-title {
-    font-size: 14px;
-    font-weight: 700;
+    font-size: 15px;
+    font-weight: 800;
     color: #1a1a1a;
     line-height: 1.4;
   }
 
   .card-icon-bg {
-    font-size: 48px;
+    font-size: 58px;
     color: rgba(0,0,0,0.12);
     position: absolute;
-    bottom: 30px;
-    left: 14px;
+    bottom: 24px;
+    left: 20px;
   }
 
   .arrow-btn {
@@ -165,28 +167,3 @@ ion-content {
   }
 }
 
-.bottom-nav {
-  position: fixed;
-  bottom: 24px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: #1a1a1a;
-  border-radius: 50px;
-  padding: 8px 16px;
-  display: flex;
-  gap: 8px;
-  z-index: 999;
-
-  .nav-btn {
-    --color: rgba(255,255,255,0.5);
-    font-size: 22px;
-    --padding-start: 12px;
-    --padding-end: 12px;
-
-    &.active {
-      --color: #ffffff;
-      background: rgba(255,255,255,0.15);
-      border-radius: 50px;
-    }
-  }
-}
