@@ -51,6 +51,7 @@ export class ApiService {
   previewInvoice(id: any): Observable<any> { return this.http.get(this.baseUrl + '/Invoice/PreviewInvoice/invoices/' + id + '/preview'); }
 
   createPayment(data: any): Observable<any> { return this.http.post(this.baseUrl + '/Payment/CreatePayment/payments', data); }
+  createBulkPayment(data: any): Observable<any> { return this.http.post(this.baseUrl + '/Payment/CreateBulkPayment/bulk-payments', data); }
   getPayInfo(customerId: any, invoiceId: any): Observable<any> { return this.http.get(this.baseUrl + '/Payment/GetPayInfo/customers/' + customerId + '/invoices/' + invoiceId + '/pay-info'); }
   getPaymentPreview(id: any): Observable<any> { return this.http.get(this.baseUrl + '/Payment/GetPaymentPreview/payments/' + id + '/preview'); }
   getPayments(): Observable<any> { return this.http.get(this.baseUrl + '/Payment/GetPayments/payments'); }

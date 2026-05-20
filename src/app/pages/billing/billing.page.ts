@@ -19,6 +19,8 @@ import { ApiService } from '../../services/api.service';
 export class BillingPage implements OnInit {
   ionViewWillEnter() {
     this.currentView = 'home';
+    this.loadCustomers();
+    this.loadAllInvoices();
     this.cdr.detectChanges();
   }
 
@@ -46,9 +48,12 @@ export class BillingPage implements OnInit {
   waitingInvoiceId: number | null = null;
   paymentSearchTerm = '';
   cnSearchTerm = '';
-  paymentForm: any = { customerId: 0, invoiceId: 0, amount: 0, method: 'Cash', referenceNo: '' };
+  paymentForm: any = { customerId: 0, invoiceIds: [], amount: 0, method: 'Cash', referenceNo: '' };
   cnForm: any = { customerId: 0, invoiceId: 0, reason: '', items: [] };
   paymentMethods = ['Cash', 'Card', 'Online Transfer', 'Cheque'];
+  
+  showInvoiceSelectionModal = false;
+  selectedInvoicesList: any[] = [];
 
   deletePaymentButtons = [
     { text: 'Cancel', role: 'cancel' },
@@ -203,7 +208,7 @@ export class BillingPage implements OnInit {
   }
 
   loadAllInvoices() {
-    this.api.getInvoices().subscribe({
+    this.api.getInvoices({ _t: new Date().getTime() }).subscribe({
       next: (res) => { 
         this.invoices = Array.isArray(res) ? res : []; 
         this.cnFilteredInvoices = [...this.invoices];
@@ -212,10 +217,19 @@ export class BillingPage implements OnInit {
     });
   }
 
+  paymentInvoices: any[] = [];
+
   loadInvoicesByCustomer(customerId: any) {
-    this.api.getInvoices({ customerId }).subscribe({
-      next: (res) => { this.invoices = Array.isArray(res) ? res : []; },
-      error: () => {}
+    const cid = Number(customerId);
+    this.api.getInvoices({ customerId: cid, _t: new Date().getTime() }).subscribe({
+      next: (res) => { 
+        const list = Array.isArray(res) ? res : [];
+        console.log('API returned invoices count:', list.length);
+        this.paymentInvoices = list.filter((inv: any) => inv.status !== 'Paid');
+        console.log('Filtered invoices count:', this.paymentInvoices.length);
+        this.cdr.detectChanges(); // Force UI update
+      },
+      error: (err) => { console.error('API Error:', err); }
     });
   }
 
@@ -255,10 +269,22 @@ export class BillingPage implements OnInit {
   goHome() { this.currentView = 'home'; }
 
   openNewPayment() {
-    this.paymentForm = { customerId: this.customers.length > 0 ? this.customers[0].id : 0, invoiceId: 0, amount: 0, method: 'Cash', referenceNo: '' };
-    this.selectedInvoiceDetail = null;
+    this.paymentForm = { customerId: this.customers.length > 0 ? this.customers[0].id : 0, invoiceIds: [], amount: 0, method: 'Cash', referenceNo: '' };
+    this.selectedInvoicesList = [];
     if (this.customers.length > 0) this.loadInvoicesByCustomer(this.customers[0].id);
     this.currentView = 'newPayment';
+  }
+
+  openInvoiceModal() {
+    if (!this.paymentForm.customerId || this.paymentForm.customerId === 0) {
+      this.showToastMsg('Please select a customer first');
+      return;
+    }
+    this.loadInvoicesByCustomer(this.paymentForm.customerId);
+    this.showInvoiceSelectionModal = true;
+    setTimeout(() => {
+      this.cdr.detectChanges();
+    }, 100);
   }
 
   openNewCN() {
@@ -275,20 +301,13 @@ export class BillingPage implements OnInit {
   onCustomerChange() {
     if (this.paymentForm.customerId) {
       this.loadInvoicesByCustomer(this.paymentForm.customerId);
-      this.paymentForm.invoiceId = 0;
-      this.selectedInvoiceDetail = null;
+      this.paymentForm.invoiceIds = [];
+      this.selectedInvoicesList = [];
     }
   }
 
   onInvoiceChange() {
-    if (this.paymentForm.invoiceId && this.paymentForm.invoiceId != 0) {
-      this.api.getInvoiceDetails(Number(this.paymentForm.invoiceId)).subscribe({
-        next: (res: any) => { this.selectedInvoiceDetail = res; },
-        error: () => { this.selectedInvoiceDetail = null; }
-      });
-    } else {
-      this.selectedInvoiceDetail = null;
-    }
+    // Legacy onInvoiceChange not needed for multiple selection.
   }
 
   onCNCustomerChange() {
@@ -334,17 +353,41 @@ export class BillingPage implements OnInit {
     }
   }
 
-  getTotalCNForPayment(): number {
-    if (!this.selectedInvoiceDetail?.creditNotes) return 0;
-    return this.selectedInvoiceDetail.creditNotes
-      .reduce((sum: number, cn: any) => sum + (cn.amount || 0), 0);
+  toggleInvoiceSelection(inv: any) {
+    const idx = this.paymentForm.invoiceIds.indexOf(inv.id);
+    if (idx > -1) {
+      this.paymentForm.invoiceIds.splice(idx, 1);
+      this.selectedInvoicesList = this.selectedInvoicesList.filter((i: any) => i.id !== inv.id);
+    } else {
+      this.paymentForm.invoiceIds.push(inv.id);
+      this.selectedInvoicesList.push(inv);
+    }
   }
 
-  getBalanceForPayment(): number {
-    if (!this.selectedInvoiceDetail) return 0;
-    const totalCN = this.getTotalCNForPayment();
-    const netTotal = (this.selectedInvoiceDetail.totalAmount || 0) - totalCN;
-    return netTotal - (this.selectedInvoiceDetail.paidAmount || 0);
+  isInvoiceSelected(inv: any): boolean {
+    return this.paymentForm.invoiceIds.includes(inv.id);
+  }
+
+  confirmInvoiceSelection() {
+    this.showInvoiceSelectionModal = false;
+    this.paymentForm.amount = this.getBulkBalance();
+  }
+
+  getBulkTotalAmount(): number {
+    return this.selectedInvoicesList.reduce((sum, inv) => sum + (inv.totalAmount || 0), 0);
+  }
+
+  getBulkPaidAmount(): number {
+    return this.selectedInvoicesList.reduce((sum, inv) => sum + ((inv.paidAmount || 0) + (inv.creditUsed || 0)), 0);
+  }
+
+  getBulkCreditNotes(): number {
+    // Only fetch CN total if it exists in the model. (We can just use 0 here or filter if needed)
+    return this.selectedInvoicesList.reduce((sum, inv) => sum + ((inv.totalAmount || 0) - (inv.netTotal || 0)), 0);
+  }
+
+  getBulkBalance(): number {
+    return this.selectedInvoicesList.reduce((sum, inv) => sum + (inv.balance || 0), 0);
   }
 
   useCreditNote(cn: any) {
@@ -359,28 +402,85 @@ export class BillingPage implements OnInit {
     });
   }
 
+  getPaymentAmountValidationError(): string | null {
+    if (!this.paymentForm.invoiceIds || this.paymentForm.invoiceIds.length === 0) {
+      return 'Please select at least one invoice';
+    }
+    const balance = this.getBulkBalance();
+    const amount = Number(this.paymentForm.amount);
+    
+    if (isNaN(amount) || amount <= 0) {
+      return 'Amount must be greater than 0';
+    }
+    
+    if (amount < balance) {
+      return `Amount must be at least the balance due: RM ${balance.toFixed(2)}`;
+    }
+    
+    // No upper limit — any excess will be auto-converted to a CN-CHG credit note by the backend.
+    return null;
+  }
+
+  getPaymentChange(): number {
+    const balance = this.getBulkBalance();
+    const amount = Number(this.paymentForm.amount);
+    if (!amount || amount <= balance) return 0;
+    return amount - balance;
+  }
+
   savePayment() {
     if (!this.paymentForm.customerId) { this.showToastMsg('Please select a customer'); return; }
-    if (!this.paymentForm.invoiceId || this.paymentForm.invoiceId == 0) { this.showToastMsg('Please select an invoice'); return; }
-    if (!this.paymentForm.amount || this.paymentForm.amount <= 0 || isNaN(this.paymentForm.amount)) { this.showToastMsg('Amount must be greater than 0'); return; }
+    
+    const errorMsg = this.getPaymentAmountValidationError();
+    if (errorMsg) { this.showToastMsg(errorMsg); return; }
+    
+    const totalInputAmount = Number(this.paymentForm.amount);
+
+    // Distribute payment — each invoice gets at most its own balance
+    let remainingAmount = totalInputAmount;
+    const payments = [];
+    
+    // Sort invoices oldest first based on invoiceDate
+    const sortedInvoices = [...this.selectedInvoicesList].sort((a, b) => {
+      const dateA = new Date(a.invoiceDate || 0).getTime();
+      const dateB = new Date(b.invoiceDate || 0).getTime();
+      return dateA - dateB;
+    });
+
+    for (const inv of sortedInvoices) {
+      if (remainingAmount <= 0) break;
+      const amountToApply = Math.min(remainingAmount, inv.balance || 0);
+      if (amountToApply > 0) {
+        payments.push({
+          invoiceId: inv.id,
+          amount: amountToApply
+        });
+        remainingAmount -= amountToApply;
+      }
+    }
+
+    if (payments.length === 0) {
+      this.showToastMsg('Could not distribute payment amount to selected invoices.'); return;
+    }
+
     const payload = {
       customerId: Number(this.paymentForm.customerId),
-      invoiceId: Number(this.paymentForm.invoiceId),
-      amount: Number(this.paymentForm.amount),
       method: this.paymentForm.method,
-      referenceNo: this.paymentForm.referenceNo || ''
+      referenceNo: this.paymentForm.referenceNo || '',
+      totalInputAmount: totalInputAmount,   // ← backend uses this to compute CN-CHG excess
+      payments: payments
     };
-    this.api.createPayment(payload).subscribe({
-      next: () => { this.showToastMsg('Payment created!'); this.openPaymentList(); },
+
+    const excess = this.getPaymentChange();
+    const successMsg = excess > 0.01
+      ? `Payment recorded! Excess RM ${excess.toFixed(2)} converted to Credit Note.`
+      : 'Bulk Payment created successfully!';
+
+    this.api.createBulkPayment(payload).subscribe({
+      next: () => { this.showToastMsg(successMsg); this.openPaymentList(); },
       error: (err: any) => {
         const errBody = err.error;
-        if (errBody?.type === 'STOCK_INSUFFICIENT') {
-          this.stockIssues = errBody.stockIssues || [];
-          this.pendingPayload = payload;
-          this.showStockAlert = true;
-        } else {
-          this.showToastMsg('Failed: ' + (errBody?.message || errBody || err.message || 'error'));
-        }
+        this.showToastMsg('Failed: ' + (errBody?.message || errBody || err.message || 'error'));
       }
     });
   }
