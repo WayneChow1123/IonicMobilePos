@@ -543,6 +543,19 @@
                 <span>Total: RM {{ inv.totalAmount | number:'1.2-2' }}</span>
                 <span style="font-weight:800; color:#ff4757;">Bal: RM {{ inv.balance | number:'1.2-2' }}</span>
               </div>
+
+              <!-- Standard CN Details -->
+              <div *ngIf="hasStandardCN(inv)" 
+                   style="margin-top: 8px; padding-top: 8px; border-top: 1px dashed rgba(0,0,0,0.08); font-size: 12px; display: flex; flex-direction: column; gap: 4px;">
+                <div style="display: flex; justify-content: space-between; color: #e67e22; font-weight: 700;">
+                  <span>Standard CN Deducted:</span>
+                  <span>- RM {{ getStandardCNDeduction(inv) | number:'1.2-2' }}</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; color: #27ae60; font-weight: 700;">
+                  <span>Net Amount:</span>
+                  <span>RM {{ inv.netTotal | number:'1.2-2' }}</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>

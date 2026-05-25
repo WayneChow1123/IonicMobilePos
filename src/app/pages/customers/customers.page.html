@@ -328,8 +328,8 @@
     <div class="cd-footer">
       <div class="cd-summary-card">
         <div class="cd-credit-row">
-          <span class="credit-label">TOTAL CREDIT</span>
-          <span class="credit-amount">RM {{ form.totalCredit | number:'1.2-2' }}</span>
+          <span class="credit-label">CUSTOMER BALANCE</span>
+          <span class="credit-amount" [style.color]="form.totalCredit < 0 ? '#E57373' : (form.totalCredit === 0 ? '#aaa' : '#27AE60')">RM {{ form.totalCredit | number:'1.2-2' }}</span>
         </div>
         
         <div class="cd-sub-tabs">

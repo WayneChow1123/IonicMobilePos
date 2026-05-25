@@ -1,4 +1,4 @@
-﻿import { AlertService } from '../../services/alert.service';
+import { AlertService } from '../../services/alert.service';
 import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
 import { NavController } from '@ionic/angular';
 import { Router } from '@angular/router';
@@ -62,12 +62,15 @@ export class CustomerDetailPage implements OnInit {
     return this.getCustomerInvoices(customerId).reduce((sum, inv) => sum + (inv.totalAmount || 0), 0);
   }
 
-  getTotalPaid(customerId: number): number {
-    return this.getCustomerInvoices(customerId).reduce((sum, inv) => sum + (inv.paidAmount || 0), 0);
+  getBalance(customerId: number): number {
+    return this.getCustomerInvoices(customerId).reduce((sum, inv) => {
+      const bal = inv.balance !== undefined ? inv.balance : ((inv.totalAmount || 0) - (inv.paidAmount || 0) - (inv.creditUsed || 0));
+      return sum + (bal > 0 ? bal : 0);
+    }, 0);
   }
 
-  getBalance(customerId: number): number {
-    return this.getTotalInvoice(customerId) - this.getTotalPaid(customerId);
+  getTotalPaid(customerId: number): number {
+    return this.getTotalInvoice(customerId) - this.getBalance(customerId);
   }
 
   openInvoiceList(customer: any) {

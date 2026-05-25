@@ -41,6 +41,9 @@ export class InvoicesPage implements OnInit {
   filteredProductsForSelection: any[] = [];
   showSearch = false;
   searchTerm = '';
+  startDate = '';
+  endDate = '';
+  activePreset = '';
   isEditing = false;
   isEditMode = false;
   selectedInvoice: any = null;
@@ -143,10 +146,88 @@ export class InvoicesPage implements OnInit {
   }
 
   filterInvoices() {
-    this.filteredInvoices = this.invoices.filter(inv =>
-      (inv.invoiceNumber || '').toLowerCase().includes(this.searchTerm.toLowerCase()) ||
-      (inv.customerName || '').toLowerCase().includes(this.searchTerm.toLowerCase())
-    );
+    const term = this.searchTerm.toLowerCase();
+    this.filteredInvoices = this.invoices.filter(inv => {
+      // Search term filtering
+      const matchesSearch = (inv.invoiceNumber || '').toLowerCase().includes(term) ||
+        (inv.customerName || '').toLowerCase().includes(term);
+
+      if (!matchesSearch) return false;
+
+      // Date range filtering
+      let matchesDate = true;
+      if (inv.invoiceDate) {
+        let invDateStr = '';
+        if (typeof inv.invoiceDate === 'string') {
+          invDateStr = inv.invoiceDate;
+        } else if (inv.invoiceDate instanceof Date) {
+          invDateStr = inv.invoiceDate.toISOString();
+        } else {
+          invDateStr = new Date(inv.invoiceDate).toISOString();
+        }
+        const invDatePart = invDateStr.substring(0, 10); // Extract "YYYY-MM-DD"
+
+        if (this.startDate && invDatePart < this.startDate) {
+          matchesDate = false;
+        }
+        if (this.endDate && invDatePart > this.endDate) {
+          matchesDate = false;
+        }
+      } else if (this.startDate || this.endDate) {
+        matchesDate = false; // Exclude invoices without a date if date filters are applied
+      }
+
+      return matchesDate;
+    });
+  }
+
+  clearDateFilter() {
+    this.startDate = '';
+    this.endDate = '';
+    this.activePreset = '';
+    this.filterInvoices();
+  }
+
+  formatDate(date: Date): string {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+
+  setPreset(preset: string) {
+    this.activePreset = preset;
+    const now = new Date();
+    
+    if (preset === 'today') {
+      const todayStr = this.formatDate(now);
+      this.startDate = todayStr;
+      this.endDate = todayStr;
+    } else if (preset === 'yesterday') {
+      const yesterday = new Date();
+      yesterday.setDate(now.getDate() - 1);
+      const yesterdayStr = this.formatDate(yesterday);
+      this.startDate = yesterdayStr;
+      this.endDate = yesterdayStr;
+    } else if (preset === 'week') {
+      // Start of this week (Monday)
+      const day = now.getDay();
+      const diff = now.getDate() - day + (day === 0 ? -6 : 1);
+      const monday = new Date(now.setDate(diff));
+      this.startDate = this.formatDate(monday);
+      this.endDate = this.formatDate(new Date());
+    } else if (preset === 'month') {
+      const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+      this.startDate = this.formatDate(firstDay);
+      this.endDate = this.formatDate(new Date());
+    } else if (preset === '30days') {
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(now.getDate() - 30);
+      this.startDate = this.formatDate(thirtyDaysAgo);
+      this.endDate = this.formatDate(new Date());
+    }
+    
+    this.filterInvoices();
   }
 
   onCustomerChange() {
@@ -367,11 +448,35 @@ export class InvoicesPage implements OnInit {
   }
 
   onTermTypeChange() {
-    if (this.termType === 'CASH SALE') {
+    if (this.termType === 'On Credit') {
+      this.form.useCreditBalance = true;
+      this.amountPaid = 0;
+    } else if (this.termType === 'CASH SALE') {
+      if (!this.selectedCreditNoteId) {
+        this.form.useCreditBalance = false;
+      }
       this.amountPaid = this.getNetTotal();
     } else {
       this.amountPaid = 0;
     }
+  }
+
+  /** On Credit 时按全部可用 CN 计算抵扣；其他账期仅用手动勾选的单张 CN */
+  getApplicableCreditAmount(): number {
+    const gross = this.getFormTotal();
+    if (gross <= 0) return 0;
+    if (this.termType === 'On Credit' && this.availableCredits.length > 0) {
+      const totalAvailable = this.availableCredits.reduce((sum: number, cn: any) => sum + (cn.amount || 0), 0);
+      return Math.round((Math.min(gross, totalAvailable) + Number.EPSILON) * 100) / 100;
+    }
+    if (this.selectedCreditNoteId) {
+      return this.getSelectedCreditAmount();
+    }
+    return 0;
+  }
+
+  isOnCreditAutoApply(): boolean {
+    return this.termType === 'On Credit' && this.availableCredits.length > 0;
   }
 
   openPaymentCollection() {
@@ -412,9 +517,11 @@ export class InvoicesPage implements OnInit {
     } else {
       if (!this.form.customerId) { this.showToastMsg('Please select a customer'); return; }
       
+      const useCredit = !!this.selectedCreditNoteId || this.termType === 'On Credit';
       const payload = {
         ...this.form,
-        selectedCreditNoteId: this.form.useCreditBalance ? this.selectedCreditNoteId : null,
+        useCreditBalance: useCredit,
+        selectedCreditNoteId: this.selectedCreditNoteId,
         paidAmount: this.amountPaid,
         paymentMethod: this.paymentMethod,
         termType: this.termType,
@@ -610,23 +717,34 @@ export class InvoicesPage implements OnInit {
     return Math.round((total + Number.EPSILON) * 100) / 100;
   }
 
+  getCreditNoteId(cn: any): number | null {
+    const id = cn?.id ?? cn?.Id;
+    return id != null ? Number(id) : null;
+  }
+
   toggleCreditSelection(cn: any) {
-    if (this.selectedCreditNoteId === cn.id) {
+    const cnId = this.getCreditNoteId(cn);
+    if (cnId == null) return;
+    if (this.selectedCreditNoteId == cnId) {
       this.selectedCreditNoteId = null;
       this.form.useCreditBalance = false;
+      this.termType = 'CASH SALE';
+      this.onTermTypeChange();
     } else {
       if (!this.isCreditUsable(cn.amount)) {
         this.showToastMsg('Invoice total must be RM ' + cn.amount.toFixed(2) + ' or more to use this Credit Note');
         return;
       }
-      this.selectedCreditNoteId = cn.id;
+      this.selectedCreditNoteId = cnId;
       this.form.useCreditBalance = true;
+      this.termType = 'On Credit';
+      this.onTermTypeChange();
     }
   }
 
   getSelectedCreditAmount(): number {
-    if (!this.form.useCreditBalance || !this.selectedCreditNoteId) return 0;
-    const cn = this.availableCredits.find(c => c.id === this.selectedCreditNoteId);
+    if (!this.selectedCreditNoteId) return 0;
+    const cn = this.availableCredits.find(c => this.getCreditNoteId(c) == this.selectedCreditNoteId);
     return cn ? Math.round((cn.amount + Number.EPSILON) * 100) / 100 : 0;
   }
 
@@ -655,7 +773,7 @@ export class InvoicesPage implements OnInit {
 
   getNetTotal(): number {
     const gross = this.getFormTotal();
-    const credit = this.getSelectedCreditAmount();
+    const credit = this.getApplicableCreditAmount();
     const net = gross - credit;
     return net > 0 ? Math.round((net + Number.EPSILON) * 100) / 100 : 0;
   }

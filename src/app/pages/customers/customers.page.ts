@@ -160,9 +160,10 @@ export class CustomersPage implements OnInit {
       return false;
     });
     
-    // Use invoice.paidAmount directly (more reliable - backend updates this on every payment)
-    const outstanding = this.customerInvoices.reduce((sum, inv) => 
-      sum + ((inv.totalAmount || 0) - (inv.paidAmount || 0)), 0);
+    const outstanding = this.customerInvoices.reduce((sum, inv) => {
+      const bal = inv.balance !== undefined ? inv.balance : ((inv.totalAmount || 0) - (inv.paidAmount || 0) - (inv.creditUsed || 0));
+      return sum + (bal > 0 ? bal : 0);
+    }, 0);
     this.form.totalCredit = -outstanding; // negative = owes money
     
     this.cdr.detectChanges();
@@ -170,10 +171,11 @@ export class CustomersPage implements OnInit {
 
   getCustomerCredit(customerId: any): number {
     const invs = this.allInvoices.filter(inv => inv.customerId == customerId);
-    // Use invoice.paidAmount directly - reliable since backend updates it on every payment
-    const outstanding = invs.reduce((s, inv) => 
-      s + ((inv.totalAmount || 0) - (inv.paidAmount || 0)), 0);
-    return -outstanding; // negative = owes money, positive = overpaid/credit
+    const outstanding = invs.reduce((s, inv) => {
+      const bal = inv.balance !== undefined ? inv.balance : ((inv.totalAmount || 0) - (inv.paidAmount || 0) - (inv.creditUsed || 0));
+      return s + (bal > 0 ? bal : 0);
+    }, 0);
+    return -outstanding; // negative = owes money, 0 = paid
   }
 
   filterCustomers() {

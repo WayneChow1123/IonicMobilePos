@@ -7,6 +7,7 @@ import { Observable } from 'rxjs';
 })
 export class ApiService {
 
+  // private baseUrl = 'https://td.mobile.pos.xcode.com.my';
   private baseUrl = 'http://localhost:5262';
 
   constructor(private http: HttpClient) {}

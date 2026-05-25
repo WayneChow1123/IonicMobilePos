@@ -368,6 +368,16 @@ export class BillingPage implements OnInit {
     return this.paymentForm.invoiceIds.includes(inv.id);
   }
 
+  hasStandardCN(inv: any): boolean {
+    if (!inv || inv.totalAmount === undefined || inv.netTotal === undefined) return false;
+    return (inv.totalAmount - inv.netTotal) > 0.01;
+  }
+
+  getStandardCNDeduction(inv: any): number {
+    if (!inv || inv.totalAmount === undefined || inv.netTotal === undefined) return 0;
+    return inv.totalAmount - inv.netTotal;
+  }
+
   confirmInvoiceSelection() {
     this.showInvoiceSelectionModal = false;
     this.paymentForm.amount = this.getBulkBalance();
@@ -393,9 +403,17 @@ export class BillingPage implements OnInit {
   useCreditNote(cn: any) {
     if (cn.isUsed) return;
     this.api.useCreditNote(Number(cn.invoiceId), Number(cn.id)).subscribe({
-      next: () => {
-        cn.isUsed = true;
-        this.showToastMsg('Credit note marked as used!');
+      next: (res: any) => {
+        const applied = (res.creditApplied || 0).toFixed(2);
+        const remaining = (res.cnRemainingAmount || 0).toFixed(2);
+        const invoice = res.appliedToInvoice || '';
+        const fullyUsed = res.cnFullyUsed;
+
+        if (fullyUsed) {
+          this.showToastMsg(`RM ${applied} credit applied to ${invoice}. CN fully used.`);
+        } else {
+          this.showToastMsg(`RM ${applied} applied to ${invoice}. CN remaining: RM ${remaining}`);
+        }
         this.loadCreditNotes();
       },
       error: (err: any) => this.showToastMsg('Failed: ' + (err.error?.message || err.message || 'error'))

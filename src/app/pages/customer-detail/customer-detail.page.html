@@ -1,4 +1,4 @@
-﻿<ion-content [fullscreen]="true">
+<ion-content [fullscreen]="true">
 
   <!-- CUSTOMER LIST -->
   <div *ngIf="!showInvoiceList" class="page-container">
@@ -37,8 +37,8 @@
           </div>
           <div class="balance-item">
             <span class="balance-label">Balance</span>
-            <span class="balance-value" [style.color]="getBalance(customer.id) > 0 ? '#e57373' : '#27ae60'">
-              RM {{ getBalance(customer.id) | number:'1.2-2' }}
+            <span class="balance-value" [style.color]="getBalance(customer.id) > 0 ? '#e57373' : '#aaa'">
+              RM {{ (getBalance(customer.id) > 0 ? -getBalance(customer.id) : 0) | number:'1.2-2' }}
             </span>
           </div>
         </div>
@@ -72,8 +72,8 @@
       <div class="divider"></div>
       <div class="summary-row">
         <span class="summary-label" style="font-weight:800;">Balance</span>
-        <span class="summary-value" style="font-size:18px;font-weight:800;" [style.color]="getBalance(selectedCustomer?.id) > 0 ? '#e57373' : '#27ae60'">
-          RM {{ getBalance(selectedCustomer?.id) | number:'1.2-2' }}
+        <span class="summary-value" style="font-size:18px;font-weight:800;" [style.color]="getBalance(selectedCustomer?.id) > 0 ? '#e57373' : '#aaa'">
+          RM {{ (getBalance(selectedCustomer?.id) > 0 ? -getBalance(selectedCustomer?.id) : 0) | number:'1.2-2' }}
         </span>
       </div>
     </div>

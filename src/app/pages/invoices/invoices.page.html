@@ -22,6 +22,41 @@
 
     <ion-searchbar [(ngModel)]="searchTerm" (ionInput)="filterInvoices()" placeholder="Search INV- or customer..." style="--background:#fff;--border-radius:16px;--box-shadow:none;padding:0;margin-bottom:12px;"></ion-searchbar>
 
+    <!-- Date Range Filter -->
+    <div class="date-filter-card">
+      <div class="date-filter-header">
+        <div class="df-title">
+          <ion-icon name="calendar-outline"></ion-icon>
+          <span>Filter by Date Range</span>
+        </div>
+        <button class="clear-btn" *ngIf="startDate || endDate" (click)="clearDateFilter()">
+          Clear Filter
+        </button>
+      </div>
+      <div class="date-inputs">
+        <div class="date-input-wrapper">
+          <span class="input-label">FROM</span>
+          <input type="date" [(ngModel)]="startDate" (change)="activePreset = ''; filterInvoices()" class="premium-date-input">
+        </div>
+        <div class="date-separator">
+          <ion-icon name="arrow-forward-outline"></ion-icon>
+        </div>
+        <div class="date-input-wrapper">
+          <span class="input-label">TO</span>
+          <input type="date" [(ngModel)]="endDate" (change)="activePreset = ''; filterInvoices()" class="premium-date-input">
+        </div>
+      </div>
+
+      <!-- Preset Quick Filters -->
+      <div class="preset-chips-container">
+        <button class="preset-chip" [class.active]="activePreset === 'today'" (click)="setPreset('today')">Today</button>
+        <button class="preset-chip" [class.active]="activePreset === 'yesterday'" (click)="setPreset('yesterday')">Yesterday</button>
+        <button class="preset-chip" [class.active]="activePreset === 'week'" (click)="setPreset('week')">This Week</button>
+        <button class="preset-chip" [class.active]="activePreset === 'month'" (click)="setPreset('month')">This Month</button>
+        <button class="preset-chip" [class.active]="activePreset === '30days'" (click)="setPreset('30days')">Last 30 Days</button>
+      </div>
+    </div>
+
     <div *ngIf="isLoading" style="display:flex;justify-content:center;padding:60px;">
       <ion-spinner name="crescent"></ion-spinner>
     </div>
@@ -168,24 +203,28 @@
 
       <!-- Available Credits -->
       <div *ngIf="availableCredits.length > 0" class="ni-section-header" style="margin-top: 10px;" (click)="showAvailableCredits = !showAvailableCredits">
-        <span class="ni-label">AVAILABLE CREDITS</span>
+        <span class="ni-label">AVAILABLE CREDITS (点数)</span>
         <div style="display:flex;align-items:center;gap:6px;">
           <span class="ni-count">{{ availableCredits.length }} Note{{ availableCredits.length !== 1 ? 's' : '' }}</span>
           <ion-icon [name]="showAvailableCredits ? 'chevron-up-outline' : 'chevron-down-outline'" style="font-size:16px;color:#888;"></ion-icon>
         </div>
       </div>
+      <div *ngIf="termType === 'On Credit' && availableCredits.length > 0" style="margin: 0 16px 8px; padding: 10px 12px; background: #e8f4fd; border-radius: 10px; font-size: 12px; color: #2980b9; font-weight: 600;">
+        已选点数 → On Credit：自动用完可用 CN；不足部分记为欠款，不用 Credit Balance
+      </div>
       <div *ngIf="availableCredits.length > 0 && showAvailableCredits" class="ni-credits-section">
         <div *ngFor="let cn of availableCredits" 
              class="ni-credit-card" 
-             [class.selected]="selectedCreditNoteId === cn.id" 
+             [class.selected]="termType === 'On Credit'" 
+             [class.preferred]="selectedCreditNoteId == getCreditNoteId(cn)"
              [class.disabled]="!isCreditUsable(cn.amount)"
              (click)="toggleCreditSelection(cn)">
           <div class="ni-credit-info">
-            <span class="ni-credit-num">{{ cn.cnNumber || 'CN-' + cn.id }}</span>
+            <span class="ni-credit-num">{{ cn.cnNumber || cn.CNNumber || 'CN-' + getCreditNoteId(cn) }}</span>
             <span class="ni-credit-amt">RM {{ cn.amount | number:'1.2-2' }}</span>
           </div>
-          <div class="ni-credit-check" [class.selected]="selectedCreditNoteId === cn.id">
-            <ion-icon name="checkmark-outline" *ngIf="selectedCreditNoteId === cn.id"></ion-icon>
+          <div class="ni-credit-check" [class.selected]="termType === 'On Credit'">
+            <ion-icon name="checkmark-outline" *ngIf="termType === 'On Credit'"></ion-icon>
           </div>
         </div>
       </div>
@@ -277,9 +316,9 @@
           <span class="ni-sum-label">DISCOUNT ({{ getCustomerDiscount() }}%):</span>
           <span class="ni-sum-val" style="color: #e67e22;">- RM {{ getDiscountAmount() | number:'1.2-2' }}</span>
         </div>
-        <div *ngIf="form.useCreditBalance" class="ni-sum-row" style="color: #27ae60;">
-          <span class="ni-sum-label">CREDIT USED:</span>
-          <span class="ni-sum-val">- RM {{ getSelectedCreditAmount() | number:'1.2-2' }}</span>
+        <div *ngIf="getApplicableCreditAmount() > 0" class="ni-sum-row" style="color: #27ae60;">
+          <span class="ni-sum-label">{{ isOnCreditAutoApply() ? 'CREDIT (AUTO CN):' : 'CREDIT USED:' }}</span>
+          <span class="ni-sum-val">- RM {{ getApplicableCreditAmount() | number:'1.2-2' }}</span>
         </div>
         <div class="ni-sum-row">
           <span class="ni-sum-label">TAX:</span>
@@ -690,6 +729,10 @@
               </ion-select>
               <ion-icon name="chevron-down-outline"></ion-icon>
             </div>
+          </div>
+
+          <div *ngIf="termType === 'On Credit'" style="margin-bottom: 12px; padding: 10px 12px; background: #f0f9ff; border-radius: 10px; font-size: 12px; color: #2980b9;">
+            将自动使用全部可用 CN；CN 不足时，剩余 RM {{ getNetTotal() | number:'1.2-2' }} 记为欠款（不动用 Credit Balance）
           </div>
 
           <ng-container *ngIf="termType === 'CASH SALE'">
