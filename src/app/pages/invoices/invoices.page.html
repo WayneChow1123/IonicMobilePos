@@ -203,19 +203,20 @@
 
       <!-- Available Credits -->
       <div *ngIf="availableCredits.length > 0" class="ni-section-header" style="margin-top: 10px;" (click)="showAvailableCredits = !showAvailableCredits">
-        <span class="ni-label">AVAILABLE CREDITS (点数)</span>
+        <span class="ni-label">AVAILABLE CREDITS</span>
         <div style="display:flex;align-items:center;gap:6px;">
           <span class="ni-count">{{ availableCredits.length }} Note{{ availableCredits.length !== 1 ? 's' : '' }}</span>
           <ion-icon [name]="showAvailableCredits ? 'chevron-up-outline' : 'chevron-down-outline'" style="font-size:16px;color:#888;"></ion-icon>
         </div>
       </div>
-      <div *ngIf="termType === 'On Credit' && availableCredits.length > 0" style="margin: 0 16px 8px; padding: 10px 12px; background: #e8f4fd; border-radius: 10px; font-size: 12px; color: #2980b9; font-weight: 600;">
-        已选点数 → On Credit：自动用完可用 CN；不足部分记为欠款，不用 Credit Balance
+      <div *ngIf="selectedCreditNoteId" style="margin: 0 16px 8px; padding: 10px 12px; background: #e8f4fd; border-radius: 10px; font-size: 12px; color: #2980b9; font-weight: 600;">
+        Selected CN will be applied; remaining balance to be paid as cash
       </div>
+
       <div *ngIf="availableCredits.length > 0 && showAvailableCredits" class="ni-credits-section">
         <div *ngFor="let cn of availableCredits" 
              class="ni-credit-card" 
-             [class.selected]="termType === 'On Credit'" 
+             [class.selected]="selectedCreditNoteId == getCreditNoteId(cn)" 
              [class.preferred]="selectedCreditNoteId == getCreditNoteId(cn)"
              [class.disabled]="!isCreditUsable(cn.amount)"
              (click)="toggleCreditSelection(cn)">
@@ -223,8 +224,8 @@
             <span class="ni-credit-num">{{ cn.cnNumber || cn.CNNumber || 'CN-' + getCreditNoteId(cn) }}</span>
             <span class="ni-credit-amt">RM {{ cn.amount | number:'1.2-2' }}</span>
           </div>
-          <div class="ni-credit-check" [class.selected]="termType === 'On Credit'">
-            <ion-icon name="checkmark-outline" *ngIf="termType === 'On Credit'"></ion-icon>
+          <div class="ni-credit-check" [class.selected]="selectedCreditNoteId == getCreditNoteId(cn)">
+            <ion-icon name="checkmark-outline" *ngIf="selectedCreditNoteId == getCreditNoteId(cn)"></ion-icon>
           </div>
         </div>
       </div>
@@ -732,7 +733,7 @@
           </div>
 
           <div *ngIf="termType === 'On Credit'" style="margin-bottom: 12px; padding: 10px 12px; background: #f0f9ff; border-radius: 10px; font-size: 12px; color: #2980b9;">
-            将自动使用全部可用 CN；CN 不足时，剩余 RM {{ getNetTotal() | number:'1.2-2' }} 记为欠款（不动用 Credit Balance）
+           On Credit: auto-apply all available CNs; remaining balance recorded as debt
           </div>
 
           <ng-container *ngIf="termType === 'CASH SALE'">

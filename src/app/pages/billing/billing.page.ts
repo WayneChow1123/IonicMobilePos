@@ -153,9 +153,7 @@ export class BillingPage implements OnInit {
     const found = this.cnForm.items.find((i: any) => i.productId === item.productId);
     if (found) {
       found.returnQuantity += 1;
-      // 允许增加到历史记录里的最大剩余量
-      found.maxQuantity = item.remaining;
-      if (found.returnQuantity > item.remaining) found.returnQuantity = item.remaining;
+      if (found.returnQuantity > found.maxQuantity) found.returnQuantity = found.maxQuantity;
     } else {
       this.cnForm.items.push({
         productId: item.productId,

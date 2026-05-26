@@ -465,18 +465,19 @@ export class InvoicesPage implements OnInit {
   getApplicableCreditAmount(): number {
     const gross = this.getFormTotal();
     if (gross <= 0) return 0;
+    // 如果用户手动选择了某张 CN，只使用该张，不自动聚合全部
+    if (this.selectedCreditNoteId) {
+      return this.getSelectedCreditAmount();
+    }
     if (this.termType === 'On Credit' && this.availableCredits.length > 0) {
       const totalAvailable = this.availableCredits.reduce((sum: number, cn: any) => sum + (cn.amount || 0), 0);
       return Math.round((Math.min(gross, totalAvailable) + Number.EPSILON) * 100) / 100;
-    }
-    if (this.selectedCreditNoteId) {
-      return this.getSelectedCreditAmount();
     }
     return 0;
   }
 
   isOnCreditAutoApply(): boolean {
-    return this.termType === 'On Credit' && this.availableCredits.length > 0;
+    return this.termType === 'On Credit' && this.availableCredits.length > 0 && !this.selectedCreditNoteId;
   }
 
   openPaymentCollection() {
