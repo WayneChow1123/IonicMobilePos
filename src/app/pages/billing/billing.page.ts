@@ -74,6 +74,18 @@ export class BillingPage implements OnInit {
   filteredProductsSelection: any[] = [];
   productSearchTerm = '';
 
+  getSelectedCustomerDiscount(): number {
+    if (!this.cnForm.customerId) return 0;
+    const customer = this.customers.find((c: any) => c.id == this.cnForm.customerId);
+    return customer ? (customer.discountPercent || customer.discount || 0) : 0;
+  }
+
+  getDiscountedPrice(price: number): number {
+    const discount = this.getSelectedCustomerDiscount();
+    if (discount <= 0) return price;
+    return Math.round(price * (1 - discount / 100) * 100) / 100;
+  }
+
   loadAllProducts() {
     this.isLoading = true;
     this.api.getProducts().subscribe({

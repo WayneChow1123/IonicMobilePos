@@ -478,9 +478,15 @@
                   <div style="font-size:16px; font-weight:800; color:#2f3542; margin-bottom:2px;">{{ p.name }}</div>
                   <div style="font-size:11px; color:#27ae60; font-weight:700;">Code: {{ p.productCode || p.code || 'N/A' }}</div>
                 </div>
-                <div style="text-align:right;">
-                  <div style="font-size:15px; font-weight:900; color:#2f3542;">RM {{ p.price | number:'1.2-2' }}</div>
-                  <div style="font-size:11px; color:#747d8c; font-weight:600;">Stock: {{ p.stock }}</div>
+                 <div style="text-align:right;">
+                  <ng-container *ngIf="getSelectedCustomerDiscount() > 0; else noDiscount">
+                    <div style="font-size:11px; color:#a4b0be; text-decoration:line-through;">RM {{ p.price | number:'1.2-2' }}</div>
+                    <div style="font-size:15px; font-weight:950; color:#ff4757;">RM {{ getDiscountedPrice(p.price) | number:'1.2-2' }}</div>
+                  </ng-container>
+                  <ng-template #noDiscount>
+                    <div style="font-size:15px; font-weight:900; color:#2f3542;">RM {{ p.price | number:'1.2-2' }}</div>
+                  </ng-template>
+                  <div style="font-size:11px; color:#747d8c; font-weight:600; margin-top:2px;">Stock: {{ p.stock }}</div>
                 </div>
               </div>
             </div>
