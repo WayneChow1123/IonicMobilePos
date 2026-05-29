@@ -81,11 +81,8 @@
             <div class="info-right">
               <span class="status-badge" [class.paid]="invoice.status==='Paid'" [class.partial]="invoice.status==='Partial'" [class.unpaid]="invoice.status==='Unpaid'">{{ invoice.status || 'Unpaid' }}</span>
               <div class="amount-box">
-                <span class="paid-amount" style="color: #6c5ce7;" *ngIf="invoice.creditUsed > 0 || invoice.CreditUsed > 0">Credit: RM {{ (invoice.creditUsed || invoice.CreditUsed) | number:'1.2-2' }}</span>
-                <span class="paid-amount" [class.partial]="invoice.status !== 'Paid'" *ngIf="(invoice.paidAmount || invoice.PaidAmount) > 0">Paid: RM {{ (invoice.paidAmount || invoice.PaidAmount) | number:'1.2-2' }}</span>
-                <span class="paid-amount" style="color: #ff7675; font-weight: 800;" *ngIf="(invoice.balance || invoice.Balance) > 0">Owe: RM {{ (invoice.balance || invoice.Balance) | number:'1.2-2' }}</span>
-                <span class="item-amount">RM {{ (invoice.netTotal || invoice.NetTotal || invoice.totalAmount || 0) | number:'1.2-2' }}</span>
-                <span *ngIf="invoice.hasCreditNote || invoice.HasCreditNote" style="font-size: 10px; color: #999; text-decoration: line-through; text-align: right;">RM {{ (invoice.totalAmount || invoice.TotalAmount) | number:'1.2-2' }}</span>
+                <span class="paid-amount" style="color: #e67e22;" *ngIf="(invoice.CNTotal || invoice.cnTotal || 0) > 0">CN: - RM {{ (invoice.CNTotal || invoice.cnTotal) | number:'1.2-2' }}</span>
+                <span class="item-amount">RM {{ (invoice.totalAmount || invoice.TotalAmount || 0) | number:'1.2-2' }}</span>
               </div>
             </div>
           </div>
@@ -95,6 +92,8 @@
         </div>
       </div>
       
+
+
       <!-- Spacer to prevent overlap with fixed footer -->
       <div *ngIf="filteredInvoices.length > 0" class="gs-spacer"></div>
 
@@ -408,9 +407,13 @@
           <span style="font-weight:700;color:#e67e22;font-size:15px;">Returns (CN)</span>
           <span style="font-weight:700;color:#e67e22;font-size:15px;">- RM {{ getTotalCN() | number:'1.2-2' }}</span>
         </div>
+        <div *ngIf="selectedInvoice.creditUsed > 0" style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;">
+          <span style="font-weight:700;color:#6c5ce7;font-size:15px;">Credit Used</span>
+          <span style="font-weight:700;color:#6c5ce7;font-size:15px;">- RM {{ selectedInvoice.creditUsed | number:'1.2-2' }}</span>
+        </div>
         <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;border-top:1px dashed rgba(0,0,0,0.1);padding-top:6px;">
           <span style="font-weight:800;color:#1a1a1a;font-size:16px;">Final Bill</span>
-          <span style="font-weight:800;font-size:16px;">RM {{ (selectedInvoice.totalAmount - getTotalCN()) | number:'1.2-2' }}</span>
+          <span style="font-weight:800;font-size:16px;">RM {{ (selectedInvoice.totalAmount - getTotalCN() - selectedInvoice.creditUsed > 0 ? selectedInvoice.totalAmount - getTotalCN() - selectedInvoice.creditUsed : 0) | number:'1.2-2' }}</span>
         </div>
         <div style="height:1px;background:rgba(0,0,0,0.1);margin:8px 0;"></div>
         <div style="display:flex;justify-content:space-between;align-items:center;">
@@ -424,6 +427,10 @@
         <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;border-top:1px solid #eee;padding-top:4px;">
           <span style="font-weight:800;color:#1a1a1a;font-size:15px;">Applied to Bill</span>
           <span style="font-weight:800;color:#2ecc71;font-size:15px;">RM {{ selectedInvoice.paidAmount | number:'1.2-2' }}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;border-top:1px solid #eee;padding-top:4px;">
+          <span style="font-weight:800;color:#ff7675;font-size:15px;">Owe (Remaining Balance)</span>
+          <span style="font-weight:800;color:#ff7675;font-size:15px;">RM {{ (selectedInvoice.totalAmount - getTotalCN() - selectedInvoice.creditUsed - selectedInvoice.paidAmount > 0 ? selectedInvoice.totalAmount - getTotalCN() - selectedInvoice.creditUsed - selectedInvoice.paidAmount : 0) | number:'1.2-2' }}</span>
         </div>
       </div>
     </div>
@@ -514,8 +521,11 @@
       </ion-button>
     </div>
     <div class="receipt-scroll">
-      <div class="receipt-paper" id="receipt-paper">
-        <div class="receipt-header">
+      <!-- 纸宽动态设置（58mm / 80mm） -->
+      <div class="receipt-paper" id="receipt-paper" [style.max-width]="printerSettings?.paperWidth === 58 ? '360px' : '480px'">
+        
+        <!-- 公司信息抬头的条件化渲染 -->
+        <div class="receipt-header" *ngIf="isOptionEnabled('Print Company Logo')">
           <span class="receipt-type">TAX INVOICE</span>
           <div class="receipt-divider"></div>
           <h2 class="receipt-company">{{ previewData?.companyName || 'B JAYA TRADING' }}</h2>
@@ -524,19 +534,35 @@
           <span class="receipt-address">{{ previewData?.companyCity || '70400 SEREMBAN N.S, SEREMBAN, N.S, MALAYSIA' }}</span>
           <span class="receipt-contact">TEL: {{ previewData?.companyTel || '012-6988080' }}&nbsp;&nbsp;&nbsp;GST: {{ previewData?.companyGst || '000134806856' }}</span>
         </div>
+
         <div class="receipt-doc-info">
           <div class="doc-row"><span class="doc-label">DOC NO</span><span class="doc-value">: {{ selectedInvoice?.invoiceNumber || 'S001-' + selectedInvoice?.id }}</span></div>
-          <div class="doc-row"><span class="doc-label">DATE</span><span class="doc-value">: {{ selectedInvoice?.invoiceDate | date:'dd MMMM yyyy HH:mm' }}</span></div>
+          
+          <!-- 发票时间条件化渲染 -->
+          <div class="doc-row" *ngIf="isOptionEnabled('Print Issue Time')">
+            <span class="doc-label">DATE</span>
+            <span class="doc-value">: {{ selectedInvoice?.invoiceDate | date:'dd MMMM yyyy HH:mm' }}</span>
+          </div>
         </div>
-        <div class="receipt-to">
+
+        <!-- 客户地址/电话条件化渲染 -->
+        <div class="receipt-to" *ngIf="isOptionEnabled('Print Customer Tel') || isOptionEnabled('Print Customer Add')">
           <span class="to-label">TO:</span>
           <div class="to-box">
             <strong>{{ selectedInvoice?.customerName || getCustomerName(selectedInvoice?.customerId) }}</strong>
-            <div *ngIf="getCustomerFullAddress(selectedInvoice?.customerId)" style="margin-top: 4px; font-size: 11px; line-height: 1.4;">
+            
+            <div *ngIf="isOptionEnabled('Print Customer Tel') && getCustomer(selectedInvoice?.customerId)?.phone" 
+                 style="margin-top: 4px; font-size: 11px; font-weight: 700; color: #1a1a1a;">
+              TEL: {{ getCustomer(selectedInvoice?.customerId)?.phone }}
+            </div>
+            
+            <div *ngIf="isOptionEnabled('Print Customer Add') && getCustomerFullAddress(selectedInvoice?.customerId)" 
+                 style="margin-top: 4px; font-size: 11px; line-height: 1.4;">
               {{ getCustomerFullAddress(selectedInvoice?.customerId) }}
             </div>
           </div>
         </div>
+
         <div class="receipt-divider-thin"></div>
         <div class="receipt-table-header">
           <span class="col-desc"><em>DESCRIPTION</em></span>
@@ -544,9 +570,18 @@
           <span class="col-sub">SUBTOTAL</span>
         </div>
         <div class="receipt-divider-thin"></div>
+
+        <!-- 明细列表（支持商品编码/UOM的开关） -->
         <div *ngFor="let item of (previewData?.items || selectedInvoice?.items || []); let i = index" class="receipt-item">
           <div class="item-desc-row">
-            <span>{{ i + 1 }}. {{ item.productName || getProductName(item.productId) }} ({{ item.uom || 'UNIT' }})</span>
+            <span>
+              {{ i + 1 }}. 
+              <!-- 商品编码开关 -->
+              <span *ngIf="isOptionEnabled('Print Item Code') && getProductCode(item.productId)">[{{ getProductCode(item.productId) }}] </span>
+              {{ item.productName || getProductName(item.productId) }}
+              <!-- 商品UOM开关 -->
+              <span *ngIf="isOptionEnabled('Print Item U.O.M.')"> ({{ item.uom || 'UNIT' }})</span>
+            </span>
             <span class="item-gst">[{{ item.taxType || 'SR' }}]</span>
           </div>
           <div class="item-calc-row">
@@ -557,6 +592,7 @@
             * {{ item.remark }}
           </div>
         </div>
+
         <div class="receipt-divider-thin" style="margin-top:16px;"></div>
         <div class="receipt-totals">
           <div class="total-row"><span>GROSS TOTAL</span><span>RM {{ selectedInvoice?.totalAmount | number:'1.2-2' }}</span></div>
@@ -565,6 +601,11 @@
           <div *ngIf="getTotalCN() > 0" class="total-row cn-deduct">
             <span>RETURNS (CN)</span>
             <span>- RM {{ getTotalCN() | number:'1.2-2' }}</span>
+          </div>
+          <!-- 信用抵扣行 (如果有) -->
+          <div *ngIf="selectedInvoice?.creditUsed > 0" class="total-row" style="color:#6c5ce7;">
+            <span>CREDIT USED</span>
+            <span>- RM {{ selectedInvoice?.creditUsed | number:'1.2-2' }}</span>
           </div>
         </div>
         <div *ngIf="getReceiptCreditNotes().length > 0" class="receipt-divider-thin"></div>
@@ -585,7 +626,7 @@
         </div>
         <div class="receipt-net">
           <span class="net-label">NET AMOUNT</span>
-          <span class="net-value">RM {{ (selectedInvoice?.totalAmount - getTotalCN()) | number:'1.2-2' }}</span>
+          <span class="net-value">RM {{ getReceiptNetAmount() | number:'1.2-2' }}</span>
         </div>
         <div class="receipt-payment-status">
           <span class="payment-status-label">PAYMENT STATUS</span>
@@ -602,17 +643,34 @@
           </div>
           <div class="payment-detail-row balance" style="border-top: 1px solid #eee; margin-top: 5px; padding-top: 5px;">
             <span style="font-weight:800;">BALANCE</span>
-            <span style="font-weight:800;">RM {{ ((selectedInvoice?.totalAmount - getTotalCN()) - (selectedInvoice?.paidAmount || 0)) | number:'1.2-2' }}</span>
+            <span style="font-weight:800;">RM {{ getReceiptBalance() | number:'1.2-2' }}</span>
           </div>
         </div>
-        <div class="receipt-due-box">
+        
+        <!-- 付款期限条件化 -->
+        <div class="receipt-due-box" *ngIf="isOptionEnabled('Print Term Date')">
           <span class="due-label">PAYMENT DUE</span>
           <span class="due-date">{{ previewData?.paymentDue || (selectedInvoice?.invoiceDate | date:'dd MMMM yyyy') }}</span>
         </div>
-        <div class="receipt-signature">
-          <span class="sig-label">SIGNATURE</span>
+        
+        <!-- 签收签名框条件化（支持Cash/Credit/CN/Payment等细分控制） -->
+        <div class="receipt-signature" *ngIf="(selectedInvoice?.termType === 'CASH SALE' && isOptionEnabled('Sign on Cash Invoice')) ||
+                                             (selectedInvoice?.termType === 'On Credit' && isOptionEnabled('Sign on Credit Invoice')) ||
+                                             (getTotalCN() > 0 && isOptionEnabled('Sign on Credit Note')) ||
+                                             (selectedInvoice?.paidAmount > 0 && isOptionEnabled('Sign on Payment'))">
+          <span class="sig-label">
+            {{ selectedInvoice?.termType === 'CASH SALE' && isOptionEnabled('Sign on Cash Invoice') ? 'CASH RECEIVED SIGNATURE' :
+               selectedInvoice?.termType === 'On Credit' && isOptionEnabled('Sign on Credit Invoice') ? 'CREDIT RECEIVED SIGNATURE' :
+               getTotalCN() > 0 && isOptionEnabled('Sign on Credit Note') ? 'CREDIT NOTE RECEIVED SIGNATURE' :
+               selectedInvoice?.paidAmount > 0 && isOptionEnabled('Sign on Payment') ? 'PAYMENT RECEIVED SIGNATURE' : 'SIGNATURE' }}
+          </span>
         </div>
-        <div class="receipt-thanks">THANK YOU</div>
+
+        <!-- 页脚条件化 -->
+        <div class="receipt-thanks" *ngIf="isOptionEnabled('Footer')">THANK YOU</div>
+
+        <!-- 底部空白行输出控制 -->
+        <div *ngFor="let dummy of getBottomEmptyLines()" style="height: 20px;"></div>
       </div>
     </div>
   </div>

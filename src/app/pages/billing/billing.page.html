@@ -94,8 +94,12 @@
         <span style="font-size:15px;font-weight:700;">RM {{ getBulkTotalAmount() | number:'1.2-2' }}</span>
       </div>
       <div *ngIf="getBulkCreditNotes() > 0" style="display:flex;justify-content:space-between;margin-bottom:6px;">
-        <span style="font-size:15px;color:#e67e22;">Credit Notes</span>
+        <span style="font-size:15px;color:#e67e22;">Credit Notes (CN)</span>
         <span style="font-size:15px;font-weight:700;color:#e67e22;">- RM {{ getBulkCreditNotes() | number:'1.2-2' }}</span>
+      </div>
+      <div *ngIf="getBulkCreditUsed() > 0" style="display:flex;justify-content:space-between;margin-bottom:6px;">
+        <span style="font-size:15px;color: #6c5ce7;">Credit Used</span>
+        <span style="font-size:15px;font-weight:700;color: #6c5ce7;">- RM {{ getBulkCreditUsed() | number:'1.2-2' }}</span>
       </div>
       <div *ngIf="getBulkPaidAmount() > 0" style="display:flex;justify-content:space-between;margin-bottom:6px;">
         <span style="font-size:15px;color:#888;">Already Paid</span>
@@ -541,16 +545,20 @@
                 <span style="font-weight:800; color:#ff4757;">Bal: RM {{ inv.balance | number:'1.2-2' }}</span>
               </div>
 
-              <!-- Standard CN Details -->
-              <div *ngIf="hasStandardCN(inv)" 
+              <!-- Standard CN Details & Credit Used -->
+              <div *ngIf="hasStandardCN(inv) || getInvoiceCreditUsed(inv) > 0" 
                    style="margin-top: 8px; padding-top: 8px; border-top: 1px dashed rgba(0,0,0,0.08); font-size: 12px; display: flex; flex-direction: column; gap: 4px;">
-                <div style="display: flex; justify-content: space-between; color: #e67e22; font-weight: 700;">
-                  <span>Standard CN Deducted:</span>
+                <div *ngIf="hasStandardCN(inv)" style="display: flex; justify-content: space-between; color: #e67e22; font-weight: 700;">
+                  <span>CN Deducted:</span>
                   <span>- RM {{ getStandardCNDeduction(inv) | number:'1.2-2' }}</span>
+                </div>
+                <div *ngIf="getInvoiceCreditUsed(inv) > 0" style="display: flex; justify-content: space-between; color: #6c5ce7; font-weight: 700;">
+                  <span>Credit Used:</span>
+                  <span>- RM {{ getInvoiceCreditUsed(inv) | number:'1.2-2' }}</span>
                 </div>
                 <div style="display: flex; justify-content: space-between; color: #27ae60; font-weight: 700;">
                   <span>Net Amount:</span>
-                  <span>RM {{ inv.netTotal | number:'1.2-2' }}</span>
+                  <span>RM {{ (inv.netTotal ?? inv.NetTotal ?? inv.totalAmount) | number:'1.2-2' }}</span>
                 </div>
               </div>
             </div>

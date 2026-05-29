@@ -59,6 +59,69 @@ export class InvoicesPage implements OnInit {
   stockIssues: any[] = [];
   showAvailableCredits = true;
   showInvoiceRemark = false;
+
+  printerSettings: any = null;
+
+  loadPrinterSettings() {
+    const saved = localStorage.getItem('printerSettings');
+    if (saved) {
+      try {
+        this.printerSettings = JSON.parse(saved);
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    if (!this.printerSettings) {
+      this.printerSettings = {
+        paperWidth: 80,
+        bottomEmptyLine: 5,
+        contentOptions: [
+          { name: 'Print Company Logo', enabled: true },
+          { name: 'Print Issue Time', enabled: true },
+          { name: 'Print Item Code', enabled: false },
+          { name: 'Print Item U.O.M.', enabled: true },
+          { name: 'Print Term Date', enabled: false },
+          { name: 'Print Customer Tel', enabled: true },
+          { name: 'Print Customer Add', enabled: true },
+          { name: 'Sign on Cash Invoice', enabled: true },
+          { name: 'Sign on Credit Invoice', enabled: true },
+          { name: 'Sign on Credit Note', enabled: true },
+          { name: 'Sign on Payment', enabled: true },
+          { name: 'Footer', enabled: true }
+        ]
+      };
+    }
+  }
+
+  isOptionEnabled(optionName: string): boolean {
+    this.loadPrinterSettings();
+    if (!this.printerSettings || !this.printerSettings.contentOptions) return true;
+    const opt = this.printerSettings.contentOptions.find((o: any) => o.name === optionName);
+    return opt ? opt.enabled : true;
+  }
+
+  getProductCode(productId: any): string {
+    const product = this.allProducts.find(p => p.id == productId);
+    return product?.productCode || product?.code || '';
+  }
+
+  getBottomEmptyLines(): number[] {
+    const count = this.printerSettings?.bottomEmptyLine ?? 5;
+    return Array(count).fill(0);
+  }
+
+  getReceiptNetAmount(): number {
+    if (!this.selectedInvoice) return 0;
+    const net = (this.selectedInvoice.totalAmount || 0) - this.getTotalCN() - (this.selectedInvoice.creditUsed || 0);
+    return net > 0 ? Math.round((net + Number.EPSILON) * 100) / 100 : 0;
+  }
+
+  getReceiptBalance(): number {
+    if (!this.selectedInvoice) return 0;
+    const net = this.getReceiptNetAmount();
+    const bal = net - (this.selectedInvoice.paidAmount || 0);
+    return bal > 0 ? Math.round((bal + Number.EPSILON) * 100) / 100 : 0;
+  }
   
   getGrandNetTotal() {
     return (this.filteredInvoices || [])
@@ -70,6 +133,35 @@ export class InvoicesPage implements OnInit {
     return (this.filteredInvoices || []).length;
   }
 
+  getGrandTotalAmount(): number {
+    return (this.filteredInvoices || [])
+      .reduce((sum, inv) => sum + (inv.totalAmount || inv.TotalAmount || 0), 0);
+  }
+
+  getGrandCNTotal(): number {
+    return (this.filteredInvoices || [])
+      .reduce((sum, inv) => sum + (inv.cnTotal || inv.CNTotal || 0), 0);
+  }
+
+  getGrandCreditUsed(): number {
+    return (this.filteredInvoices || [])
+      .reduce((sum, inv) => sum + (inv.creditUsed || inv.CreditUsed || 0), 0);
+  }
+
+  getGrandPaidTotal(): number {
+    return (this.filteredInvoices || [])
+      .reduce((sum, inv) => sum + (inv.paidAmount || inv.PaidAmount || 0), 0);
+  }
+
+  getGrandBalanceTotal(): number {
+    const total = (this.filteredInvoices || [])
+      .reduce((sum, inv) => {
+        const bal = inv.balance ?? inv.Balance ?? 0;
+        return sum + (bal > 0 ? bal : 0);
+      }, 0);
+    return total > 0 ? Math.round((total + Number.EPSILON) * 100) / 100 : 0;
+  }
+
   deleteButtons = [
     { text: 'Cancel', role: 'cancel' },
     { text: 'Delete', role: 'destructive', handler: () => this.deleteInvoice() }
@@ -78,6 +170,7 @@ export class InvoicesPage implements OnInit {
   constructor(private router: Router, private route: ActivatedRoute, private navCtrl: NavController, private api: ApiService, private cdr: ChangeDetectorRef, private alertService: AlertService) { }
 
   ionViewWillEnter() {
+    this.loadPrinterSettings();
     this.cdr.detectChanges();
   }
 
@@ -828,26 +921,83 @@ export class InvoicesPage implements OnInit {
   }
 
   downloadReceipt() {
+    this.loadPrinterSettings();
     const printWindow = window.open('', '_blank');
     if (!printWindow) { this.showToastMsg('Please allow pop-ups to download'); return; }
-    const styles = `<style>* { margin: 0; padding: 0; box-sizing: border-box; } body { font-family: 'Courier New', monospace; background: #F0EBE3; display: flex; justify-content: center; padding: 40px 20px; } .receipt { background: #fff; border-radius: 24px; padding: 40px 36px; max-width: 480px; width: 100%; box-shadow: 0 4px 24px rgba(0,0,0,0.08); } .receipt-type { display: block; text-align: center; font-size: 13px; letter-spacing: 6px; color: #888; margin-bottom: 16px; } .divider { height: 1px; background: #1a1a1a; margin: 12px 0; } .divider-thin { height: 1px; background: #ddd; margin: 12px 0; } .company { text-align: center; font-size: 22px; font-weight: 700; margin: 12px 0 4px; } .co-reg { display: block; text-align: center; font-size: 12px; color: #888; margin-bottom: 8px; } .address { display: block; text-align: center; font-size: 11px; color: #666; line-height: 1.6; } .contact { display: block; text-align: center; font-size: 11px; color: #888; margin-top: 6px; } .doc-row { display: flex; gap: 12px; margin: 4px 0; } .doc-label { font-size: 12px; font-weight: 700; min-width: 70px; } .doc-value { font-size: 12px; font-weight: 700; } .to-section { margin: 16px 0; } .to-label { font-size: 12px; font-style: italic; color: #888; } .to-box { border: 1px solid #ddd; border-radius: 8px; padding: 12px; margin-top: 6px; font-size: 12px; line-height: 1.6; } .table-header { display: flex; justify-content: space-between; font-size: 11px; font-weight: 700; font-style: italic; } .item-row { margin: 12px 0; } .item-desc { display: flex; justify-content: space-between; font-size: 12px; font-weight: 700; } .item-calc { font-size: 11px; color: #888; margin-top: 2px; display: flex; justify-content: space-between; } .total-row { display: flex; justify-content: space-between; font-size: 12px; margin: 4px 0; } .net-bar { background: #1a1a1a; color: #fff; border-radius: 8px; padding: 14px 20px; display: flex; justify-content: space-between; align-items: center; margin: 16px 0; } .net-label { font-size: 12px; font-weight: 700; font-style: italic; } .net-value { font-size: 20px; font-weight: 700; } .due-box { border: 1px solid #ddd; border-radius: 8px; padding: 16px; text-align: center; margin: 16px 0; } .due-label { display: block; font-size: 10px; letter-spacing: 3px; color: #888; margin-bottom: 6px; } .due-date { font-size: 18px; font-weight: 700; } .sig-box { border: 1px solid #ddd; border-radius: 8px; padding: 16px; min-height: 100px; margin: 16px 0; } .sig-label { font-size: 11px; color: #ccc; font-style: italic; } .thanks { text-align: center; font-size: 12px; letter-spacing: 6px; color: #ccc; margin-top: 20px; } .cn-header { font-size: 11px; font-weight: 700; letter-spacing: 2px; color: #1a1a1a; margin: 8px 0; } .cn-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 12px; } .cn-number { font-weight: 700; } .cn-amount { font-weight: 700; color: #1a1a1a; } .cn-deduct { color: #1a1a1a; font-weight: 700; }</style>`;
+
+    const width = this.printerSettings?.paperWidth === 58 ? '360px' : '480px';
+    const styles = `<style>* { margin: 0; padding: 0; box-sizing: border-box; } body { font-family: 'Courier New', monospace; background: #F0EBE3; display: flex; justify-content: center; padding: 40px 20px; } .receipt { background: #fff; border-radius: 24px; padding: 40px 36px; max-width: ${width}; width: 100%; box-shadow: 0 4px 24px rgba(0,0,0,0.08); } .receipt-type { display: block; text-align: center; font-size: 13px; letter-spacing: 6px; color: #888; margin-bottom: 16px; } .divider { height: 1px; background: #1a1a1a; margin: 12px 0; } .divider-thin { height: 1px; background: #ddd; margin: 12px 0; } .company { text-align: center; font-size: 22px; font-weight: 700; margin: 12px 0 4px; } .co-reg { display: block; text-align: center; font-size: 12px; color: #888; margin-bottom: 8px; } .address { display: block; text-align: center; font-size: 11px; color: #666; line-height: 1.6; } .contact { display: block; text-align: center; font-size: 11px; color: #888; margin-top: 6px; } .doc-row { display: flex; gap: 12px; margin: 4px 0; } .doc-label { font-size: 12px; font-weight: 700; min-width: 70px; } .doc-value { font-size: 12px; font-weight: 700; } .to-section { margin: 16px 0; } .to-label { font-size: 12px; font-style: italic; color: #888; } .to-box { border: 1px solid #ddd; border-radius: 8px; padding: 12px; margin-top: 6px; font-size: 12px; line-height: 1.6; } .table-header { display: flex; justify-content: space-between; font-size: 11px; font-weight: 700; font-style: italic; } .item-row { margin: 12px 0; } .item-desc { display: flex; justify-content: space-between; font-size: 12px; font-weight: 700; } .item-calc { font-size: 11px; color: #888; margin-top: 2px; display: flex; justify-content: space-between; } .total-row { display: flex; justify-content: space-between; font-size: 12px; margin: 4px 0; } .net-bar { background: #1a1a1a; color: #fff; border-radius: 8px; padding: 14px 20px; display: flex; justify-content: space-between; align-items: center; margin: 16px 0; } .net-label { font-size: 12px; font-weight: 700; font-style: italic; } .net-value { font-size: 20px; font-weight: 700; } .due-box { border: 1px solid #ddd; border-radius: 8px; padding: 16px; text-align: center; margin: 16px 0; } .due-label { display: block; font-size: 10px; letter-spacing: 3px; color: #888; margin-bottom: 6px; } .due-date { font-size: 18px; font-weight: 700; } .sig-box { border: 1px solid #ddd; border-radius: 8px; padding: 16px; min-height: 100px; margin: 16px 0; } .sig-label { font-size: 11px; color: #ccc; font-style: italic; } .thanks { text-align: center; font-size: 12px; letter-spacing: 6px; color: #ccc; margin-top: 20px; } .cn-header { font-size: 11px; font-weight: 700; letter-spacing: 2px; color: #1a1a1a; margin: 8px 0; } .cn-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 12px; } .cn-number { font-weight: 700; } .cn-amount { font-weight: 700; color: #1a1a1a; } .cn-deduct { color: #1a1a1a; font-weight: 700; }</style>`;
+
     const inv = this.selectedInvoice;
     const pd = this.previewData;
     const items = pd?.items || inv?.items || [];
+
+    // 1. 公司抬头的条件化拼接
+    let companyHeaderHtml = '';
+    if (this.isOptionEnabled('Print Company Logo')) {
+      companyHeaderHtml = `
+        <div class="company">${pd?.companyName || 'B JAYA TRADING'}</div>
+        <span class="co-reg">(${pd?.companyReg || '001188861-T'})</span>
+        <span class="address">${pd?.companyAddress || 'NO. 467, JALAN PALAS 13, TAMAN PELANGI,'}</span>
+        <span class="address">${pd?.companyCity || '70400 SEREMBAN N.S, SEREMBAN, N.S, MALAYSIA'}</span>
+        <span class="contact">TEL: ${pd?.companyTel || '012-6988080'} GST: ${pd?.companyGst || '000134806856'}</span>
+      `;
+    }
+
+    // 2. 发件日期的条件化拼接
+    const invoiceDate = inv?.invoiceDate ? new Date(inv.invoiceDate) : new Date();
+    const dateStr = invoiceDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    let dateHtml = '';
+    if (this.isOptionEnabled('Print Issue Time')) {
+      dateHtml = `<div class="doc-row"><span class="doc-label">DATE</span><span class="doc-value">: ${dateStr}</span></div>`;
+    }
+
+    // 3. 客户信息（电话与地址）条件化拼接
+    let customerBoxHtml = '';
+    if (this.isOptionEnabled('Print Customer Tel') || this.isOptionEnabled('Print Customer Add')) {
+      let telHtml = '';
+      let addrHtml = '';
+      const c = this.getCustomer(inv?.customerId);
+      if (c) {
+        if (this.isOptionEnabled('Print Customer Tel') && c.phone) {
+          telHtml = `<div style="margin-top:2px; font-weight:bold;">TEL: ${c.phone}</div>`;
+        }
+        if (this.isOptionEnabled('Print Customer Add')) {
+          addrHtml = this.getCustomerFullAddressHtml(inv?.customerId);
+        }
+      }
+      customerBoxHtml = `
+        <div class="to-section">
+          <span class="to-label">TO:</span>
+          <div class="to-box">
+            <strong>${inv?.customerName || this.getCustomerName(inv?.customerId)}</strong>
+            ${telHtml}
+            ${addrHtml}
+          </div>
+        </div>
+      `;
+    }
+
+    // 4. 商品明细（支持商品编码/UOM开关）
     let itemsHtml = '';
     items.forEach((item: any, i: number) => {
       const subtotal = ((item.quantity || 0) * (item.unitPrice || 0)).toFixed(2);
-      const prodName = item.productName || this.getProductName(item.productId);
+      let prodName = item.productName || this.getProductName(item.productId);
+      if (this.isOptionEnabled('Print Item Code')) {
+        const product = this.allProducts.find(p => p.id == item.productId);
+        const code = product?.productCode || product?.code || '';
+        if (code) {
+          prodName = `[${code}] ${prodName}`;
+        }
+      }
+      const uom = this.isOptionEnabled('Print Item U.O.M.') ? ` (${item.uom || 'UNIT'})` : '';
       const remarkHtml = item.remark ? `<div style="font-size:10px; color:#555; font-style:italic; margin-top:2px;">* ${item.remark}</div>` : '';
-      itemsHtml += `<div class="item-row"><div class="item-desc"><span>${i + 1}. ${prodName} (${item.uom || 'UNIT'})</span><span>[${item.taxType || 'SR'}]</span></div><div class="item-calc"><span>${item.quantity} x ${(item.unitPrice || 0).toFixed(2)}</span><span>${subtotal}</span></div>${remarkHtml}</div>`;
+      itemsHtml += `<div class="item-row"><div class="item-desc"><span>${i + 1}. ${prodName}${uom}</span><span>[${item.taxType || 'SR'}]</span></div><div class="item-calc"><span>${item.quantity} x ${(item.unitPrice || 0).toFixed(2)}</span><span>${subtotal}</span></div>${remarkHtml}</div>`;
     });
-    const invoiceDate = inv?.invoiceDate ? new Date(inv.invoiceDate) : new Date();
-    const dateStr = invoiceDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+
     const dueStr = pd?.paymentDue || invoiceDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
     const cns = this.getReceiptCreditNotes();
-    const totalCN = this.getReceiptTotalCN(); // This is the total of ALL CNs
     
-    // ✅ 区分退货和找零，让收据更直观
     const changeCNs = cns.filter((cn: any) => (cn.cnNumber || '').startsWith('CN-CHG'));
     const returnCNs = cns.filter((cn: any) => !(cn.cnNumber || '').startsWith('CN-CHG'));
     
@@ -872,18 +1022,54 @@ export class InvoicesPage implements OnInit {
       });
     }
 
-    // 重新计算收据上的 Net 和 Paid
-    const netAmount = (inv?.totalAmount || 0) - totalReturns; // 最终账单应该是 原价 - 退货
-    const displayedPaid = (inv?.paidAmount || 0) + totalChange; // 展示给客户的实收 = 账单实收 + 找零点数
-    
+    const netAmount = this.getReceiptNetAmount();
+    const balance = this.getReceiptBalance();
+    const displayedPaid = (inv?.paidAmount || 0) + totalChange;
     const paymentStatus = inv?.status === 'Paid' ? 'PAID' : inv?.status === 'Partial' ? 'PARTIALLY PAID' : 'UNPAID';
+    
     const paymentDetailHtml = `<div style="padding:8px 20px;border:1px dashed #ddd;border-top:none;border-radius:0 0 8px 8px;margin-bottom:16px;">
         <div style="display:flex;justify-content:space-between;font-size:12px;font-weight:700;padding:3px 0;"><span>PAID AMOUNT</span><span>RM ${displayedPaid.toFixed(2)}</span></div>
         ${changeRowHtml}
-        <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:800;padding:6px 0 3px;border-top:1px solid #eee;margin-top:4px;"><span>BALANCE</span><span>RM ${(netAmount - (inv?.paidAmount || 0)).toFixed(2)}</span></div>
+        <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:800;padding:6px 0 3px;border-top:1px solid #eee;margin-top:4px;"><span>BALANCE</span><span>RM ${balance.toFixed(2)}</span></div>
     </div>`;
 
-    printWindow.document.write(`<!DOCTYPE html><html><head><title>Invoice ${inv?.invoiceNumber || ''}</title>${styles}</head><body><div class="receipt"><span class="receipt-type">TAX INVOICE</span><div class="divider"></div><div class="company">${pd?.companyName || 'B JAYA TRADING'}</div><span class="co-reg">(${pd?.companyReg || '001188861-T'})</span><span class="address">${pd?.companyAddress || 'NO. 467, JALAN PALAS 13, TAMAN PELANGI,'}</span><span class="address">${pd?.companyCity || '70400 SEREMBAN N.S, SEREMBAN, N.S, MALAYSIA'}</span><span class="contact">TEL: ${pd?.companyTel || '012-6988080'} GST: ${pd?.companyGst || '000134806856'}</span><div style="margin-top:20px;"><div class="doc-row"><span class="doc-label">DOC NO</span><span class="doc-value">: ${inv?.invoiceNumber || 'S001-' + inv?.id}</span></div><div class="doc-row"><span class="doc-label">DATE</span><span class="doc-value">: ${dateStr}</span></div></div><div class="to-section"><span class="to-label">TO:</span><div class="to-box"><strong>${inv?.customerName || this.getCustomerName(inv?.customerId)}</strong>${this.getCustomerFullAddressHtml(inv?.customerId)}</div></div><div class="divider-thin"></div><div class="table-header"><span>DESCRIPTION</span><span>GST SUBTOTAL</span></div><div class="divider-thin"></div>${itemsHtml}<div class="divider-thin"></div><div class="total-row"><span>GROSS TOTAL</span><span>RM ${(inv?.totalAmount || 0).toFixed(2)}</span></div>${returnsHtml}${cnListHtml}<div class="net-bar"><span class="net-label">NET AMOUNT</span><span class="net-value">RM ${netAmount.toFixed(2)}</span></div><div style="display:flex;justify-content:space-between;padding:12px 20px;border:1px dashed #ddd;border-radius:8px;margin-bottom:0;"><span style="font-size:11px;font-weight:700;letter-spacing:2px;color:#888;">PAYMENT STATUS</span><span style="font-size:14px;font-weight:800;">${paymentStatus}</span></div>${paymentDetailHtml}<div class="due-box"><span class="due-label">PAYMENT DUE</span><span class="due-date">${dueStr}</span></div><div class="sig-box"><span class="sig-label">SIGNATURE</span></div><div class="thanks">THANK YOU</div></div></body></html>`);
+    // 5. 期限日期条件化
+    let termDateHtml = '';
+    if (this.isOptionEnabled('Print Term Date')) {
+      termDateHtml = `<div class="due-box"><span class="due-label">PAYMENT DUE</span><span class="due-date">${dueStr}</span></div>`;
+    }
+
+    // 6. 签收栏条件化（根据发票类型动态决定渲染）
+    let sigBoxHtml = '';
+    const showCashSig = inv?.termType === 'CASH SALE' && this.isOptionEnabled('Sign on Cash Invoice');
+    const showCreditSig = inv?.termType === 'On Credit' && this.isOptionEnabled('Sign on Credit Invoice');
+    const showCNSig = (totalReturns > 0) && this.isOptionEnabled('Sign on Credit Note');
+    const showPaymentSig = (inv?.paidAmount > 0) && this.isOptionEnabled('Sign on Payment');
+
+    if (showCashSig || showCreditSig || showCNSig || showPaymentSig) {
+      let sigLabelText = 'SIGNATURE';
+      if (showCashSig) sigLabelText = 'CASH RECEIVED SIGNATURE';
+      else if (showCreditSig) sigLabelText = 'CREDIT RECEIVED SIGNATURE';
+      else if (showCNSig) sigLabelText = 'CREDIT NOTE RECEIVED SIGNATURE';
+      else if (showPaymentSig) sigLabelText = 'PAYMENT RECEIVED SIGNATURE';
+
+      sigBoxHtml = `<div class="sig-box"><span class="sig-label">${sigLabelText}</span></div>`;
+    }
+
+    // 7. 页脚条件化
+    let footerHtml = '';
+    if (this.isOptionEnabled('Footer')) {
+      footerHtml = `<div class="thanks">THANK YOU</div>`;
+    }
+
+    // 8. 底部安全留空行数处理
+    let emptyLinesHtml = '';
+    const linesCount = this.printerSettings?.bottomEmptyLine ?? 5;
+    for (let l = 0; l < linesCount; l++) {
+      emptyLinesHtml += `<div style="height: 20px;"></div>`;
+    }
+
+    printWindow.document.write(`<!DOCTYPE html><html><head><title>Invoice ${inv?.invoiceNumber || ''}</title>${styles}</head><body><div class="receipt"><span class="receipt-type">TAX INVOICE</span><div class="divider"></div>${companyHeaderHtml}<div style="margin-top:20px;"><div class="doc-row"><span class="doc-label">DOC NO</span><span class="doc-value">: ${inv?.invoiceNumber || 'S001-' + inv?.id}</span></div>${dateHtml}</div>${customerBoxHtml}<div class="divider-thin"></div><div class="table-header"><span>DESCRIPTION</span><span>GST SUBTOTAL</span></div><div class="divider-thin"></div>${itemsHtml}<div class="divider-thin"></div><div class="total-row"><span>GROSS TOTAL</span><span>RM ${(inv?.totalAmount || 0).toFixed(2)}</span></div>${returnsHtml}${cnListHtml}<div class="net-bar"><span class="net-label">NET AMOUNT</span><span class="net-value">RM ${netAmount.toFixed(2)}</span></div><div style="display:flex;justify-content:space-between;padding:12px 20px;border:1px dashed #ddd;border-radius:8px;margin-bottom:0;"><span style="font-size:11px;font-weight:700;letter-spacing:2px;color:#888;">PAYMENT STATUS</span><span style="font-size:14px;font-weight:800;">${paymentStatus}</span></div>${paymentDetailHtml}${termDateHtml}${sigBoxHtml}${footerHtml}${emptyLinesHtml}</div></body></html>`);
     printWindow.document.close();
     setTimeout(() => printWindow.print(), 500);
   }

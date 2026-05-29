@@ -1,4 +1,4 @@
-﻿import { AlertService } from '../../services/alert.service';
+import { AlertService } from '../../services/alert.service';
 import { Component, ChangeDetectorRef } from '@angular/core';
 import { NavController } from '@ionic/angular';
 import { Router } from '@angular/router';
@@ -53,7 +53,31 @@ export class PrinterSettingPage {
   constructor(private router: Router, private navCtrl: NavController, private cdr: ChangeDetectorRef, private alertService: AlertService) {}
 
   ionViewWillEnter() {
+    this.loadSettings();
     this.cdr.detectChanges();
+  }
+
+  loadSettings() {
+    const saved = localStorage.getItem('printerSettings');
+    if (saved) {
+      try {
+        const config = JSON.parse(saved);
+        this.paperWidth = config.paperWidth ?? 80;
+        this.bottomEmptyLine = config.bottomEmptyLine ?? 5;
+        this.printerInterface = config.printerInterface ?? 'Bluetooth';
+        this.printerType = config.printerType ?? 'JP Printer - Text';
+        this.connectionType = config.connectionType ?? 'Type 1-Normal';
+        this.macAddress = config.macAddress ?? '02:29:DE:43:D8:2C';
+        this.selectedFormat = config.selectedFormat ?? 'FORMAT 1';
+        if (config.contentOptions) {
+          this.contentOptions = config.contentOptions;
+        } else {
+          this.contentOptions = this.buildOptions(this.selectedFormat);
+        }
+      } catch (e) {
+        console.error('Error loading printer settings', e);
+      }
+    }
   }
 
   goBack() {
@@ -78,7 +102,7 @@ export class PrinterSettingPage {
   }
 
   saveSettings() {
-    console.log('Saving printer settings...', {
+    const config = {
       paperWidth: this.paperWidth,
       bottomEmptyLine: this.bottomEmptyLine,
       printerInterface: this.printerInterface,
@@ -87,7 +111,9 @@ export class PrinterSettingPage {
       macAddress: this.macAddress,
       selectedFormat: this.selectedFormat,
       contentOptions: this.contentOptions,
-    });
+    };
+    localStorage.setItem('printerSettings', JSON.stringify(config));
+    this.alertService.toast('Printer settings saved successfully!', 'success');
   }
 }
 

@@ -367,13 +367,16 @@ export class BillingPage implements OnInit {
   }
 
   hasStandardCN(inv: any): boolean {
-    if (!inv || inv.totalAmount === undefined || inv.netTotal === undefined) return false;
-    return (inv.totalAmount - inv.netTotal) > 0.01;
+    const cnTotal = inv.CNTotal ?? inv.cnTotal ?? 0;
+    return cnTotal > 0.01;
   }
 
   getStandardCNDeduction(inv: any): number {
-    if (!inv || inv.totalAmount === undefined || inv.netTotal === undefined) return 0;
-    return inv.totalAmount - inv.netTotal;
+    return inv.CNTotal ?? inv.cnTotal ?? 0;
+  }
+
+  getInvoiceCreditUsed(inv: any): number {
+    return inv.CreditUsed ?? inv.creditUsed ?? 0;
   }
 
   confirmInvoiceSelection() {
@@ -382,20 +385,23 @@ export class BillingPage implements OnInit {
   }
 
   getBulkTotalAmount(): number {
-    return this.selectedInvoicesList.reduce((sum, inv) => sum + (inv.totalAmount || 0), 0);
+    return this.selectedInvoicesList.reduce((sum, inv) => sum + (inv.totalAmount ?? inv.TotalAmount ?? 0), 0);
   }
 
   getBulkPaidAmount(): number {
-    return this.selectedInvoicesList.reduce((sum, inv) => sum + ((inv.paidAmount || 0) + (inv.creditUsed || 0)), 0);
+    return this.selectedInvoicesList.reduce((sum, inv) => sum + (inv.paidAmount ?? inv.PaidAmount ?? 0), 0);
   }
 
   getBulkCreditNotes(): number {
-    // Only fetch CN total if it exists in the model. (We can just use 0 here or filter if needed)
-    return this.selectedInvoicesList.reduce((sum, inv) => sum + ((inv.totalAmount || 0) - (inv.netTotal || 0)), 0);
+    return this.selectedInvoicesList.reduce((sum, inv) => sum + (inv.CNTotal ?? inv.cnTotal ?? 0), 0);
+  }
+
+  getBulkCreditUsed(): number {
+    return this.selectedInvoicesList.reduce((sum, inv) => sum + (inv.CreditUsed ?? inv.creditUsed ?? 0), 0);
   }
 
   getBulkBalance(): number {
-    return this.selectedInvoicesList.reduce((sum, inv) => sum + (inv.balance || 0), 0);
+    return this.selectedInvoicesList.reduce((sum, inv) => sum + (inv.Balance ?? inv.balance ?? 0), 0);
   }
 
   useCreditNote(cn: any) {
