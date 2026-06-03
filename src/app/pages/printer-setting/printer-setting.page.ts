@@ -1,6 +1,6 @@
 import { AlertService } from '../../services/alert.service';
 import { Component, ChangeDetectorRef } from '@angular/core';
-import { NavController } from '@ionic/angular';
+import { NavController, AlertController } from '@ionic/angular';
 import { Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { IonicModule } from '@ionic/angular';
@@ -50,7 +50,7 @@ export class PrinterSettingPage {
 
   contentOptions = this.buildOptions('FORMAT 1');
 
-  constructor(private router: Router, private navCtrl: NavController, private cdr: ChangeDetectorRef, private alertService: AlertService) {}
+  constructor(private router: Router, private navCtrl: NavController, private cdr: ChangeDetectorRef, private alertService: AlertService, private alertCtrl: AlertController) {}
 
   ionViewWillEnter() {
     this.loadSettings();
@@ -89,7 +89,76 @@ export class PrinterSettingPage {
   }
 
   refreshMac() {
-    console.log('Refreshing MAC address...');
+    const bt = (window as any).bluetoothSerial;
+    if (!bt) {
+      this.alertService.toast('Bluetooth serial plugin not available (only works on APK)', 'error');
+      return;
+    }
+
+    const permissions = (window as any).plugins?.permissions;
+    if (permissions && permissions.BLUETOOTH_CONNECT) {
+      permissions.hasPermission(permissions.BLUETOOTH_CONNECT, (status: any) => {
+        if (status.hasPermission) {
+          this.listBtDevices(bt);
+        } else {
+          permissions.requestPermission(permissions.BLUETOOTH_CONNECT, (s: any) => {
+            if (s.hasPermission) {
+              this.listBtDevices(bt);
+            } else {
+              this.alertService.toast('Permission denied. Please enable "Nearby Devices" permission in App settings.', 'error');
+            }
+          }, () => {
+            this.alertService.toast('Failed to request bluetooth permission', 'error');
+          });
+        }
+      }, () => {
+        this.alertService.toast('Failed to check bluetooth permission', 'error');
+      });
+    } else {
+      this.listBtDevices(bt);
+    }
+  }
+
+  private listBtDevices(bt: any) {
+    this.alertService.toast('Scanning paired devices...', 'info');
+    bt.list(
+      async (devices: any[]) => {
+        if (!devices || devices.length === 0) {
+          this.alertService.toast('No paired Bluetooth devices found. Please pair in system settings first.', 'warning');
+          return;
+        }
+
+        const inputs = devices.map((d: any) => ({
+          type: 'radio' as const,
+          label: `${d.name || 'Unnamed'} (${d.address || d.id})`,
+          value: d.address || d.id,
+          checked: d.address === this.macAddress || d.id === this.macAddress
+        }));
+
+        const alert = await this.alertCtrl.create({
+          header: 'Select Bluetooth Printer',
+          inputs: inputs,
+          buttons: [
+            { text: 'Cancel', role: 'cancel' },
+            {
+              text: 'Select',
+              handler: (selectedMac) => {
+                if (selectedMac) {
+                  this.macAddress = selectedMac;
+                  this.cdr.detectChanges();
+                  this.alertService.toast(`Selected: ${selectedMac}`, 'success');
+                }
+              }
+            }
+          ]
+        });
+
+        await alert.present();
+      },
+      (err: any) => {
+        this.alertService.toast('Failed to list bluetooth devices: ' + err, 'error');
+      }
+    );
   }
 
   onFormatChange() {

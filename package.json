@@ -28,6 +28,8 @@
     "@capacitor/keyboard": "8.0.3",
     "@capacitor/status-bar": "8.0.2",
     "@ionic/angular": "^8.0.0",
+    "cordova-plugin-android-permissions": "^1.1.5",
+    "cordova-plugin-bluetooth-serial": "^0.4.7",
     "ionicons": "^7.0.0",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.7",
