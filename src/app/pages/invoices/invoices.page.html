@@ -310,7 +310,7 @@
       <div class="ni-summary">
         <div class="ni-sum-row">
           <span class="ni-sum-label">SUB-TOTAL:</span>
-          <span class="ni-sum-val">RM {{ getOriginalTotal() | number:'1.2-2' }}</span>
+          <span class="ni-sum-val">RM {{ getBaseTotal() | number:'1.2-2' }}</span>
         </div>
         <div class="ni-sum-row" *ngIf="getCustomerDiscount() > 0">
           <span class="ni-sum-label">DISCOUNT ({{ getCustomerDiscount() }}%):</span>

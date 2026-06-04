@@ -47,6 +47,10 @@ export class CustomersPage implements OnInit {
   allInvoices: any[] = [];
   allPayments: any[] = [];
   allCNs: any[] = [];
+  customerPrices: any[] = [];
+  allProducts: any[] = [];
+  showAddPriceForm = false;
+  newPriceForm: any = { productId: null, specialPrice: null };
   deleteButtons = [
     { text: 'Cancel', role: 'cancel' },
     { text: 'Delete', role: 'destructive', handler: () => this.deleteCustomer() }
@@ -169,6 +173,68 @@ export class CustomersPage implements OnInit {
     this.cdr.detectChanges();
   }
 
+  loadCustomerPrices(customerId: number) {
+    if (!customerId) return;
+    this.api.getCustomerProductPrices(customerId).subscribe({
+      next: (res) => { this.customerPrices = Array.isArray(res) ? res : []; this.cdr.detectChanges(); },
+      error: () => { this.customerPrices = []; }
+    });
+  }
+
+  loadPriceProducts() {
+    this.api.getProducts().subscribe({
+      next: (res) => { this.allProducts = Array.isArray(res) ? res : []; },
+      error: () => { this.allProducts = []; }
+    });
+  }
+
+  getProductName(productId: number): string {
+    const p = this.allProducts.find(x => x.id === productId);
+    return p ? p.name : 'Unknown Product';
+  }
+
+  getProductPrice(productId: number): number {
+    const p = this.allProducts.find(x => x.id === productId);
+    return p ? p.price : 0;
+  }
+
+  toggleAddPriceForm() {
+    this.showAddPriceForm = !this.showAddPriceForm;
+    this.newPriceForm = { productId: null, specialPrice: null };
+  }
+
+  addCustomerPrice() {
+    if (!this.newPriceForm.productId || this.newPriceForm.specialPrice == null) {
+      this.showToastMsg('Please select a product and enter a price');
+      return;
+    }
+    this.api.createCustomerProductPrice(this.selectedCustomer.id, {
+      productId: Number(this.newPriceForm.productId),
+      specialPrice: Number(this.newPriceForm.specialPrice)
+    }).subscribe({
+      next: () => {
+        this.showToastMsg('Price created!');
+        this.showAddPriceForm = false;
+        this.newPriceForm = { productId: null, specialPrice: null };
+        this.loadCustomerPrices(this.selectedCustomer.id);
+      },
+      error: (err) => this.showToastMsg('Failed: ' + (err.error?.message || err.message))
+    });
+  }
+
+  deleteCustomerPrice(productId: number) {
+    this.alertService.confirm('Delete Price', 'Remove this special price?').then(ok => {
+      if (!ok) return;
+      this.api.deleteCustomerProductPrice(this.selectedCustomer.id, productId).subscribe({
+        next: () => {
+          this.showToastMsg('Price deleted!');
+          this.loadCustomerPrices(this.selectedCustomer.id);
+        },
+        error: (err) => this.showToastMsg('Failed: ' + (err.error?.message || err.message))
+      });
+    });
+  }
+
   getCustomerCredit(customerId: any): number {
     const invs = this.allInvoices.filter(inv => inv.customerId == customerId);
     const outstanding = invs.reduce((s, inv) => {
@@ -255,6 +321,8 @@ export class CustomersPage implements OnInit {
           _hasBranch: !!branch
         };
         this.loadCustomerSpecificData(fullCustomer.id);
+        this.loadCustomerPrices(fullCustomer.id);
+        this.loadPriceProducts();
       },
       error: () => {
         this.isModalLoading = false;
@@ -273,10 +341,11 @@ export class CustomersPage implements OnInit {
     }
   }
 
-  closeModal() { this.showModal = false; this.isEditMode = false; this.activeReport = null; }
+  closeModal() { this.showModal = false; this.isEditMode = false; this.activeReport = null; this.showAddPriceForm = false; this.customerPrices = []; }
 
   setActiveReport(report: string | null) {
     this.activeReport = report;
+    if (report) this.showAddPriceForm = false;
   }
 
   viewAllInvoices() {

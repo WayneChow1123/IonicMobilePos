@@ -316,10 +316,56 @@
         </div>
       </div>
 
-      <!-- PRICE SUB-TAB CONTENT (Placeholder) -->
-      <div *ngIf="activeSubTab === 'PRICE'" style="padding: 40px; text-align: center; color: #888;">
-        <ion-icon name="pricetag-outline" style="font-size: 48px; margin-bottom: 12px;"></ion-icon>
-        <p>Price settings not implemented yet.</p>
+      <!-- PRICE SUB-TAB CONTENT -->
+      <div *ngIf="activeSubTab === 'PRICE'" style="padding: 16px;">
+        <div *ngIf="customerPrices.length === 0 && !showAddPriceForm" style="text-align:center;color:#888;padding:40px 0;">
+          <ion-icon name="pricetag-outline" style="font-size: 48px; margin-bottom: 12px;"></ion-icon>
+          <p>No special prices for this customer.</p>
+        </div>
+
+        <div *ngFor="let price of customerPrices" class="cd-card cd-card-white" style="margin-bottom:10px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;">
+            <div>
+              <div style="font-weight:700;font-size:15px;color:#1a1a1a;">{{ price.productName }}</div>
+              <div style="font-size:12px;color:#888;margin-top:4px;">
+                Code: {{ price.productCode || '---' }} |
+                Original: <span style="text-decoration:line-through;color:#aaa;">RM {{ price.originalPrice | number:'1.2-2' }}</span>
+              </div>
+              <div style="font-size:14px;color:#27ae60;font-weight:700;margin-top:4px;">
+                Special: RM {{ price.specialPrice | number:'1.2-2' }}
+              </div>
+            </div>
+            <ion-button fill="clear" style="--color:#e57373;" (click)="deleteCustomerPrice(price.productId)">
+              <ion-icon name="trash-outline"></ion-icon>
+            </ion-button>
+          </div>
+        </div>
+
+        <!-- Add Price Form -->
+        <div *ngIf="showAddPriceForm" class="cd-card cd-card-beige" style="margin-top:12px;">
+          <div style="font-weight:700;font-size:13px;color:#1a1a1a;margin-bottom:12px;">ADD SPECIAL PRICE</div>
+          <div class="cd-field" style="margin-bottom:10px;">
+            <label class="cd-label">PRODUCT</label>
+            <select [(ngModel)]="newPriceForm.productId" class="cd-input" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:14px;background:#fff;">
+              <option [ngValue]="null">-- Select Product --</option>
+              <option *ngFor="let p of allProducts" [ngValue]="p.id">{{ p.name }} (RM {{ p.price | number:'1.2-2' }})</option>
+            </select>
+          </div>
+          <div class="cd-field" style="margin-bottom:10px;">
+            <label class="cd-label">SPECIAL PRICE (RM)</label>
+            <input type="number" step="0.01" [(ngModel)]="newPriceForm.specialPrice" class="cd-input" placeholder="0.00" style="width:100%;"/>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:12px;">
+            <button class="save-btn" style="flex:1;padding:10px;font-size:12px;" (click)="addCustomerPrice()">SAVE PRICE</button>
+            <button class="save-btn" style="flex:1;padding:10px;font-size:12px;background:#888;" (click)="toggleAddPriceForm()">CANCEL</button>
+          </div>
+        </div>
+
+        <!-- Add Button -->
+        <button *ngIf="!showAddPriceForm" class="save-btn" style="margin-top:12px;width:100%;padding:12px;font-size:13px;" (click)="toggleAddPriceForm()">
+          <ion-icon name="add-outline" style="margin-right:6px;"></ion-icon>
+          ADD SPECIAL PRICE
+        </button>
       </div>
     </div>
     </div> <!-- end *ngIf="!isModalLoading" -->

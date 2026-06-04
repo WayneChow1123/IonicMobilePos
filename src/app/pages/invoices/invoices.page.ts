@@ -23,6 +23,8 @@ export class InvoicesPage implements OnInit {
   products: any[] = [];
   allProducts: any[] = [];
   availableCredits: any[] = [];
+  customerProductPrices: any[] = [];
+  loadedCustomerId: number = 0;
   selectedCreditNoteId: number | null = null;
   isLoading = false;
   showModal = false;
@@ -324,6 +326,22 @@ export class InvoicesPage implements OnInit {
     this.filterInvoices();
   }
 
+  loadCustomerProductPrices(customerId: number) {
+    if (!customerId) return;
+    this.loadedCustomerId = 0;
+    this.api.getCustomerProductPrices(customerId).subscribe({
+      next: (res) => {
+        this.customerProductPrices = Array.isArray(res) ? res : [];
+        this.loadedCustomerId = customerId;
+        this.applyCustomerDiscount();
+      },
+      error: () => {
+        this.customerProductPrices = [];
+        this.loadedCustomerId = customerId;
+      }
+    });
+  }
+
   onCustomerChange() {
     if (this.form.customerId) {
       const customer = this.customers.find((c: any) => c.id == this.form.customerId);
@@ -331,18 +349,22 @@ export class InvoicesPage implements OnInit {
       this.form.useCreditBalance = false;
       this.selectedCreditNoteId = null;
       this.availableCredits = [];
+      this.customerProductPrices = [];
       this.loadAvailableCredits(Number(this.form.customerId));
-      this.applyCustomerDiscount();
+      this.loadCustomerProductPrices(Number(this.form.customerId));
     }
   }
 
   applyCustomerDiscount() {
     if (!this.selectedCustomerDetail) return;
     const discount = this.selectedCustomerDetail.discountPercent || this.selectedCustomerDetail.discount || 0;
-    this.form.items.forEach((item: any) => {
+    const items = this.isEditing ? this.editForm.items : this.form.items;
+    (items || []).forEach((item: any) => {
       const product = this.allProducts.find(p => p.id == item.productId);
       if (product) {
-        item.unitPrice = product.price * (1 - (discount / 100));
+        const specialPrice = this.customerProductPrices.find(p => p.productId == item.productId);
+        const basePrice = specialPrice ? specialPrice.specialPrice : product.price;
+        item.unitPrice = basePrice * (1 - (discount / 100));
       }
     });
   }
@@ -364,6 +386,8 @@ export class InvoicesPage implements OnInit {
 
   selectCustomer(customer: any) {
     this.form.customerId = customer.id;
+    this.selectedCustomerDetail = customer;
+    this.customerProductPrices = [];
     this.onCustomerChange();
     this.showCustomerSelector = false;
   }
@@ -383,17 +407,19 @@ export class InvoicesPage implements OnInit {
   }
 
   selectProduct(product: any) {
-    const existingItem = this.form.items.find((i: any) => i.productId === product.id);
+    const existingItem = this.form.items.find((i: any) => i.productId == product.id);
     if (existingItem) {
       existingItem.quantity += 1;
       this.showToastMsg('Increased quantity for ' + product.name);
     } else {
       const discount = this.selectedCustomerDetail?.discountPercent || this.selectedCustomerDetail?.discount || 0;
-      const discountedPrice = product.price * (1 - (discount / 100));
+      const specialPrice = this.customerProductPrices.find(p => p.productId == product.id);
+      const basePrice = specialPrice ? specialPrice.specialPrice : product.price;
+      const finalPrice = basePrice * (1 - (discount / 100));
       const newItem = {
         productId: product.id,
         productName: product.name,
-        unitPrice: discountedPrice,
+        unitPrice: finalPrice,
         quantity: 1,
         remark: ''
       };
@@ -405,7 +431,11 @@ export class InvoicesPage implements OnInit {
 
   onProductChange(item: any) {
     const product = this.products.find((p: any) => p.id == item.productId);
-    if (product) item.unitPrice = product.price;
+    if (!product) return;
+    const discount = this.selectedCustomerDetail?.discountPercent || this.selectedCustomerDetail?.discount || 0;
+    const specialPrice = this.customerProductPrices.find(p => p.productId == product.id);
+    const basePrice = specialPrice ? specialPrice.specialPrice : product.price;
+    item.unitPrice = basePrice * (1 - (discount / 100));
   }
 
   getCustomerCreditBalance(): number {
@@ -420,15 +450,18 @@ export class InvoicesPage implements OnInit {
     this.selectedCustomerDetail = this.customers.length > 0 ? this.customers[0] : null;
     this.selectedCreditNoteId = null;
     this.availableCredits = [];
+    this.customerProductPrices = [];
+    const firstCustomerId = this.customers.length > 0 ? Number(this.customers[0].id) : 0;
     this.form = {
-      customerId: 0,
+      customerId: firstCustomerId,
       invoiceDate: this.getMYSDate(),
       remark: '',
       useCreditBalance: false,
       items: []
     };
     if (this.customers.length > 0) {
-      this.loadAvailableCredits(Number(this.customers[0].id));
+      this.loadAvailableCredits(firstCustomerId);
+      this.loadCustomerProductPrices(firstCustomerId);
     }
     this.showModal = true;
   }
@@ -444,6 +477,10 @@ export class InvoicesPage implements OnInit {
       next: (res: any) => {
         this.isLoading = false;
         this.selectedInvoice = { ...res, customerName: res.customerName || invoice.customerName, customerId: res.customerId ?? invoice.customerId };
+        const customerId = Number(res.customerId ?? invoice.customerId);
+        if (customerId) {
+          this.loadCustomerProductPrices(customerId);
+        }
         this.editForm = {
           invoiceDate: res.invoiceDate || this.getMYSDate(),
           remark: res.remark || '',
@@ -859,10 +896,22 @@ export class InvoicesPage implements OnInit {
     return Math.round((total + Number.EPSILON) * 100) / 100;
   }
 
+  getBaseTotal(): number {
+    if (!this.form.items || this.form.items.length === 0) return 0;
+    const total = this.form.items.reduce((sum: number, item: any) => {
+      const product = this.allProducts.find(p => p.id == item.productId);
+      if (!product) return sum;
+      const specialPrice = this.customerProductPrices.find(p => p.productId == item.productId);
+      const basePrice = specialPrice ? specialPrice.specialPrice : product.price;
+      return sum + (basePrice * (item.quantity || 0));
+    }, 0);
+    return Math.round((total + Number.EPSILON) * 100) / 100;
+  }
+
   getDiscountAmount(): number {
-    const original = this.getOriginalTotal();
+    const base = this.getBaseTotal();
     const discounted = this.getFormTotal();
-    return Math.round((original - discounted + Number.EPSILON) * 100) / 100;
+    return Math.round((base - discounted + Number.EPSILON) * 100) / 100;
   }
 
   getNetTotal(): number {

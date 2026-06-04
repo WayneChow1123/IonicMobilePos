@@ -37,6 +37,7 @@ export class ApiService {
   getCustomerById(id: any): Observable<any> { return this.http.get(this.baseUrl + '/Customer/GetCustomerById/getcustomersby/' + id); }
   editCustomer(id: any, data: any): Observable<any> { return this.http.put(this.baseUrl + '/Customer/EditCustomer/editcustomers/' + id, data); }
   deleteCustomer(id: any): Observable<any> { return this.http.delete(this.baseUrl + '/Customer/DeleteCustomer/deletecustomer/' + id, { responseType: 'text' }); }
+  getCustomerProductPrices(customerId: any): Observable<any> { return this.http.get(this.baseUrl + '/Customer/GetCustomerProductPrices/customers/' + customerId + '/product-prices'); }
   createCustomerProductPrice(customerId: any, data: any): Observable<any> { return this.http.post(this.baseUrl + '/Customer/CreateCustomerProductPrice/customers/' + customerId + '/product-prices', data); }
   updateCustomerProductPrice(customerId: any, productId: any, data: any): Observable<any> { return this.http.patch(this.baseUrl + '/Customer/UpdateCustomerProductPrice/customers/' + customerId + '/product-prices/' + productId, data); }
   deleteCustomerProductPrice(customerId: any, productId: any): Observable<any> { return this.http.delete(this.baseUrl + '/Customer/DeleteCustomerProductPrice/customers/' + customerId + '/product-prices/' + productId, { responseType: 'text' }); }
