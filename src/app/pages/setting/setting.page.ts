@@ -1,9 +1,10 @@
-﻿import { AlertService } from '../../services/alert.service';
+import { AlertService } from '../../services/alert.service';
 import { Component, ChangeDetectorRef } from '@angular/core';
 import { NavController } from '@ionic/angular';
 import { Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { IonicModule } from '@ionic/angular';
+import { AuthService } from '../../services/auth.service';
 
 @Component({
   standalone: true,
@@ -16,7 +17,13 @@ export class SettingPage {
   deviceAutoBlocking = false;
   trainingMode = false;
 
-  constructor(private router: Router, private navCtrl: NavController, private cdr: ChangeDetectorRef, private alertService: AlertService) {}
+  constructor(
+    private router: Router, 
+    private navCtrl: NavController, 
+    private cdr: ChangeDetectorRef, 
+    private alertService: AlertService,
+    private authService: AuthService
+  ) {}
 
   ionViewWillEnter() {
     this.cdr.detectChanges();
@@ -37,6 +44,13 @@ export class SettingPage {
   navigateTo(section: string) {
     this.navCtrl.navigateRoot('pages/' + section);
   }
+
+  logout() {
+    this.authService.logout();
+    this.alertService.toast('Logout successful!', 'success');
+    this.navCtrl.navigateRoot('login');
+  }
 }
+
 
 

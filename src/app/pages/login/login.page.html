@@ -1,0 +1,76 @@
+<ion-content [fullscreen]="true" class="login-page-content">
+  <div class="login-wrapper">
+    <div class="login-card">
+      <!-- Header & Brand -->
+      <div class="header-brand">
+        <div class="brand-info">
+          <!-- Logo Icon -->
+          <div class="logo-icon-container">
+            <ion-icon name="phone-portrait-outline"></ion-icon>
+          </div>
+          <div class="brand-text">
+            <h1 class="brand-title">TD Mobile POS</h1>
+            <p class="brand-subtitle">B Jaya Trading</p>
+          </div>
+        </div>
+        <!-- Security Badge -->
+        <div class="security-badge">
+          <span class="badge-text">TLS 1.3</span>
+          <div class="badge-dot"></div>
+        </div>
+      </div>
+
+      <!-- Login Form -->
+      <form (submit)="onSubmit()" class="login-form">
+        <!-- Username Input -->
+        <div class="input-group">
+          <label class="input-label">Username</label>
+          <div class="input-container">
+            <ion-icon name="person-outline" class="input-icon"></ion-icon>
+            <input 
+              type="text" 
+              placeholder="e.g. admin"
+              [(ngModel)]="username"
+              name="username"
+              class="custom-input"
+              required
+            />
+          </div>
+        </div>
+
+        <!-- Password Input -->
+        <div class="input-group">
+          <label class="input-label">Password</label>
+          <div class="input-container">
+            <ion-icon name="lock-closed-outline" class="input-icon"></ion-icon>
+            <input 
+              type="password" 
+              placeholder="••••••••"
+              [(ngModel)]="password"
+              name="password"
+              class="custom-input password-input"
+              required
+            />
+          </div>
+        </div>
+
+        <!-- Error message box -->
+        <div *ngIf="errorMessage" class="error-box">
+          <ion-icon name="alert-circle-outline" class="error-box-icon"></ion-icon>
+          <span class="error-box-text">{{ errorMessage }}</span>
+        </div>
+
+        <!-- Submit Button -->
+        <button type="submit" class="submit-btn">
+          <span>Log In to POS</span>
+          <ion-icon name="chevron-forward-outline" class="btn-arrow-icon"></ion-icon>
+        </button>
+      </form>
+
+      <!-- Footer Status -->
+      <div class="footer-status" style="justify-content: center;">
+        <span>SYSTEM_ONLINE</span>
+      </div>
+    </div>
+  </div>
+</ion-content>
