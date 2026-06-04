@@ -1,4 +1,4 @@
-﻿import { AlertService } from '../../services/alert.service';
+import { AlertService } from '../../services/alert.service';
 import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
 import { NavController } from '@ionic/angular';
 import { Router } from '@angular/router';
@@ -203,6 +203,22 @@ export class ProductsPage implements OnInit {
     if ((val === 0 || val === "" || val === null || val === undefined) && event.key === "0") {
       event.preventDefault();
     }
+  }
+
+  formatValue(val: any): string {
+    if (val === null || val === undefined || isNaN(val)) return '0.00';
+    return Number(val).toFixed(2);
+  }
+
+  onCurrencyInput(event: any, field: 'price' | 'cost' | 'lowestPrice') {
+    let inputVal = event.target.value;
+    let digits = inputVal.replace(/\D/g, '');
+    let amount = 0;
+    if (digits) {
+      amount = parseInt(digits, 10) / 100;
+    }
+    this.form[field] = amount;
+    event.target.value = amount.toFixed(2);
   }
 
   showToastMsg(msg: string) { const isWarn = msg.toLowerCase().includes('please') || msg.toLowerCase().includes('must') || msg.toLowerCase().includes('cannot') || msg.toLowerCase().includes('required') || msg.toLowerCase().includes('no '); const isErr = msg.toLowerCase().includes('fail') || msg.toLowerCase().includes('error'); this.alertService.toast(msg, isErr ? 'error' : (isWarn ? 'warning' : 'success')); }

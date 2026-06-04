@@ -236,3 +236,19 @@ ion-content {
 .red-text {
   color: #dc2626 !important;
 }
+
+.setting-card--disabled {
+  background: #fdfdfd !important;
+  opacity: 0.5;
+  cursor: not-allowed !important;
+  pointer-events: none !important;
+  box-shadow: none !important;
+
+  .setting-card-icon, .percent-icon {
+    color: #a1a1aa !important;
+  }
+
+  .setting-card-label {
+    color: #a1a1aa !important;
+  }
+}

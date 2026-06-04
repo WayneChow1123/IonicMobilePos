@@ -1,4 +1,4 @@
-﻿<ion-content [fullscreen]="true">
+<ion-content [fullscreen]="true">
 
   <div *ngIf="!showModal && !showAddStockModal" class="page-container">
     <div class="top-bar">
@@ -213,11 +213,11 @@
       <div class="pd-two-col">
         <div class="pd-field">
           <label class="pd-label">PRICE (RM)</label>
-          <input type="number" [(ngModel)]="form.price" (keydown)="noLeadingZero($event, form.price)" placeholder="0.00" class="pd-input pd-input-bold" min="0" [readonly]="!isEditMode"/>
+          <input type="text" [ngModel]="formatValue(form.price)" (input)="onCurrencyInput($event, 'price')" placeholder="0.00" class="pd-input pd-input-bold" [readonly]="!isEditMode" inputmode="numeric"/>
         </div>
         <div class="pd-field pd-field-right">
           <label class="pd-label">COST (RM)</label>
-          <input type="number" [(ngModel)]="form.cost" (keydown)="noLeadingZero($event, form.cost)" placeholder="0.00" class="pd-input pd-input-bold" min="0" [readonly]="!isEditMode"/>
+          <input type="text" [ngModel]="formatValue(form.cost)" (input)="onCurrencyInput($event, 'cost')" placeholder="0.00" class="pd-input pd-input-bold" [readonly]="!isEditMode" inputmode="numeric"/>
         </div>
       </div>
 
@@ -226,7 +226,7 @@
       <!-- Lowest Price -->
       <div class="pd-field">
         <label class="pd-label">LOWEST PRICE (RM)</label>
-        <input type="number" [(ngModel)]="form.lowestPrice" (keydown)="noLeadingZero($event, form.lowestPrice)" placeholder="0.00" class="pd-input pd-input-bold" min="0" [readonly]="!isEditMode"/>
+        <input type="text" [ngModel]="formatValue(form.lowestPrice)" (input)="onCurrencyInput($event, 'lowestPrice')" placeholder="0.00" class="pd-input pd-input-bold" [readonly]="!isEditMode" inputmode="numeric"/>
       </div>
 
       <div class="pd-divider"></div>
