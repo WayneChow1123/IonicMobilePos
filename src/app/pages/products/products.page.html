@@ -178,7 +178,7 @@
       <!-- Available Stock (big centered number) -->
       <div class="pd-stock-center">
         <span class="pd-stock-label">AVAILABLE STOCK</span>
-        <input type="number" [(ngModel)]="form.stock" class="pd-stock-input" *ngIf="isEditMode" (keydown)="noLeadingZero($event, form.stock)"/>
+        <input type="number" [(ngModel)]="form.stock" placeholder="0" class="pd-stock-input" *ngIf="isEditMode" (keydown)="noLeadingZero($event, form.stock)"/>
         <span class="pd-stock-number" *ngIf="!isEditMode">{{ form.stock || 0 }}</span>
       </div>
 

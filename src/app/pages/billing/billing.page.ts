@@ -42,6 +42,29 @@ export class BillingPage implements OnInit {
   selectedCN: any = null;
   selectedInvoiceDetail: any = null;
   selectedCNInvoiceDetail: any = null;
+  customerProductPrices: any[] = [];
+
+  loadCustomerProductPrices(customerId: number) {
+    if (!customerId) {
+      this.customerProductPrices = [];
+      return;
+    }
+    this.api.getCustomerProductPrices(customerId).subscribe({
+      next: (res) => { this.customerProductPrices = Array.isArray(res) ? res : []; },
+      error: () => { this.customerProductPrices = []; }
+    });
+  }
+
+  getCustomerSpecialPrice(productId: any): number | null {
+    if (!this.customerProductPrices || this.customerProductPrices.length === 0) return null;
+    const special = this.customerProductPrices.find(p => p.productId == productId);
+    return special ? special.specialPrice : null;
+  }
+
+  getOriginalUnitPrice(productId: any): number {
+    const product = this.allProducts.find(p => p.id == productId);
+    return product ? product.price : 0;
+  }
   cnFilteredInvoices: any[] = [];
   stockIssues: any[] = [];
   pendingPayload: any = null;
@@ -120,7 +143,7 @@ export class BillingPage implements OnInit {
         productName: product.name,
         maxQuantity: 9999, // Allow large return if selected from all products
         returnedQuantity: 0,
-        returnQuantity: 1,
+        returnQuantity: 0,
         returnToStock: false,
         isGlobal: true 
       });
@@ -172,7 +195,7 @@ export class BillingPage implements OnInit {
         productName: item.productName,
         maxQuantity: item.remaining, 
         returnedQuantity: item.totalReturned,
-        returnQuantity: 1,
+        returnQuantity: 0,
         returnToStock: false,
         isGlobal: true 
       });
@@ -326,8 +349,10 @@ export class BillingPage implements OnInit {
     this.selectedCNInvoiceDetail = null;
     if (this.cnForm.customerId && this.cnForm.customerId != 0) {
       this.cnFilteredInvoices = this.invoices.filter((inv: any) => inv.customerId == this.cnForm.customerId);
+      this.loadCustomerProductPrices(Number(this.cnForm.customerId));
     } else {
       this.cnFilteredInvoices = [...this.invoices];
+      this.customerProductPrices = [];
     }
   }
 
@@ -339,6 +364,7 @@ export class BillingPage implements OnInit {
           // ✅ 双重保险：优先取顶层 customerId，取不到就取 res.customer.id
           const cid = res.customerId || (res.customer ? res.customer.id : 0);
           this.cnForm.customerId = Number(cid); 
+          this.loadCustomerProductPrices(Number(cid));
           this.cnForm.items = [];
           if (res.items && res.items.length > 0) {
             res.items.forEach((item: any) => {

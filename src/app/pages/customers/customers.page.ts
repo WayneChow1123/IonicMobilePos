@@ -33,7 +33,7 @@ export class CustomersPage implements OnInit {
     name: '', phone: '', email: '', address: '', 
     code: '', term: 'Cash Sale', sequence: '', category: 'DEFAULT', 
     description: '', processCompany: 'ALL COMPANY', taxStatus: 'Un-Defined', 
-    taxDocNo: '', discount: 0, requireDigitSign: false,
+    taxDocNo: '', discount: null, requireDigitSign: false,
     totalCredit: 0,
     branchCode: '', branchName: '', branchAddress: '',
     branchPostcode: '', branchCity: '', branchState: '',
@@ -276,7 +276,7 @@ export class CustomersPage implements OnInit {
       name: '', phone: '', email: '', address: '', 
       code: '', term: 'Cash Sale', sequence: '', category: 'DEFAULT', 
       description: '', processCompany: 'ALL COMPANY', taxStatus: 'Un-Defined', 
-      taxDocNo: '', discount: 0, requireDigitSign: false,
+      taxDocNo: '', discount: null, requireDigitSign: false,
       totalCredit: 0.00,
       branchCode: '', branchName: '', branchAddress: '', 
       branchPostcode: '', branchCity: '', branchState: '',
@@ -423,6 +423,22 @@ export class CustomersPage implements OnInit {
       next: () => { this.showToastMsg('Customer deleted!'); this.loadCustomers(); },
       error: (err: any) => this.showToastMsg('Failed: ' + (err.error?.message || err.message || 'error'))
     });
+  }
+
+  formatSpecialPrice(val: any): string {
+    if (val === null || val === undefined || isNaN(val)) return '0.00';
+    return Number(val).toFixed(2);
+  }
+
+  onSpecialPriceInput(event: any) {
+    let inputVal = event.target.value;
+    let digits = inputVal.replace(/\D/g, '');
+    let amount = 0;
+    if (digits) {
+      amount = parseInt(digits, 10) / 100;
+    }
+    this.newPriceForm.specialPrice = amount;
+    event.target.value = amount.toFixed(2);
   }
 
   showToastMsg(msg: string) { const isWarn = msg.toLowerCase().includes('please') || msg.toLowerCase().includes('must') || msg.toLowerCase().includes('cannot') || msg.toLowerCase().includes('required') || msg.toLowerCase().includes('no '); const isErr = msg.toLowerCase().includes('fail') || msg.toLowerCase().includes('error'); this.alertService.toast(msg, isErr ? 'error' : (isWarn ? 'warning' : 'success')); }

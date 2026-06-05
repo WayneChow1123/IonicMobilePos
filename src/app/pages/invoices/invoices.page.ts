@@ -888,6 +888,12 @@ export class InvoicesPage implements OnInit {
     return product ? product.price : 0;
   }
 
+  getCustomerSpecialPrice(productId: any): number | null {
+    if (!this.customerProductPrices || this.customerProductPrices.length === 0) return null;
+    const special = this.customerProductPrices.find(p => p.productId == productId);
+    return special ? special.specialPrice : null;
+  }
+
   getOriginalTotal(): number {
     if (!this.form.items || this.form.items.length === 0) return 0;
     const total = this.form.items.reduce((sum: number, item: any) => {

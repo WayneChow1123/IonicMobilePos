@@ -260,9 +260,15 @@
           <div class="ni-item-price-row">
             <div class="ni-unit-label">
               Unit 
-              <span class="ni-unit-val" [style.color]="getCustomerDiscount() > 0 ? '#27ae60' : 'inherit'">RM {{ item.unitPrice | number:'1.2-2' }}</span>
-              <span *ngIf="getCustomerDiscount() > 0" class="ni-original-price">
+              <span class="ni-unit-val" [style.color]="getCustomerDiscount() > 0 || getCustomerSpecialPrice(item.productId) ? '#27ae60' : 'inherit'">RM {{ item.unitPrice | number:'1.2-2' }}</span>
+              <span *ngIf="getCustomerDiscount() > 0 || getCustomerSpecialPrice(item.productId)" class="ni-original-price">
                 RM {{ getOriginalUnitPrice(item.productId) | number:'1.2-2' }}
+              </span>
+              <span *ngIf="getCustomerSpecialPrice(item.productId)" style="color: #6c5ce7; font-weight: 800; background: #E8EAF6; padding: 3px 8px; border-radius: 4px; font-size: 11px; margin-left: 6px;">
+                CUST PRICE: RM {{ getCustomerSpecialPrice(item.productId) | number:'1.2-2' }}
+              </span>
+              <span *ngIf="getCustomerDiscount() > 0" style="color: #ff4757; font-size: 10px; font-weight: 800; margin-left: 6px;">
+                ({{ getCustomerDiscount() }}% OFF)
               </span>
             </div>
             <div class="ni-unit-type">/ PCS</div>
@@ -725,6 +731,7 @@
       </div>
     </div>
   </div>
+
   <!-- Product Selector Overlay -->
   <div *ngIf="showProductSelector" class="ni-overlay">
     <div class="ni-overlay-header">
@@ -744,7 +751,22 @@
         </div>
         <div class="ni-cust-item-info">
           <div class="ni-cust-item-name">{{ p.name }}</div>
-          <div class="ni-cust-item-code">RM {{ p.price | number:'1.2-2' }} | Stock: {{ p.stock }}</div>
+          <div class="ni-cust-item-code">
+            <span *ngIf="!getCustomerSpecialPrice(p.id) && getCustomerDiscount() === 0">
+              RM {{ p.price | number:'1.2-2' }}
+            </span>
+            <span *ngIf="getCustomerSpecialPrice(p.id) || getCustomerDiscount() > 0">
+              <span style="text-decoration: line-through; color: #888; font-size: 11px; margin-right: 4px;">RM {{ p.price | number:'1.2-2' }}</span>
+              <span style="color: #27ae60; font-weight: 800;">RM {{ (getCustomerSpecialPrice(p.id) != null ? getCustomerSpecialPrice(p.id)! * (1 - getCustomerDiscount()/100) : p.price * (1 - getCustomerDiscount()/100)) | number:'1.2-2' }}</span>
+              <span *ngIf="getCustomerDiscount() > 0" style="color: #ff4757; font-weight: 800; font-size: 11px; margin-left: 6px;">
+                ({{ getCustomerDiscount() }}% OFF)
+              </span>
+            </span>
+            <span *ngIf="getCustomerSpecialPrice(p.id)" style="color: #6c5ce7; font-weight: 800; background: #E8EAF6; padding: 2px 6px; border-radius: 4px; font-size: 11px; margin-left: 8px;">
+              CUST PRICE: RM {{ getCustomerSpecialPrice(p.id) | number:'1.2-2' }}
+            </span>
+            | Stock: {{ p.stock }}
+          </div>
         </div>
         <ion-icon name="chevron-forward-outline" class="ni-cust-arrow"></ion-icon>
       </div>

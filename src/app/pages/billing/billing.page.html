@@ -238,9 +238,28 @@
 
           <div style="margin-bottom:12px;">
             <div style="font-size:16px; font-weight:800; color:#2f3542; margin-bottom:4px; padding-right:30px;">{{ item.productName }}</div>
-            <div style="font-size:13px; font-weight:700; color:#747d8c; margin-bottom:12px;">
+            <div style="font-size:13px; font-weight:700; color:#747d8c; margin-bottom:6px;">
               Total Purchased: <span style="color:#2f3542;">{{ item.maxQuantity + (item.returnedQuantity || 0) }}</span> • 
               Remaining: <span style="color:#00b894;">{{ item.maxQuantity }}</span>
+            </div>
+            <div style="font-size:13px; font-weight:700; color:#747d8c; margin-bottom:12px; display:flex; flex-direction:column; gap:4px;">
+              <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                <span>Return Price:</span>
+                <span *ngIf="getSelectedCustomerDiscount() > 0 || getCustomerSpecialPrice(item.productId) != null" style="text-decoration: line-through; color: #888; font-size: 11px;">
+                  RM {{ getOriginalUnitPrice(item.productId) | number:'1.2-2' }}
+                </span>
+                <span style="color:#27ae60; font-weight:900;">
+                  RM {{ (getCustomerSpecialPrice(item.productId) != null ? getDiscountedPrice(getCustomerSpecialPrice(item.productId)!) : getDiscountedPrice(getOriginalUnitPrice(item.productId))) | number:'1.2-2' }}
+                </span>
+                <span *ngIf="getSelectedCustomerDiscount() > 0" style="color: #ff4757; font-size: 10px; font-weight: 800;">
+                  ({{ getSelectedCustomerDiscount() }}% OFF)
+                </span>
+              </div>
+              <div *ngIf="getCustomerSpecialPrice(item.productId) != null" style="display:flex; align-items:center; gap:6px;">
+                <span style="color: #6c5ce7; font-weight: 800; background: #E8EAF6; padding: 2px 6px; border-radius: 4px; font-size: 10px;">
+                  CUST PRICE: RM {{ getCustomerSpecialPrice(item.productId) | number:'1.2-2' }}
+                </span>
+              </div>
             </div>
             <!-- Stock & Payment Info (Only for single invoice mode) -->
             <div *ngIf="selectedCNInvoiceDetail" style="font-size:12px; color:#a4b0be; font-weight:700; margin-top:-8px; margin-bottom:12px; display:flex; gap:12px; flex-wrap:wrap;">
@@ -251,6 +270,9 @@
           <div style="display:flex; align-items:center; gap:16px; padding-top:12px; border-top:1px dashed #f1f2f6;">
             <div style="flex:1; position:relative;">
               <input type="number" [(ngModel)]="item.returnQuantity" 
+                placeholder="0"
+                (focus)="item.returnQuantity = (item.returnQuantity === 0 ? null : item.returnQuantity)"
+                (blur)="item.returnQuantity = (item.returnQuantity == null ? 0 : item.returnQuantity)"
                 style="width:100%; border:none; border-bottom:2px solid #6c5ce7; padding:8px 0; outline:none; font-size:18px; font-weight:800; color:#6c5ce7; background:transparent;"
                 [max]="item.maxQuantity" min="0">
               <div style="font-size:10px; color:#a4b0be; font-weight:700; margin-top:4px; text-transform:uppercase; letter-spacing:0.5px;">Return Qty</div>
@@ -479,13 +501,17 @@
                   <div style="font-size:11px; color:#27ae60; font-weight:700;">Code: {{ p.productCode || p.code || 'N/A' }}</div>
                 </div>
                  <div style="text-align:right;">
-                  <ng-container *ngIf="getSelectedCustomerDiscount() > 0; else noDiscount">
+                  <ng-container *ngIf="getCustomerSpecialPrice(p.id) != null || getSelectedCustomerDiscount() > 0">
                     <div style="font-size:11px; color:#a4b0be; text-decoration:line-through;">RM {{ p.price | number:'1.2-2' }}</div>
-                    <div style="font-size:15px; font-weight:950; color:#ff4757;">RM {{ getDiscountedPrice(p.price) | number:'1.2-2' }}</div>
+                    <div style="font-size:15px; font-weight:950; color:#27ae60;">RM {{ (getCustomerSpecialPrice(p.id) != null ? getDiscountedPrice(getCustomerSpecialPrice(p.id)!) : getDiscountedPrice(p.price)) | number:'1.2-2' }}</div>
+                    <div *ngIf="getSelectedCustomerDiscount() > 0" style="font-size:10px; color:#ff4757; font-weight:800; margin-top:2px;">
+                      ({{ getSelectedCustomerDiscount() }}% OFF)
+                    </div>
+                    <div *ngIf="getCustomerSpecialPrice(p.id) != null" style="font-size:9px; color:#6c5ce7; font-weight:800; background:#E8EAF6; padding:2px 6px; border-radius:4px; display:inline-block; margin-top:4px;">CUST PRICE: RM {{ getCustomerSpecialPrice(p.id) | number:'1.2-2' }}</div>
                   </ng-container>
-                  <ng-template #noDiscount>
+                  <ng-container *ngIf="getCustomerSpecialPrice(p.id) == null && getSelectedCustomerDiscount() <= 0">
                     <div style="font-size:15px; font-weight:900; color:#2f3542;">RM {{ p.price | number:'1.2-2' }}</div>
-                  </ng-template>
+                  </ng-container>
                   <div style="font-size:11px; color:#747d8c; font-weight:600; margin-top:2px;">Stock: {{ p.stock }}</div>
                 </div>
               </div>

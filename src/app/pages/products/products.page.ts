@@ -32,7 +32,7 @@ export class ProductsPage implements OnInit {
   showToast = false;
   toastMessage = '';
   addStockQty = 0;
-  form: any = { name: '', description: '', barcode: '', code: '', category: 'DEFAULT', uom: 'UNIT', price: 0, rate: 1, cost: 0, lowestPrice: 0, stock: 0, includeTax: false, salesDefault: false, returnDefault: false };
+  form: any = { name: '', description: '', barcode: '', code: '', category: 'DEFAULT', uom: 'UNIT', price: 0, rate: null, cost: 0, lowestPrice: 0, stock: null, includeTax: false, salesDefault: false, returnDefault: false };
   deleteButtons = [
     { text: 'Cancel', role: 'cancel' },
     { text: 'Delete', role: 'destructive', handler: () => this.deleteProduct() }
@@ -91,7 +91,7 @@ export class ProductsPage implements OnInit {
     this.isEditing = false;
     this.isEditMode = true;
     this.selectedProduct = null;
-    this.form = { name: '', description: '', barcode: '', code: '', category: 'DEFAULT', uom: 'UNIT', price: 0, rate: 1, cost: 0, lowestPrice: 0, stock: 0, includeTax: false, salesDefault: false, returnDefault: false };
+    this.form = { name: '', description: '', barcode: '', code: '', category: 'DEFAULT', uom: 'UNIT', price: 0, rate: null, cost: 0, lowestPrice: 0, stock: null, includeTax: false, salesDefault: false, returnDefault: false };
     this.showModal = true;
   }
 
@@ -130,11 +130,16 @@ export class ProductsPage implements OnInit {
 
   saveProduct() {
     if (!this.form.name) { this.showToastMsg('Product name is required'); return; }
-    if (this.form.price < 0) { this.showToastMsg('Price cannot be negative'); return; }
-    if (this.form.stock < 0) { this.showToastMsg('Stock cannot be negative'); return; }
-    if (!this.form.category) this.form.category = 'DEFAULT';
+    const payload = {
+      ...this.form,
+      stock: this.form.stock == null ? 0 : Number(this.form.stock),
+      rate: this.form.rate == null ? 1 : Number(this.form.rate)
+    };
+    if (payload.price < 0) { this.showToastMsg('Price cannot be negative'); return; }
+    if (payload.stock < 0) { this.showToastMsg('Stock cannot be negative'); return; }
+    if (!payload.category) payload.category = 'DEFAULT';
     if (this.isEditing && this.selectedProduct) {
-      this.api.editProduct(this.selectedProduct.id, this.form).subscribe({
+      this.api.editProduct(this.selectedProduct.id, payload).subscribe({
         next: () => { 
           this.showToastMsg('Product updated!'); 
           this.isEditMode = false; 
@@ -143,7 +148,7 @@ export class ProductsPage implements OnInit {
         error: (err: any) => this.showToastMsg('Failed: ' + (err.error?.message || err.message || 'error'))
       });
     } else {
-      this.api.createProduct(this.form).subscribe({
+      this.api.createProduct(payload).subscribe({
         next: () => { 
           this.showToastMsg('Product created!'); 
           this.isEditMode = false; 
