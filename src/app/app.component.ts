@@ -37,6 +37,12 @@ export class AppComponent {
     });
   }
 
+  getSliderOffset(): number {
+    const isTablet = window.innerWidth >= 768;
+    const step = isTablet ? 108 : 56;
+    return this.activeIndex * step;
+  }
+
   goTo(page: string, index: number) {
     if (this.activeIndex === index && this.router.url.split('?')[0] === '/pages/' + page) return;
     this.activeIndex = index;

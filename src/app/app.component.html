@@ -2,7 +2,7 @@
   <ion-router-outlet></ion-router-outlet>
   
   <div class="global-bottom-nav" *ngIf="showBottomNav">
-    <div class="nav-bg-slider" [ngStyle]="{'transform': 'translateX(' + (activeIndex * 56) + 'px)'}"></div>
+    <div class="nav-bg-slider" [ngStyle]="{'transform': 'translateX(' + getSliderOffset() + 'px)'}"></div>
     
     <ion-button fill="clear" class="nav-btn" [class.active]="activeIndex === 0" (click)="goTo('home', 0)">
       <ion-icon name="home-outline"></ion-icon>

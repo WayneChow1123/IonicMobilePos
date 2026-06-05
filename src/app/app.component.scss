@@ -40,3 +40,28 @@
     }
   }
 }
+
+@media (min-width: 768px) {
+  .global-bottom-nav {
+    padding: 12px 24px;
+    gap: 12px;
+
+    .nav-bg-slider {
+      position: absolute;
+      top: 8px;
+      left: 24px;
+      width: 96px;
+      height: 96px;
+      border-radius: 50px;
+      transition: transform 0.35s cubic-bezier(0.25, 1, 0.5, 1);
+      z-index: 1;
+      pointer-events: none;
+    }
+
+    .nav-btn {
+      width: 96px;
+      height: 96px;
+      font-size: 32px;
+    }
+  }
+}
