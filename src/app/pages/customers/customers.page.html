@@ -356,14 +356,10 @@
           </div>
           <div class="cd-field" style="margin-bottom:10px;">
             <label class="cd-label">SPECIAL PRICE (RM)</label>
-<<<<<<< Updated upstream
             <input type="number" step="0.01" [(ngModel)]="newPriceForm.specialPrice" class="cd-input" placeholder="0.00" style="width:100%;"/>
             <div *ngIf="newPriceForm.productId && newPriceForm.specialPrice > getProductPrice(newPriceForm.productId)" style="font-size:11px;color:#e57373;margin-top:6px;font-weight:600;">
               ⚠ Special Price cannot exceed Original Price (RM {{ getProductPrice(newPriceForm.productId) | number:'1.2-2' }})
             </div>
-=======
-            <input type="text" [ngModel]="formatSpecialPrice(newPriceForm.specialPrice)" (input)="onSpecialPriceInput($event)" placeholder="0.00" class="cd-input" inputmode="numeric" style="width:100%;"/>
->>>>>>> Stashed changes
           </div>
           <div style="display:flex;gap:8px;margin-top:12px;">
             <button class="save-btn" style="flex:1;padding:10px;font-size:12px;" (click)="addCustomerPrice()">SAVE PRICE</button>
