@@ -10,17 +10,17 @@ export class AuthService {
 
   login(username: string, password: string): boolean {
     if (username === 'admin' && password === 'admin') {
-      localStorage.setItem(this.AUTH_KEY, 'true');
+      sessionStorage.setItem(this.AUTH_KEY, 'true');
       return true;
     }
     return false;
   }
 
   logout(): void {
-    localStorage.removeItem(this.AUTH_KEY);
+    sessionStorage.removeItem(this.AUTH_KEY);
   }
 
   isLoggedIn(): boolean {
-    return localStorage.getItem(this.AUTH_KEY) === 'true';
+    return sessionStorage.getItem(this.AUTH_KEY) === 'true';
   }
 }
