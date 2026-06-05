@@ -208,6 +208,12 @@ export class CustomersPage implements OnInit {
       this.showToastMsg('Please select a product and enter a price');
       return;
     }
+    const product = this.allProducts.find(p => p.id == this.newPriceForm.productId);
+    const originalPrice = product ? product.price : 0;
+    if (Number(this.newPriceForm.specialPrice) > originalPrice) {
+      this.showToastMsg('Special Price cannot exceed Original Price (RM ' + originalPrice.toFixed(2) + ')');
+      return;
+    }
     this.api.createCustomerProductPrice(this.selectedCustomer.id, {
       productId: Number(this.newPriceForm.productId),
       specialPrice: Number(this.newPriceForm.specialPrice)
