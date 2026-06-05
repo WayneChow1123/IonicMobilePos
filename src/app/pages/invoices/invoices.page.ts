@@ -580,7 +580,9 @@ export class InvoicesPage implements OnInit {
 
   onTermTypeChange() {
     if (this.termType === 'On Credit') {
-      this.form.useCreditBalance = true;
+      if (!this.selectedCreditNoteId) {
+        this.form.useCreditBalance = false;
+      }
       this.amountPaid = 0;
     } else if (this.termType === 'CASH SALE') {
       if (!this.selectedCreditNoteId) {
@@ -592,7 +594,6 @@ export class InvoicesPage implements OnInit {
     }
   }
 
-  /** On Credit 时按全部可用 CN 计算抵扣；其他账期仅用手动勾选的单张 CN */
   getApplicableCreditAmount(): number {
     const gross = this.getFormTotal();
     if (gross <= 0) return 0;
@@ -600,15 +601,11 @@ export class InvoicesPage implements OnInit {
     if (this.selectedCreditNoteId) {
       return this.getSelectedCreditAmount();
     }
-    if (this.termType === 'On Credit' && this.availableCredits.length > 0) {
-      const totalAvailable = this.availableCredits.reduce((sum: number, cn: any) => sum + (cn.amount || 0), 0);
-      return Math.round((Math.min(gross, totalAvailable) + Number.EPSILON) * 100) / 100;
-    }
     return 0;
   }
 
   isOnCreditAutoApply(): boolean {
-    return this.termType === 'On Credit' && this.availableCredits.length > 0 && !this.selectedCreditNoteId;
+    return false;
   }
 
   openPaymentCollection() {
@@ -625,12 +622,20 @@ export class InvoicesPage implements OnInit {
   }
 
   confirmPayment() {
+    if (this.termType === 'On Credit' && this.amountPaid > this.getNetTotal()) {
+      this.showToastMsg('Paid amount cannot exceed Net Total for On Credit');
+      return;
+    }
     // Here we would call the actual save logic
     this.saveInvoice();
     this.showPaymentCollection = false;
   }
 
   saveInvoice() {
+    if (this.termType === 'On Credit' && this.amountPaid > this.getNetTotal()) {
+      this.showToastMsg('Paid amount cannot exceed Net Total for On Credit');
+      return;
+    }
     const items = this.isEditing ? this.editForm.items : this.form.items;
     for (const item of items) {
       if (!item.quantity || item.quantity <= 0) { this.showToastMsg('Quantity must be greater than 0'); return; }
@@ -649,7 +654,7 @@ export class InvoicesPage implements OnInit {
     } else {
       if (!this.form.customerId) { this.showToastMsg('Please select a customer'); return; }
       
-      const useCredit = !!this.selectedCreditNoteId || this.termType === 'On Credit';
+      const useCredit = !!this.selectedCreditNoteId;
       const payload = {
         ...this.form,
         useCreditBalance: useCredit,
@@ -1151,5 +1156,38 @@ export class InvoicesPage implements OnInit {
     const mysOffset = 8 * 60 * 60 * 1000;
     const localNow = new Date(now.getTime() + mysOffset);
     return localNow.toISOString().split('.')[0];
+  }
+
+  formatAmountPaidDisplay(val: any): string {
+    if (val === null || val === undefined || isNaN(val)) return '0.00';
+    return Number(val).toFixed(2);
+  }
+
+  onAmountPaidInput(event: any) {
+    let inputVal = event.target.value;
+    let digits = inputVal.replace(/\D/g, '');
+    let amount = 0;
+    if (digits) {
+      amount = parseInt(digits, 10) / 100;
+    }
+    this.amountPaid = amount;
+    event.target.value = amount.toFixed(2);
+    
+    // Force cursor to the end
+    setTimeout(() => {
+      if (event.target) {
+        const len = event.target.value.length;
+        event.target.setSelectionRange(len, len);
+      }
+    }, 0);
+  }
+
+  onAmountPaidFocus(event: any) {
+    setTimeout(() => {
+      if (event.target) {
+        const len = event.target.value.length;
+        event.target.setSelectionRange(len, len);
+      }
+    }, 0);
   }
 } 
