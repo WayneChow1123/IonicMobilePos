@@ -203,7 +203,10 @@ export class CustomersPage implements OnInit {
     this.newPriceForm = { productId: null, specialPrice: null };
   }
 
+  isSavingPrice = false;
+
   addCustomerPrice() {
+    if (this.isSavingPrice) return;
     if (!this.newPriceForm.productId || this.newPriceForm.specialPrice == null) {
       this.showToastMsg('Please select a product and enter a price');
       return;
@@ -214,18 +217,44 @@ export class CustomersPage implements OnInit {
       this.showToastMsg('Special Price cannot exceed Original Price (RM ' + originalPrice.toFixed(2) + ')');
       return;
     }
-    this.api.createCustomerProductPrice(this.selectedCustomer.id, {
-      productId: Number(this.newPriceForm.productId),
-      specialPrice: Number(this.newPriceForm.specialPrice)
-    }).subscribe({
-      next: () => {
-        this.showToastMsg('Price created!');
-        this.showAddPriceForm = false;
-        this.newPriceForm = { productId: null, specialPrice: null };
-        this.loadCustomerPrices(this.selectedCustomer.id);
-      },
-      error: (err) => this.showToastMsg('Failed: ' + (err.error?.message || err.message))
-    });
+
+    const exists = this.customerPrices.some(p => p.productId == this.newPriceForm.productId);
+    this.isSavingPrice = true;
+
+    if (exists) {
+      this.api.updateCustomerProductPrice(this.selectedCustomer.id, Number(this.newPriceForm.productId), {
+        specialPrice: Number(this.newPriceForm.specialPrice)
+      }).subscribe({
+        next: () => {
+          this.showToastMsg('Price updated!');
+          this.showAddPriceForm = false;
+          this.newPriceForm = { productId: null, specialPrice: null };
+          this.loadCustomerPrices(this.selectedCustomer.id);
+          this.isSavingPrice = false;
+        },
+        error: (err) => {
+          this.showToastMsg('Failed: ' + (err.error?.message || err.message));
+          this.isSavingPrice = false;
+        }
+      });
+    } else {
+      this.api.createCustomerProductPrice(this.selectedCustomer.id, {
+        productId: Number(this.newPriceForm.productId),
+        specialPrice: Number(this.newPriceForm.specialPrice)
+      }).subscribe({
+        next: () => {
+          this.showToastMsg('Price created!');
+          this.showAddPriceForm = false;
+          this.newPriceForm = { productId: null, specialPrice: null };
+          this.loadCustomerPrices(this.selectedCustomer.id);
+          this.isSavingPrice = false;
+        },
+        error: (err) => {
+          this.showToastMsg('Failed: ' + (err.error?.message || err.message));
+          this.isSavingPrice = false;
+        }
+      });
+    }
   }
 
   deleteCustomerPrice(productId: number) {
@@ -439,6 +468,23 @@ export class CustomersPage implements OnInit {
     }
     this.newPriceForm.specialPrice = amount;
     event.target.value = amount.toFixed(2);
+    
+    // Force cursor to the end
+    setTimeout(() => {
+      if (event.target) {
+        const len = event.target.value.length;
+        event.target.setSelectionRange(len, len);
+      }
+    }, 0);
+  }
+
+  onSpecialPriceFocus(event: any) {
+    setTimeout(() => {
+      if (event.target) {
+        const len = event.target.value.length;
+        event.target.setSelectionRange(len, len);
+      }
+    }, 0);
   }
 
   showToastMsg(msg: string) { const isWarn = msg.toLowerCase().includes('please') || msg.toLowerCase().includes('must') || msg.toLowerCase().includes('cannot') || msg.toLowerCase().includes('required') || msg.toLowerCase().includes('no '); const isErr = msg.toLowerCase().includes('fail') || msg.toLowerCase().includes('error'); this.alertService.toast(msg, isErr ? 'error' : (isWarn ? 'warning' : 'success')); }
