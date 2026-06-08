@@ -6,14 +6,173 @@
 }
 
 ion-content {
-  --background: #F0EBE3;
+  --background: var(--ion-background-color);
 }
 
 ion-toolbar {
-  --background: #F0EBE3;
+  --background: var(--ion-toolbar-background);
+  --color: var(--ion-toolbar-color);
   --border-width: 0;
   box-shadow: none;
 }
+
+body.dark {
+  background: var(--ion-background-color) !important;
+  color: var(--ion-text-color) !important;
+
+  // Global elements
+  ion-content {
+    --background: var(--ion-background-color) !important;
+  }
+
+  ion-toolbar {
+    --background: var(--ion-toolbar-background) !important;
+    --color: var(--ion-toolbar-color) !important;
+  }
+
+  // Page containers
+  .page-container, .setting-container, .ps-container, .config-container, .container {
+    background: var(--ion-background-color) !important;
+    color: var(--ion-text-color) !important;
+  }
+
+  // Card components & items
+  .list-item, .setting-card, .card, .report-item, .form-card, .hw-card, 
+  .toggles-card, .paper-width-card, .empty-line-card, .config-card, 
+  .dark-mode-card, .item-avatar {
+    background: var(--ion-item-background) !important;
+    color: var(--ion-text-color) !important;
+    border-color: #333333 !important;
+  }
+
+  // Card specific backgrounds
+  .card-pink { background: #44322e !important; }
+  .card-blue { background: #2c2f48 !important; }
+  .card-yellow { background: #3c3a20 !important; }
+  .card-purple { background: #352c3c !important; }
+  .card-beige { background: #3a322c !important; }
+
+  // Generic texts
+  .page-title, h1, h2, h3, h4, h5, h6, p, label, 
+  .list-item-title, .list-item-sub, .setting-card-label, .card-title,
+  .report-item span, .pw-label, .pw-value, .pw-hint, .el-label, 
+  .hw-sub-label, .type-value, .mac-label, .mac-value, .toggle-name, 
+  .slider-title, .slider-badge, .dm-title, .dm-subtitle, .preview-text {
+    color: var(--ion-text-color) !important;
+  }
+
+  // Specific home and configuration elements readability fixes
+  .card-title-center, .card-title-small, .card-title-top,
+  .app-title-text, .app-company-text, .section-label, .ticks-labels span,
+  .item-name, .ni-cust-item-name, .ni-item-name, .item-name-row, .item-name-row span {
+    color: var(--ion-text-color) !important;
+  }
+
+  .slider-badge {
+    background: #333333 !important;
+    color: #ffffff !important;
+  }
+
+  .preview-box {
+    background: #2a2a2a !important;
+    border: 1px solid #444444 !important;
+  }
+
+  .preview-text {
+    color: #ffffff !important;
+  }
+
+  .icon-bubble {
+    background: #2a2a2a !important;
+  }
+
+  // Select Invoices & Modal Overrides
+  ion-modal {
+    --background: #121212 !important;
+  }
+  
+  ion-modal div {
+    background: #121212 !important;
+    color: var(--ion-text-color) !important;
+  }
+  
+  ion-modal .modal-header {
+    background: #1a1a1a !important;
+  }
+
+  // Cards inside select modals (unselected)
+  body.dark ion-modal .modal-header + div > div:first-child > div {
+    background: #1e1e1e !important;
+    border-color: #333333 !important;
+    color: #ffffff !important;
+  }
+
+  // Selected card in modal (matches both hex and browser-normalized rgb border colors)
+  body.dark ion-modal .modal-header + div > div:first-child > div[style*="6c5ce7"],
+  body.dark ion-modal .modal-header + div > div:first-child > div[style*="108, 92, 231"] {
+    background: #2c2f48 !important;
+    border-color: #6c5ce7 !important;
+  }
+
+  // Specific class selector for invoice status badges (e.g. UNPAID, PARTIAL) in the modal
+  body.dark .invoice-status-badge {
+    background: #3a2e1e !important;
+    color: #f39c12 !important;
+  }
+
+
+  // Confirm button container at bottom
+  ion-modal div[style*="border-top:1px solid"] {
+    background: #121212 !important;
+    border-top-color: #333333 !important;
+  }
+
+  ion-modal span, ion-modal p, ion-modal label {
+    color: var(--ion-text-color) !important;
+  }
+
+  ion-modal div[style*="color:#ff4757"] {
+    color: #ff7675 !important;
+  }
+  ion-modal div[style*="color:#27ae60"] {
+    color: #2ecc71 !important;
+  }
+  ion-modal div[style*="color:#e67e22"] {
+    color: #f39c12 !important;
+  }
+  ion-modal div[style*="color:#6c5ce7"] {
+    color: #a29bfe !important;
+  }
+
+
+
+
+  // Inputs and dropdown fields
+  input, select, textarea, .form-select, .form-input, .form-textarea {
+    background: #2a2a2a !important;
+    color: #ffffff !important;
+    border: 1px solid #444444 !important;
+  }
+
+  // Icons and back buttons
+  .back-btn, .more-btn {
+    --color: var(--ion-text-color) !important;
+    color: var(--ion-text-color) !important;
+  }
+
+  // Restore status indicators
+  .status-enabled, .status-enabled *, .green-text {
+    color: #3a8f5c !important;
+  }
+  .status-disabled, .status-disabled *, .orange-text {
+    color: #c7622a !important;
+  }
+  .red-text, .red-icon, .red-text * {
+    color: #dc2626 !important;
+  }
+}
+
+
 
 ion-header {
   box-shadow: none;

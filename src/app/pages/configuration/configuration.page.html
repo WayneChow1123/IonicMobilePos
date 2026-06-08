@@ -1,0 +1,58 @@
+<ion-content [fullscreen]="true">
+  <div class="config-container">
+
+    <!-- Top Bar -->
+    <div class="top-bar">
+      <ion-button fill="clear" class="back-btn" (click)="goBack()">
+        <ion-icon name="chevron-back-outline"></ion-icon> Back
+      </ion-button>
+      <h2 class="page-title">Configuration</h2>
+      <ion-button fill="clear" class="more-btn" style="visibility: hidden;">
+        <ion-icon name="ellipsis-horizontal"></ion-icon>
+      </ion-button>
+    </div>
+
+    <!-- PREFERENCES Section -->
+    <div class="section-label">SYSTEM PREFERENCES</div>
+
+    <div class="config-card">
+      <div class="slider-group">
+        <div class="slider-header">
+          <span class="slider-title">FONT SIZE</span>
+          <span class="slider-badge">{{ fontSizeValue }}px ({{ getFontSizeLabel() }})</span>
+        </div>
+        
+        <div class="range-wrap">
+          <ion-range min="12" max="24" step="2" snaps="true" ticks="true" [(ngModel)]="fontSizeValue" (ionChange)="onFontSizeChange($event)"></ion-range>
+        </div>
+        
+        <div class="ticks-labels">
+          <span>12px</span>
+          <span>16px</span>
+          <span>20px</span>
+          <span>24px</span>
+        </div>
+      </div>
+
+      <div class="preview-box">
+        <p class="preview-text" [style.font-size]="fontSizeValue + 'px'">
+          Sample Text Preview
+        </p>
+      </div>
+    </div>
+
+    <!-- DARK MODE Section -->
+    <div class="section-label" style="margin-top: 28px;">DARK MODE THEME</div>
+
+    <div class="dark-mode-card" [class.active-dark]="isDarkMode">
+      <div class="dark-mode-left">
+        <span class="dm-title">DARK MODE THEME</span>
+        <span class="dm-subtitle">CURRENT DISPLAY SETTING</span>
+      </div>
+      <button class="dm-btn" (click)="toggleDarkMode()">
+        {{ isDarkMode ? 'SWITCH TO LIGHT MODE' : 'SWITCH TO DARK MODE' }}
+      </button>
+    </div>
+
+  </div>
+</ion-content>

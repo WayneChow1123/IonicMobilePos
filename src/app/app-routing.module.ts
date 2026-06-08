@@ -15,6 +15,7 @@ const routes: Routes = [
   { path: 'pages/add-product', loadComponent: () => import('./pages/add-product/add-product.page').then(m => m.AddProductPage), canActivate: [authGuard] },
   { path: 'pages/setting', loadComponent: () => import('./pages/setting/setting.page').then(m => m.SettingPage), canActivate: [authGuard] },
   { path: 'pages/printer-setting', loadComponent: () => import('./pages/printer-setting/printer-setting.page').then(m => m.PrinterSettingPage), canActivate: [authGuard] },
+  { path: 'pages/configuration', loadComponent: () => import('./pages/configuration/configuration.page').then(m => m.ConfigurationPage), canActivate: [authGuard] },
 ];
 
 @NgModule({

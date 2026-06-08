@@ -1,0 +1,201 @@
+ion-content {
+  --background: #F0EBE3;
+}
+
+.config-container {
+  padding: 16px 20px 88px;
+  max-width: 600px;
+  margin: 0 auto;
+  min-height: 100%;
+}
+
+/* ─── Top Bar ─── */
+.top-bar {
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 28px;
+
+  .back-btn {
+    --color: #1a1a1a;
+    --padding-start: 0;
+    font-size: 15px;
+    font-weight: 600;
+    z-index: 1;
+  }
+
+  .page-title {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 17px;
+    font-weight: 700;
+    color: #1a1a1a;
+    margin: 0;
+    letter-spacing: 0.2px;
+    white-space: nowrap;
+  }
+}
+
+/* ─── Section Label ─── */
+.section-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 2.5px;
+  color: #999;
+  margin-bottom: 14px;
+}
+
+/* ─── Config Card ─── */
+.config-card {
+  background: #ffffff;
+  border-radius: 20px;
+  padding: 24px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.slider-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.slider-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.slider-title {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  color: #1a1a1a;
+}
+
+.slider-badge {
+  font-size: 13px;
+  font-weight: 850;
+  color: #1a1a1a;
+  background: #f0ebe3;
+  padding: 4px 12px;
+  border-radius: 8px;
+}
+
+.range-wrap {
+  ion-range {
+    --bar-background: #e0e0e0;
+    --bar-background-active: #1a1a1a;
+    --knob-background: #1a1a1a;
+    --pin-background: #1a1a1a;
+    --pin-color: #fff;
+    padding: 0;
+  }
+}
+
+.ticks-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  font-weight: 700;
+  color: #888;
+  margin-top: 6px;
+  padding: 0 6px;
+}
+
+.preview-box {
+  background: #f9f9fb;
+  border: 1px solid #eee;
+  border-radius: 16px;
+  padding: 24px;
+  text-align: center;
+  min-height: 100px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.preview-text {
+  margin: 0;
+  color: #444;
+  font-weight: 600;
+  transition: font-size 0.2s ease;
+}
+
+/* ─── Dark Mode Card ─── */
+.dark-mode-card {
+  background: #ffffff;
+  border-radius: 20px;
+  padding: 24px 28px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  transition: background 0.3s, color 0.3s;
+  border-bottom: 2px solid transparent;
+
+  &.active-dark {
+    background: #1a1a1a !important;
+    color: #ffffff !important;
+    
+    .dm-title {
+      color: #ffffff !important;
+    }
+    
+    .dm-subtitle {
+      color: #888888 !important;
+    }
+    
+    .dm-btn {
+      background: #ffffff !important;
+      color: #1a1a1a !important;
+    }
+  }
+}
+
+.dark-mode-left {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.dm-title {
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  color: #1a1a1a;
+  text-transform: uppercase;
+}
+
+.dm-subtitle {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: #999999;
+  text-transform: uppercase;
+}
+
+.dm-btn {
+  background: #1a1a1a;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  padding: 12px 24px;
+  border-radius: 30px;
+  border: none;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.2s, color 0.2s;
+  text-transform: uppercase;
+
+  &:active {
+    opacity: 0.85;
+  }
+}
+

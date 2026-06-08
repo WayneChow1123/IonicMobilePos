@@ -570,7 +570,7 @@
             <div style="flex:1;">
               <div style="display:flex; justify-content:space-between; margin-bottom:6px; align-items:center;">
                 <span style="font-size:15px; font-weight:800; color:#2f3542;">{{ inv.invoiceNumber }}</span>
-                <span style="font-size:11px; padding:4px 10px; border-radius:8px; background:#fff3cd; color:#d35400; font-weight:700; text-transform:uppercase; letter-spacing:0.5px;">{{ inv.status }}</span>
+                <span class="invoice-status-badge" style="font-size:11px; padding:4px 10px; border-radius:8px; background:#fff3cd; color:#d35400; font-weight:700; text-transform:uppercase; letter-spacing:0.5px;">{{ inv.status }}</span>
               </div>
               <div style="display:flex; justify-content:space-between; font-size:13px; color:#747d8c; font-weight:600;">
                 <span>Total: RM {{ inv.totalAmount | number:'1.2-2' }}</span>

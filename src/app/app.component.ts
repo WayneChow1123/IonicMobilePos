@@ -21,6 +21,32 @@ export class AppComponent {
   ];
 
   constructor(private router: Router, private navCtrl: NavController) {
+    // Initializing custom font size scaling from localStorage
+    try {
+      const savedFontSize = localStorage.getItem('pos-font-size');
+      if (savedFontSize) {
+        const val = parseInt(savedFontSize, 10);
+        if (val >= 12 && val <= 24) {
+          const scale = val / 16;
+          (document.documentElement.style as any).zoom = scale.toString();
+        }
+      }
+    } catch (e) {
+      console.error('Error reading or applying font size scale:', e);
+    }
+
+    // Initializing dark theme from localStorage
+    try {
+      const isDarkMode = localStorage.getItem('pos-dark-mode') === 'true';
+      if (isDarkMode) {
+        document.body.classList.add('dark');
+      } else {
+        document.body.classList.remove('dark');
+      }
+    } catch (e) {
+      console.error('Error reading or applying dark mode theme:', e);
+    }
+
     this.router.events.pipe(
       filter(event => event instanceof NavigationEnd)
     ).subscribe((event: any) => {
