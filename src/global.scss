@@ -17,8 +17,10 @@ ion-toolbar {
 }
 
 body.dark {
+  color-scheme: dark;
   background: var(--ion-background-color) !important;
   color: var(--ion-text-color) !important;
+
 
   // Global elements
   ion-content {
@@ -39,7 +41,7 @@ body.dark {
   // Card components & items
   .list-item, .setting-card, .card, .report-item, .form-card, .hw-card, 
   .toggles-card, .paper-width-card, .empty-line-card, .config-card, 
-  .dark-mode-card, .item-avatar {
+  .dark-mode-card, .item-avatar, .product-stock-card, .date-filter-card {
     background: var(--ion-item-background) !important;
     color: var(--ion-text-color) !important;
     border-color: #333333 !important;
@@ -64,7 +66,8 @@ body.dark {
   // Specific home and configuration elements readability fixes
   .card-title-center, .card-title-small, .card-title-top,
   .app-title-text, .app-company-text, .section-label, .ticks-labels span,
-  .item-name, .ni-cust-item-name, .ni-item-name, .item-name-row, .item-name-row span {
+  .item-name, .ni-cust-item-name, .ni-item-name, .item-name-row, .item-name-row span,
+  .item-amount, .product-stock-name, .df-title, .gs-label, .gs-amount, .gs-currency {
     color: var(--ion-text-color) !important;
   }
 
@@ -120,6 +123,12 @@ body.dark {
     color: #f39c12 !important;
   }
 
+  .cn-badge {
+    background: #3a2e1e !important;
+    color: #f39c12 !important;
+    border-color: #f39c12 !important;
+  }
+
 
   // Confirm button container at bottom
   ion-modal div[style*="border-top:1px solid"] {
@@ -148,14 +157,41 @@ body.dark {
 
 
   // Inputs and dropdown fields
-  input, select, textarea, .form-select, .form-input, .form-textarea {
+  input, select, textarea {
     background: #2a2a2a !important;
     color: #ffffff !important;
     border: 1px solid #444444 !important;
   }
 
+  select option {
+    background-color: #2a2a2a !important;
+    color: #ffffff !important;
+  }
+
+
+  .form-select, .form-input {
+    background: transparent !important;
+    color: #ffffff !important;
+    border: none !important;
+    border-bottom: 1px solid #444444 !important;
+  }
+
+  .form-textarea, .custom-input, input.custom-input, .pd-input, .pd-textarea, .pd-stock-input, .pd-select,
+  .cd-input, .cd-small-input, .cd-textarea {
+    background: transparent !important;
+    color: #ffffff !important;
+    border: none !important;
+    outline: none !important;
+    box-shadow: none !important;
+  }
+
+
   // Icons and back buttons
   .back-btn, .more-btn {
+    --color: var(--ion-text-color) !important;
+    color: var(--ion-text-color) !important;
+  }
+  .check-preview-btn {
     --color: var(--ion-text-color) !important;
     color: var(--ion-text-color) !important;
   }
@@ -169,6 +205,184 @@ body.dark {
   }
   .red-text, .red-icon, .red-text * {
     color: #dc2626 !important;
+  }
+
+  .preset-chip {
+    background: #333333 !important;
+    color: #aaaaaa !important;
+    
+    &:hover {
+      background: #444444 !important;
+      color: #ffffff !important;
+    }
+    
+    &.active {
+      background: #6c5ce7 !important;
+      color: #ffffff !important;
+      box-shadow: 0 4px 10px rgba(108, 92, 231, 0.3) !important;
+    }
+  }
+
+  .grand-summary-card {
+    background: rgba(18, 18, 18, 0.95) !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+    box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.3) !important;
+  }
+  
+  .gs-bills-pill {
+    background: rgba(255, 71, 87, 0.1) !important;
+    border-color: rgba(255, 71, 87, 0.2) !important;
+  }
+
+  /* New Invoice Page Dark Mode (ni-) */
+  .ni-container, .ni-overlay {
+    background: var(--ion-background-color) !important;
+  }
+  
+  .ni-top-bar, .ni-overlay-header, .ni-overlay-search {
+    background: var(--ion-item-background) !important;
+    border-color: #333333 !important;
+  }
+  
+  .ni-doc-row {
+    background: #1e1e1e !important;
+    border-bottom: 1px solid #333333 !important;
+  }
+  
+  .ni-card, .ni-item-card, .ni-cust-item {
+    background: var(--ion-item-background) !important;
+    border-color: #333333 !important;
+    color: var(--ion-text-color) !important;
+  }
+  
+  .ni-footer {
+    background: var(--ion-item-background) !important;
+    box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.3) !important;
+    border-top: 1px solid #333333 !important;
+  }
+  
+  .ni-page-title, .ni-value, .ni-cust-name, .ni-count, 
+  .ni-net-label, .ni-net-val, .ni-overlay-title, .ni-cust-item-name, 
+  .ni-sum-label, .ni-sum-val, .ni-cust-item-code, .ni-unit-type, 
+  .ni-unit-val, .ni-qty-total, .ni-sub-val, .ni-qty-eq, .ni-qty-x {
+    color: var(--ion-text-color) !important;
+  }
+  
+  .ni-back-btn, .ni-settings-circle, .ni-cust-arrow, .ni-overlay-header ion-button {
+    --color: var(--ion-text-color) !important;
+    color: var(--ion-text-color) !important;
+  }
+  
+  .ni-settings-circle {
+    background: #1e2d24 !important;
+  }
+
+  .ni-cust-item-icon {
+    background: #2a2a2a !important;
+    ion-icon {
+      color: #888 !important;
+    }
+  }
+
+  .ni-identify-box {
+    border-color: #333333 !important;
+  }
+  
+  .ni-qty-input, .ni-invoice-remark-input input, .ni-remark-inline-input {
+    background: #2a2a2a !important;
+    color: #ffffff !important;
+    border: 1px solid #444444 !important;
+  }
+
+  .ni-item-idx {
+    background: #333333 !important;
+    color: #ffffff !important;
+  }
+
+  .ni-credit-card {
+    background: var(--ion-item-background) !important;
+    border-color: #333333 !important;
+    color: var(--ion-text-color) !important;
+
+    &.selected {
+      background: rgba(39, 174, 96, 0.1) !important;
+      border-color: #27ae60 !important;
+    }
+
+    &.preferred {
+      border-color: #1e8449 !important;
+    }
+
+    &.disabled {
+      background: rgba(26, 26, 26, 0.5) !important;
+      opacity: 0.4 !important;
+    }
+  }
+
+  .ni-credit-num {
+    color: var(--ion-text-color) !important;
+  }
+
+  .ni-credit-check {
+    border-color: #444444 !important;
+
+    &.selected {
+      background: #27ae60 !important;
+      border-color: #27ae60 !important;
+    }
+  }
+
+  /* Popover / Select Dropdown Text Visibility in Dark Mode */
+  ion-popover ion-item, 
+  ion-popover ion-label, 
+  ion-select-popover ion-item, 
+  ion-select-popover ion-label,
+  .popover-viewport ion-item,
+  .popover-viewport ion-label,
+  ion-popover ion-radio,
+  ion-popover ion-radio::part(label),
+  ion-select-popover ion-radio,
+  ion-select-popover ion-radio::part(label) {
+    --color: #ffffff !important;
+    --color-checked: #ffffff !important;
+    --background: #1e1e1e !important;
+    color: #ffffff !important;
+  }
+
+  /* Alert Modal Override for Dark Mode */
+  ion-alert {
+    --background: #1e1e1e !important;
+    
+    .alert-title,
+    .alert-sub-title,
+    .alert-message,
+    .alert-radio-label,
+    .alert-checkbox-label,
+    .alert-input {
+      color: #ffffff !important;
+    }
+    
+    .alert-button {
+      color: #27ae60 !important;
+    }
+  }
+
+  /* SweetAlert2 Dark Mode Override */
+  .swal2-popup {
+    background: #1e1e1e !important;
+    color: #ffffff !important;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.5) !important;
+  }
+  .swal2-title, 
+  .swal2-html-container, 
+  .swal2-content, 
+  .swal2-validation-message {
+    color: #ffffff !important;
+  }
+  .swal2-toast {
+    background: #1e1e1e !important;
+    color: #ffffff !important;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
   }
 }
 

@@ -83,3 +83,44 @@ ion-content { --background: #F0EBE3; }
 .status-badge { font-size:10px; font-weight:700; padding:3px 10px; border-radius:50px; &.paid { background:#d4edda; color:#27ae60; } &.partial { background:#fff3cd; color:#f39c12; } &.unpaid { background:#f8d7da; color:#c0392b; } }
 
 .empty-state { display:flex; flex-direction:column; align-items:center; padding:60px 20px; color:#aaa; ion-icon { font-size:48px; margin-bottom:12px; } p { font-size:14px; } }
+
+:host-context(body.dark) {
+  .customer-card, .summary-card, .list-item {
+    background: #1a1a1a !important;
+    border: 1px solid #333333 !important;
+    color: #ffffff !important;
+  }
+
+  .customer-avatar, .item-avatar {
+    background: #222222 !important;
+  }
+
+  .customer-name, .item-name, .summary-value {
+    color: #ffffff !important;
+  }
+
+  .balance-row {
+    background: #222222 !important;
+  }
+
+  .balance-value {
+    color: #ffffff !important;
+  }
+
+  .divider {
+    background: #333333 !important;
+  }
+
+  .section-title {
+    color: #ffffff !important;
+  }
+  
+  .back-btn {
+    --color: #ffffff !important;
+    color: #ffffff !important;
+  }
+  
+  .page-title {
+    color: #ffffff !important;
+  }
+}

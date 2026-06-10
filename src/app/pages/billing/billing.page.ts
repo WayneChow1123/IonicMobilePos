@@ -77,6 +77,8 @@ export class BillingPage implements OnInit {
   
   showInvoiceSelectionModal = false;
   selectedInvoicesList: any[] = [];
+  invoiceSearchTerm = '';
+  filteredPaymentInvoices: any[] = [];
 
   deletePaymentButtons = [
     { text: 'Cancel', role: 'cancel' },
@@ -259,6 +261,8 @@ export class BillingPage implements OnInit {
         const list = Array.isArray(res) ? res : [];
         console.log('API returned invoices count:', list.length);
         this.paymentInvoices = list.filter((inv: any) => inv.status !== 'Paid');
+        this.filteredPaymentInvoices = [...this.paymentInvoices];
+        this.invoiceSearchTerm = '';
         console.log('Filtered invoices count:', this.paymentInvoices.length);
         this.cdr.detectChanges(); // Force UI update
       },
@@ -313,11 +317,22 @@ export class BillingPage implements OnInit {
       this.showToastMsg('Please select a customer first');
       return;
     }
+    this.invoiceSearchTerm = '';
     this.loadInvoicesByCustomer(this.paymentForm.customerId);
-    this.showInvoiceSelectionModal = true;
-    setTimeout(() => {
-      this.cdr.detectChanges();
-    }, 100);
+    this.currentView = 'selectInvoices';
+    this.cdr.detectChanges();
+  }
+
+  filterInvoicesForSelection() {
+    const term = this.invoiceSearchTerm.trim().toLowerCase();
+    if (!term) {
+      this.filteredPaymentInvoices = [...this.paymentInvoices];
+    } else {
+      this.filteredPaymentInvoices = this.paymentInvoices.filter(inv =>
+        (inv.invoiceNumber || '').toLowerCase().includes(term)
+      );
+    }
+    this.cdr.detectChanges();
   }
 
   openNewCN() {
@@ -418,7 +433,7 @@ export class BillingPage implements OnInit {
   }
 
   confirmInvoiceSelection() {
-    this.showInvoiceSelectionModal = false;
+    this.currentView = 'newPayment';
     this.paymentForm.amount = this.getBulkBalance();
   }
 

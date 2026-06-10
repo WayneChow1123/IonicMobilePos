@@ -88,10 +88,11 @@
       </div>
     </div>
     <div *ngIf="paymentForm.invoiceIds.length > 0"
+      class="payment-summary-card"
       style="background:#fff3cd;border-radius:16px;padding:14px 16px;margin-bottom:12px;">
       <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
-        <span style="font-size:15px;color:#888;">Total Invoice</span>
-        <span style="font-size:15px;font-weight:700;">RM {{ getBulkTotalAmount() | number:'1.2-2' }}</span>
+        <span style="font-size:15px;color:#888;" class="summary-label">Total Invoice</span>
+        <span style="font-size:15px;font-weight:700;" class="summary-value">RM {{ getBulkTotalAmount() | number:'1.2-2' }}</span>
       </div>
       <div *ngIf="getBulkCreditNotes() > 0" style="display:flex;justify-content:space-between;margin-bottom:6px;">
         <span style="font-size:15px;color:#e67e22;">Credit Notes (CN)</span>
@@ -102,12 +103,12 @@
         <span style="font-size:15px;font-weight:700;color: #6c5ce7;">- RM {{ getBulkCreditUsed() | number:'1.2-2' }}</span>
       </div>
       <div *ngIf="getBulkPaidAmount() > 0" style="display:flex;justify-content:space-between;margin-bottom:6px;">
-        <span style="font-size:15px;color:#888;">Already Paid</span>
+        <span style="font-size:15px;color:#888;" class="summary-label">Already Paid</span>
         <span style="font-size:15px;font-weight:700;color:#27ae60;">RM {{ getBulkPaidAmount() | number:'1.2-2' }}</span>
       </div>
       <div style="height:1px;background:rgba(0,0,0,0.1);margin:8px 0;"></div>
       <div style="display:flex;justify-content:space-between;">
-        <span style="font-size:17px;font-weight:800;color:#1a1a1a;">Grand Balance Due</span>
+        <span style="font-size:17px;font-weight:800;color:#1a1a1a;" class="grand-label">Grand Balance Due</span>
         <span style="font-size:17px;font-weight:800;color:#e57373;">RM {{ getBulkBalance() | number:'1.2-2' }}</span>
       </div>
     </div>
@@ -521,92 +522,97 @@
               <ion-icon name="cube-outline" style="font-size:48px; display:block; margin:0 auto 12px; opacity:0.3;"></ion-icon>
               No products found.
             </div>
+      <div *ngIf="filteredProductsSelection.length === 0" style="text-align:center; color:#a4b0be; padding:40px 20px;">
+              <ion-icon name="cube-outline" style="font-size:48px; display:block; margin:0 auto 12px; opacity:0.3;"></ion-icon>
+              No products found.
+            </div>
           </div>
         </div>
       </div>
     </ng-template>
   </ion-modal>
-</ion-content>
 
-<!-- Multi Invoice Selection Modal -->
-<ion-modal [isOpen]="showInvoiceSelectionModal" (didDismiss)="showInvoiceSelectionModal = false" style="--border-radius: 24px; --height: 90vh; --width: 98vw; --max-width: 600px;">
-  <ng-template>
-    <div style="height:100%; display:flex; flex-direction:column; background:#fdfdfd;">
-      <!-- Modal Header -->
-      <div class="modal-header" style="background:#6c5ce7; padding:20px; display:flex; justify-content:space-between; align-items:center; color:#fff; border-top-left-radius:24px; border-top-right-radius:24px;">
-        <h2 style="margin:0; font-size:20px; font-weight:800; letter-spacing:0.5px;">Select Invoices</h2>
-        <ion-button fill="clear" (click)="showInvoiceSelectionModal = false" style="--color:#fff; margin:0;">
-          <ion-icon name="close-outline" slot="icon-only" style="font-size:28px;"></ion-icon>
-        </ion-button>
+  <!-- Multi Invoice Selection Page View -->
+  <div *ngIf="currentView==='selectInvoices'" class="page-container" style="display:flex; flex-direction:column; min-height:100vh;">
+    <!-- Top Bar -->
+    <div class="top-bar" style="margin-bottom:16px;">
+      <ion-button fill="clear" class="back-btn" (click)="currentView = 'newPayment'">
+        <ion-icon name="chevron-back-outline"></ion-icon> Back
+      </ion-button>
+      <span class="page-title">Select Invoices</span>
+      <div style="width: 48px;"></div> <!-- Spacer to center title -->
+    </div>
+
+    <!-- Search Box -->
+    <div class="search-box premium-search-box" style="margin-bottom:16px; background:#fff; border-radius:16px; padding:6px 16px; display:flex; align-items:center; border: 1px solid #eee;">
+      <ion-icon name="search-outline" style="color:#a4b0be; font-size:24px;"></ion-icon>
+      <input type="text" [(ngModel)]="invoiceSearchTerm" (input)="filterInvoicesForSelection()" 
+        placeholder="Search invoice number..." 
+        style="border:none; background:transparent; padding:12px; flex:1; outline:none; font-size:15px; color:#2f3542;"/>
+    </div>
+
+    <!-- Invoice List -->
+    <div style="flex:1; overflow-y:auto; padding-bottom:100px; padding-right:6px; -webkit-overflow-scrolling:touch;">
+      <!-- Empty State -->
+      <div *ngIf="filteredPaymentInvoices?.length === 0" style="text-align:center; padding:60px 20px; color:#888;">
+        <ion-icon name="document-text-outline" style="font-size:56px; color:#ccc; margin-bottom:16px;"></ion-icon>
+        <div style="font-size:16px; font-weight:600; color:#666;">No invoices found.</div>
+        <div style="font-size:13px; color:#999; margin-top:4px;">(Try checking another number or customer)</div>
       </div>
 
-      <!-- Modal Body -->
-      <div style="padding:20px; flex:1; display:flex; flex-direction:column; overflow:hidden;">
+      <!-- Cards List -->
+      <div *ngFor="let inv of filteredPaymentInvoices"  
+           (click)="toggleInvoiceSelection(inv)"
+           class="invoice-select-card"
+           [class.selected]="isInvoiceSelected(inv)"
+           style="background:#fff; border-radius:20px; padding:20px; margin-bottom:16px; border:1px solid #f1f2f6; transition:all 0.2s ease; cursor:pointer; display:flex; align-items:center; gap:16px; position:relative; box-shadow:0 4px 12px rgba(0,0,0,0.02);"
+           [style.border-color]="isInvoiceSelected(inv) ? '#6c5ce7' : '#f1f2f6'"
+           [style.background]="isInvoiceSelected(inv) ? '#fbfaff' : '#fff'">
         
-        <!-- Invoice List -->
-        <div style="flex:1; overflow-y:auto; padding-right:6px; margin-bottom:16px;">
-          <!-- Empty State -->
-          <div *ngIf="paymentInvoices?.length === 0" style="text-align:center; padding:60px 20px; color:#888;">
-            <ion-icon name="document-text-outline" style="font-size:56px; color:#ccc; margin-bottom:16px;"></ion-icon>
-            <div style="font-size:16px; font-weight:600; color:#666;">No unpaid invoices found.</div>
-            <div style="font-size:13px; color:#999; margin-top:4px;">(Fully paid invoices are automatically hidden)</div>
+        <!-- Checkbox -->
+        <div style="width:24px; height:24px; border-radius:8px; border:2px solid #ddd; display:flex; align-items:center; justify-content:center; transition:0.2s;"
+             [style.background]="isInvoiceSelected(inv) ? '#6c5ce7' : 'transparent'"
+             [style.border-color]="isInvoiceSelected(inv) ? '#6c5ce7' : '#ddd'">
+          <ion-icon *ngIf="isInvoiceSelected(inv)" name="checkmark-outline" style="color:#fff; font-size:16px;"></ion-icon>
+        </div>
+
+        <!-- Invoice Details -->
+        <div style="flex:1;">
+          <div style="display:flex; justify-content:space-between; margin-bottom:6px; align-items:center;">
+            <span style="font-size:15px; font-weight:800; color:#2f3542;" class="invoice-num">{{ inv.invoiceNumber }}</span>
+            <span class="invoice-status-badge" style="font-size:11px; padding:4px 10px; border-radius:8px;  color:#d35400; font-weight:700; text-transform:uppercase; letter-spacing:0.5px;">{{ inv.status }}</span>
+          </div>
+          <div style="display:flex; justify-content:space-between; font-size:13px; color:#747d8c; font-weight:600;" class="invoice-meta-row">
+            <span>Total: RM {{ inv.totalAmount | number:'1.2-2' }}</span>
+            <span style="font-weight:800; color:#ff4757;" class="balance-due">Bal: RM {{ inv.balance | number:'1.2-2' }}</span>
           </div>
 
-          <!-- Cards List -->
-          <div *ngFor="let inv of paymentInvoices"  
-               (click)="toggleInvoiceSelection(inv)"
-               style="background:#fff; border-radius:20px; padding:20px; margin-bottom:16px; border:1px solid #f1f2f6; transition:all 0.2s ease; cursor:pointer; display:flex; align-items:center; gap:16px; position:relative; box-shadow:0 4px 12px rgba(0,0,0,0.02);"
-               [style.border-color]="isInvoiceSelected(inv) ? '#6c5ce7' : '#f1f2f6'"
-               [style.background]="isInvoiceSelected(inv) ? '#fbfaff' : '#fff'">
-            
-            <!-- Checkbox -->
-            <div style="width:24px; height:24px; border-radius:8px; border:2px solid #ddd; display:flex; align-items:center; justify-content:center; transition:0.2s;"
-                 [style.background]="isInvoiceSelected(inv) ? '#6c5ce7' : 'transparent'"
-                 [style.border-color]="isInvoiceSelected(inv) ? '#6c5ce7' : '#ddd'">
-              <ion-icon *ngIf="isInvoiceSelected(inv)" name="checkmark-outline" style="color:#fff; font-size:16px;"></ion-icon>
+          <!-- Standard CN Details & Credit Used -->
+          <div *ngIf="hasStandardCN(inv) || getInvoiceCreditUsed(inv) > 0" 
+               class="invoice-extra-details"
+               style="margin-top: 8px; padding-top: 8px; border-top: 1px dashed rgba(0,0,0,0.08); font-size: 12px; display: flex; flex-direction: column; gap: 4px;">
+            <div *ngIf="hasStandardCN(inv)" style="display: flex; justify-content: space-between; color: #e67e22; font-weight: 700;" class="cn-deducted-row">
+              <span>CN Deducted:</span>
+              <span>- RM {{ getStandardCNDeduction(inv) | number:'1.2-2' }}</span>
             </div>
-
-            <!-- Invoice Details -->
-            <div style="flex:1;">
-              <div style="display:flex; justify-content:space-between; margin-bottom:6px; align-items:center;">
-                <span style="font-size:15px; font-weight:800; color:#2f3542;">{{ inv.invoiceNumber }}</span>
-                <span class="invoice-status-badge" style="font-size:11px; padding:4px 10px; border-radius:8px; background:#fff3cd; color:#d35400; font-weight:700; text-transform:uppercase; letter-spacing:0.5px;">{{ inv.status }}</span>
-              </div>
-              <div style="display:flex; justify-content:space-between; font-size:13px; color:#747d8c; font-weight:600;">
-                <span>Total: RM {{ inv.totalAmount | number:'1.2-2' }}</span>
-                <span style="font-weight:800; color:#ff4757;">Bal: RM {{ inv.balance | number:'1.2-2' }}</span>
-              </div>
-
-              <!-- Standard CN Details & Credit Used -->
-              <div *ngIf="hasStandardCN(inv) || getInvoiceCreditUsed(inv) > 0" 
-                   style="margin-top: 8px; padding-top: 8px; border-top: 1px dashed rgba(0,0,0,0.08); font-size: 12px; display: flex; flex-direction: column; gap: 4px;">
-                <div *ngIf="hasStandardCN(inv)" style="display: flex; justify-content: space-between; color: #e67e22; font-weight: 700;">
-                  <span>CN Deducted:</span>
-                  <span>- RM {{ getStandardCNDeduction(inv) | number:'1.2-2' }}</span>
-                </div>
-                <div *ngIf="getInvoiceCreditUsed(inv) > 0" style="display: flex; justify-content: space-between; color: #6c5ce7; font-weight: 700;">
-                  <span>Credit Used:</span>
-                  <span>- RM {{ getInvoiceCreditUsed(inv) | number:'1.2-2' }}</span>
-                </div>
-                <div style="display: flex; justify-content: space-between; color: #27ae60; font-weight: 700;">
-                  <span>Net Amount:</span>
-                  <span>RM {{ (inv.netTotal ?? inv.NetTotal ?? inv.totalAmount) | number:'1.2-2' }}</span>
-                </div>
-              </div>
+            <div *ngIf="getInvoiceCreditUsed(inv) > 0" style="display: flex; justify-content: space-between; color: #6c5ce7; font-weight: 700;" class="credit-used-row">
+              <span>Credit Used:</span>
+              <span>- RM {{ getInvoiceCreditUsed(inv) | number:'1.2-2' }}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; color: #27ae60; font-weight: 700;" class="net-amount-row">
+              <span>Net Amount:</span>
+              <span>RM {{ (inv.netTotal ?? inv.NetTotal ?? inv.totalAmount) | number:'1.2-2' }}</span>
             </div>
           </div>
         </div>
-
-        <!-- Confirm Button -->
-        <div style="padding-top:16px; border-top:1px solid #f1f2f6; background:#fff;">
-          <button (click)="confirmInvoiceSelection()" 
-                  style="width:100%; background:#6c5ce7; color:#fff; border:none; border-radius:16px; padding:16px; font-size:16px; font-weight:800; box-shadow:0 6px 20px rgba(108,92,231,0.3); transition:all 0.2s ease; cursor:pointer;">
-            Confirm Selection ({{ paymentForm.invoiceIds.length }})
-          </button>
-        </div>
-
       </div>
     </div>
-  </ng-template>
-</ion-modal>
-
+
+    <!-- Confirm Button -->
+    <div style="position:fixed; bottom:0; left:0; right:0; padding:16px; border-top:1px solid #f1f2f6; background:#fff; z-index:10;" class="confirm-footer">
+      <button (click)="confirmInvoiceSelection()" 
+              style="width:100%; background:#6c5ce7; color:#fff; border:none; border-radius:16px; padding:16px; font-size:16px; font-weight:800; box-shadow:0 6px 20px rgba(108,92,231,0.3); transition:all 0.2s ease; cursor:pointer;">
+        Confirm Selection ({{ paymentForm.invoiceIds.length }})
+      </button>
+    </div>
+  </div>

@@ -14,3 +14,24 @@ ion-content { --background: #F0EBE3; }
 .form-group { margin-bottom:12px; label { font-size:11px; font-weight:700; letter-spacing:1px; color:#666; display:block; margin-bottom:6px; } }
 .form-input { width:100%; border:none; border-bottom:1px solid rgba(0,0,0,0.1); outline:none; font-size:14px; font-weight:600; color:#1a1a1a; background:transparent; padding:4px 0; font-family:'DM Sans',sans-serif; }
 .save-btn { width:100%; background:#1a1a1a; color:#fff; border:none; border-radius:16px; padding:16px; font-size:15px; font-weight:700; cursor:pointer; margin-top:16px; font-family:'DM Sans',sans-serif; }
+
+:host-context(body.dark) {
+  .icon-btn, .back-btn {
+    --color: var(--ion-text-color) !important;
+    color: var(--ion-text-color) !important;
+  }
+  .page-title {
+    color: var(--ion-text-color) !important;
+  }
+  .list-item {
+    background: #1a1a1a !important;
+    border: 1px solid #333333 !important;
+    color: #ffffff !important;
+  }
+  .item-name {
+    color: #ffffff !important;
+  }
+  .item-avatar {
+    background: #222222 !important;
+  }
+}

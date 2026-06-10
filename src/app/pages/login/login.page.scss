@@ -178,9 +178,10 @@
 
 .custom-input {
   width: 100%;
-  background: transparent;
-  border: none;
-  outline: none;
+  background: transparent !important;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
   font-family: inherit;
   font-weight: 900;
   font-size: 14px;
@@ -195,6 +196,21 @@
     letter-spacing: 0.25em;
   }
 }
+
+input.custom-input,
+input.custom-input:focus,
+input.custom-input.ng-untouched,
+input.custom-input.ng-touched,
+input.custom-input.ng-pristine,
+input.custom-input.ng-dirty,
+input.custom-input.ng-valid,
+input.custom-input.ng-invalid {
+  background: transparent !important;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
 
 /* Submit Button */
 .submit-btn {
@@ -275,4 +291,103 @@
   text-transform: uppercase;
   line-height: 1.2;
 }
+
+:host-context(body.dark) {
+  .login-page-content {
+    --background: #121212;
+  }
+
+  .login-wrapper {
+    background-color: #121212;
+  }
+
+  .login-card {
+    background-color: #1e1e1e;
+    border-color: #ffffff;
+    box-shadow: 8px 8px 0px #ffffff;
+  }
+
+  .logo-icon-container {
+    background-color: #ffffff;
+    color: #121212;
+  }
+
+  .brand-title {
+    color: #ffffff;
+  }
+
+  .brand-subtitle {
+    color: #71717a;
+  }
+
+  .security-badge {
+    background-color: #27272a;
+    border-color: #3f3f46;
+  }
+
+  .badge-text {
+    color: #a1a1aa;
+  }
+
+  .badge-dot {
+    background-color: #ffffff;
+  }
+
+  .input-label {
+    color: #ffffff;
+  }
+
+  .input-container {
+    background-color: rgba(30, 30, 30, 0.5);
+    border-color: rgba(255, 255, 255, 0.15);
+
+    &:focus-within {
+      border-color: #ffffff;
+    }
+  }
+
+  .input-icon {
+    color: #a1a1aa;
+  }
+
+  .custom-input {
+    color: #ffffff;
+
+    &::placeholder {
+      color: #52525b;
+    }
+  }
+
+  .submit-btn {
+    background-color: #ffffff;
+    color: #121212;
+
+    &:hover {
+      background-color: #e4e4e7;
+    }
+
+    .btn-arrow-icon {
+      color: #121212;
+    }
+  }
+
+  .footer-status {
+    border-top-color: #27272a;
+    color: #71717a;
+  }
+
+  .error-box {
+    background-color: #2c0e14;
+    border-color: #4c1d24;
+  }
+
+  .error-box-icon {
+    color: #f43f5e;
+  }
+
+  .error-box-text {
+    color: #f43f5e;
+  }
+}
+
 

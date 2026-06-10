@@ -666,3 +666,180 @@ ion-content {
   margin-top: 8px;
   font-family: 'DM Sans', sans-serif;
 }
+
+:host-context(body.dark) {
+  .icon-btn {
+    --color: var(--ion-text-color) !important;
+    color: var(--ion-text-color) !important;
+  }
+
+  /* Product Cards & List */
+  .product-card {
+    background: #1a1a1a !important;
+    border: 1px solid #333333 !important;
+    color: #ffffff !important;
+  }
+
+  .product-icon {
+    background: #222222 !important;
+  }
+
+  .item-name {
+    color: #ffffff !important;
+  }
+
+  .item-code {
+    background: #333333 !important;
+    color: #aaaaaa !important;
+  }
+
+  .product-price {
+    color: #ffffff !important;
+  }
+
+  .item-sub {
+    color: #888888 !important;
+  }
+
+  .product-stock {
+    background: #222222 !important;
+    color: #aaaaaa !important;
+
+    &.low-stock {
+      background: rgba(243, 156, 18, 0.15) !important;
+      color: #f39c12 !important;
+    }
+
+    &.no-stock {
+      background: rgba(229, 115, 115, 0.15) !important;
+      color: #e57373 !important;
+    }
+  }
+
+  .product-actions {
+    border-top-color: #333333 !important;
+
+    .action-btn {
+      &.edit-btn {
+        background: #1e2c48 !important;
+        color: #5c85d6 !important;
+      }
+
+      &.stock-btn {
+        background: #1e3d24 !important;
+        color: #27ae60 !important;
+      }
+
+      &.activate-btn {
+        background: #1e3d24 !important;
+        color: #27ae60 !important;
+      }
+
+      &.deactivate-btn {
+        background: #3a2e1e !important;
+        color: #f39c12 !important;
+      }
+
+      &.delete-btn {
+        background: #3a1e1e !important;
+        color: #e57373 !important;
+      }
+    }
+  }
+
+  /* Add Stock Page */
+  .stock-info-card {
+    background: #1a1a1a !important;
+    border: 1px solid #333333 !important;
+    
+    div {
+      color: #ffffff !important;
+    }
+  }
+
+  .stock-display-row {
+    background: #222222 !important;
+    
+    span {
+      color: #ffffff !important;
+    }
+  }
+
+  /* Product Detail Page modal (pd-) */
+  .pd-container {
+    background: #121212 !important;
+  }
+
+  .pd-top-bar {
+    border-color: #333333 !important;
+  }
+
+  .pd-title {
+    color: #ffffff !important;
+  }
+
+  .pd-back-btn, .pd-edit-btn {
+    --color: #ffffff !important;
+    color: #ffffff !important;
+  }
+
+  .pd-code-row {
+    color: #888888 !important;
+  }
+
+  .pd-card {
+    background: #1a1a1a !important;
+    border: 1px solid #333333 !important;
+    
+    &.pd-card-white {
+      background: #1a1a1a !important;
+    }
+
+    &.pd-card-blue {
+      background: #1e2c48 !important;
+    }
+
+    &.pd-card-beige {
+      background: #1e1e1e !important;
+    }
+  }
+
+  .pd-textarea, .pd-input, .pd-select {
+    color: #ffffff !important;
+  }
+
+  .pd-label {
+    color: #aaaaaa !important;
+  }
+
+  .pd-divider {
+    background: rgba(255, 255, 255, 0.08) !important;
+  }
+
+  .pd-stock-number {
+    color: #ffffff !important;
+  }
+
+  .pd-stock-input {
+    color: #ffffff !important;
+    border-bottom-color: rgba(255,255,255,0.15) !important;
+  }
+
+  .pd-rate-badge {
+    background: rgba(255,255,255,0.08) !important;
+    color: #aaaaaa !important;
+  }
+
+  .pd-check-label {
+    color: #ffffff !important;
+  }
+
+  .pd-checkbox {
+    accent-color: #ffffff !important;
+  }
+
+  .pd-save-btn {
+    background: #ffffff !important;
+    color: #1a1a1a !important;
+  }
+}

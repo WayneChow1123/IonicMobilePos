@@ -351,3 +351,74 @@ ion-content {
     transform: translateX(20px);
   }
 }
+
+:host-context(body.dark) {
+  .back-btn {
+    --color: #ffffff !important;
+    color: #ffffff !important;
+  }
+
+  .save-btn {
+    --background: #ffffff !important;
+    --color: #121212 !important;
+  }
+
+  .empty-line-card {
+    .el-input {
+      color: #ffffff !important;
+    }
+  }
+
+  .interface-btns {
+    .iface-btn {
+      background: #1e1e1e !important;
+      color: #888888 !important;
+      border-color: #333333 !important;
+
+      &.active {
+        background: #ffffff !important;
+        color: #121212 !important;
+        border-color: #ffffff !important;
+      }
+    }
+  }
+
+  .type-value {
+    background: #2b2b2b !important;
+    color: #ffffff !important;
+  }
+
+  .mac-section {
+    .mac-row {
+      background: #2b2b2b !important;
+    }
+
+    .mac-value {
+      color: #ffffff !important;
+    }
+
+    .mac-refresh {
+      --color: #ffffff !important;
+      color: #ffffff !important;
+    }
+  }
+
+  .toggle-row {
+    border-bottom: 1px solid #2d2d2d !important;
+    
+    &:last-child {
+      border-bottom: none !important;
+    }
+  }
+
+  .switch {
+    .slider {
+      background: #333333 !important;
+    }
+
+    input:checked + .slider {
+      background: #ffffff !important;
+    }
+  }
+}
+

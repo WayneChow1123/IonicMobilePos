@@ -2,6 +2,14 @@ ion-content {
   --background: #F0EBE3;
 }
 
+.product-stock-card {
+  background: #fff;
+}
+
+.product-stock-name {
+  color: #1a1a1a;
+}
+
 .page-container {
   padding: 16px 20px 100px;
 }
@@ -1916,6 +1924,277 @@ ion-content {
     background: #6c5ce7;
     color: #fff;
     box-shadow: 0 4px 10px rgba(108, 92, 231, 0.2);
+  }
+}
+
+:host-context(body.dark) {
+  .ni-container, .ni-overlay {
+    background: #121212 !important;
+  }
+
+  .ni-top-bar, .ni-overlay-header, .ni-overlay-search {
+    background: #1a1a1a !important;
+    border-color: #333333 !important;
+  }
+
+  .ni-doc-row {
+    background: #222222 !important;
+    border-bottom: 1px solid #333333 !important;
+  }
+
+  .ni-card, .ni-item-card, .ni-cust-item {
+    background: #1a1a1a !important;
+    border-color: #333333 !important;
+    color: #ffffff !important;
+  }
+
+  .ni-footer {
+    background: #1a1a1a !important;
+    box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.3) !important;
+    border-top: 1px solid #333333 !important;
+  }
+
+  .ni-page-title, .ni-value, .ni-cust-name, .ni-count, 
+  .ni-net-label, .ni-net-val, .ni-overlay-title, .ni-cust-item-name, 
+  .ni-sum-label, .ni-sum-val, .ni-cust-item-code, .ni-unit-type, 
+  .ni-unit-val, .ni-qty-total, .ni-sub-val, .ni-qty-eq, .ni-qty-x {
+    color: #ffffff !important;
+  }
+
+  .ni-back-btn, .ni-settings-circle, .ni-cust-arrow, .ni-overlay-header ion-button {
+    --color: #ffffff !important;
+    color: #ffffff !important;
+  }
+
+  .ni-settings-circle {
+    background: #1e2d24 !important;
+  }
+
+  .ni-cust-item-icon {
+    background: #2a2a2a !important;
+    ion-icon {
+      color: #888 !important;
+    }
+  }
+
+  .ni-identify-box {
+    border-color: #333333 !important;
+  }
+
+  .ni-qty-input, .ni-invoice-remark-input input, .ni-remark-inline-input {
+    background: #2a2a2a !important;
+    color: #ffffff !important;
+    border: 1px solid #444444 !important;
+  }
+
+  .ni-item-idx {
+    background: #333333 !important;
+    color: #ffffff !important;
+  }
+
+  .ni-credit-card {
+    background: #1a1a1a !important;
+    border-color: #333333 !important;
+    color: #ffffff !important;
+
+    &.selected {
+      background: rgba(39, 174, 96, 0.1) !important;
+      border-color: #27ae60 !important;
+    }
+
+    &.preferred {
+      border-color: #1e8449 !important;
+    }
+
+    &.disabled {
+      background: rgba(26, 26, 26, 0.5) !important;
+      opacity: 0.4 !important;
+    }
+  }
+
+  .ni-credit-num {
+    color: #ffffff !important;
+  }
+
+  .ni-credit-check {
+    border-color: #444444 !important;
+
+    &.selected {
+      background: #27ae60 !important;
+      border-color: #27ae60 !important;
+    }
+  }
+
+  /* Specific dark mode styles for items inside white card */
+  .ni-tag-text, .ni-tag-bold, .ni-tag-val, .ni-unit-label {
+    color: #ffffff !important;
+  }
+
+  .ni-item-remark {
+    background: #121212 !important;
+    border-color: #333333 !important;
+    
+    span {
+      color: #ffffff !important;
+    }
+  }
+
+  .ni-item-qty-box {
+    background: #121212 !important;
+    border: 1px solid #333333 !important;
+  }
+
+  /* Payment Collection Modal Dark Mode */
+  .ni-pay-modal {
+    background: #1a1a1a !important;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4) !important;
+  }
+
+  .ni-pay-header {
+    background: #2a2a2a !important;
+  }
+
+  .ni-pay-header-title {
+    color: #ffffff !important;
+  }
+
+  .ni-pay-total-label, .ni-pay-group label {
+    color: #aaaaaa !important;
+  }
+
+  .ni-pay-total-val {
+    color: #ffffff !important;
+  }
+
+  .ni-pay-select {
+    background: #2a2a2a !important;
+  }
+
+  .ni-pay-val-display {
+    color: #ffffff !important;
+  }
+
+  .ni-pay-input-box {
+    background: #2a2a2a !important;
+
+    &.active {
+      border-color: #ffffff !important;
+    }
+
+    &.gray {
+      background: #121212 !important;
+    }
+  }
+
+  .ni-pay-curr, .ni-pay-input, .ni-pay-display, .ni-pay-toggle-label {
+    color: #ffffff !important;
+  }
+
+  .ni-btn-cancel {
+    background: #2a2a2a !important;
+    border-color: #333333 !important;
+    color: #aaaaaa !important;
+  }
+
+  .ni-btn-pay {
+    background: #ffffff !important;
+    color: #1a1a1a !important;
+  }
+
+  .invoice-add-btn {
+    --color: #ffffff !important;
+    color: #ffffff !important;
+  }
+
+  // Invoice Details dark mode overrides
+  .detail-invoice-num {
+    color: #ffffff !important;
+  }
+
+  .detail-customer-card {
+    background: #1a1a1a !important;
+    border-color: #333333 !important;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35) !important;
+  }
+
+  .detail-customer-label {
+    color: #ffffff !important;
+  }
+
+  .detail-customer-line {
+    background: #ffffff !important;
+  }
+
+  .detail-customer-name {
+    color: #ffffff !important;
+  }
+
+  .detail-customer-code-badge {
+    background: #333333 !important;
+    color: #ffffff !important;
+  }
+
+  .detail-customer-address {
+    color: #ffffff !important;
+  }
+
+  // Credit Notes summary block overrides
+  .cn-summary-card {
+    background: #2a2315 !important;
+    border: 1px solid #4d3e20 !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25) !important;
+
+    // Divider line inside
+    div[style*="height:1px"] {
+      background: rgba(255, 255, 255, 0.15) !important;
+    }
+  }
+
+  .cn-sum-label, .cn-sum-value {
+    color: #ffffff !important;
+  }
+
+  .cn-sum-final-label, .cn-sum-final-value {
+    color: #ffffff !important;
+  }
+
+  .cn-sum-applied-label {
+    color: #ffffff !important;
+  }
+
+  .cn-sum-owe-label {
+    color: #ff7675 !important;
+  }
+
+  // Credit Notes Section & Items overrides
+  .cn-section-title span {
+    color: #ffffff !important;
+  }
+
+  .cn-item-card {
+    background: #2a2315 !important;
+    border: 1px solid #4d3e20 !important;
+  }
+
+  .cn-item-avatar {
+    background: #333333 !important;
+  }
+
+  .cn-item-name {
+    color: #ffffff !important;
+  }
+
+  .cn-item-amount-val {
+    color: #ffaa66 !important;
+  }
+
+  .cn-item-reason, .cn-item-date {
+    color: #cccccc !important;
+  }
+
+  .cn-partial-payment-badge {
+    background: rgba(243, 156, 18, 0.15) !important;
+    color: #f39c12 !important;
   }
 }
 

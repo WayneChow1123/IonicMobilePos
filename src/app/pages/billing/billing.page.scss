@@ -361,3 +361,104 @@ ion-content {
     margin-top: 16px;
     font-family: 'DM Sans', sans-serif;
 }
+
+:host-context(body.dark) {
+  // 1. Payment summary card styling overrides
+  .payment-summary-card {
+    background: #2a2315 !important;
+    border: 1px solid #4d3e20 !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25) !important;
+
+    .summary-label {
+      color: #aaaaaa !important;
+    }
+
+    .summary-value {
+      color: #ffffff !important;
+    }
+
+    .grand-label {
+      color: #ffffff !important;
+    }
+
+    div[style*="height:1px"] {
+      background: rgba(255, 255, 255, 0.15) !important;
+    }
+  }
+
+  // Excess warning/note message
+  div[style*="CN-CHG"] {
+    background: rgba(108, 92, 231, 0.2) !important;
+    color: #b4a7ff !important;
+    border-left-color: #6c5ce7 !important;
+  }
+
+  // 2. Select Invoices view styling overrides
+  .premium-search-box {
+    background: #1e1e1e !important;
+    border-color: #333333 !important;
+
+    input {
+      color: #ffffff !important;
+
+      &::placeholder {
+        color: #888888 !important;
+      }
+    }
+  }
+
+  // Confirm footer at bottom
+  .confirm-footer {
+    background: #121212 !important;
+    border-top-color: #222222 !important;
+  }
+
+  // Invoice cards inside selectInvoices view
+  .invoice-select-card {
+    background: #1e1e1e !important;
+    border-color: #333333 !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
+
+    // Selected state
+    &.selected {
+      background: #231f38 !important;
+      border-color: #6c5ce7 !important;
+    }
+
+    // Invoice Number
+    .invoice-num {
+      color: #ffffff !important;
+    }
+
+    // Status Badge
+    .invoice-status-badge {
+      background: rgba(211, 84, 0, 0.15) !important;
+      color: #ff9f43 !important;
+    }
+
+    // Total/Bal Row
+    .invoice-meta-row {
+      color: #aaaaaa !important;
+
+      .balance-due {
+        color: #ff6b6b !important;
+      }
+    }
+
+    // CN/Deduction/Net amount section
+    .invoice-extra-details {
+      border-top-color: rgba(255, 255, 255, 0.1) !important;
+
+      .cn-deducted-row {
+        color: #ff9f43 !important;
+      }
+      .credit-used-row {
+        color: #a29bfe !important;
+      }
+      .net-amount-row {
+        color: #2ecc71 !important;
+      }
+    }
+  }
+}
+

@@ -142,6 +142,10 @@ ion-content { --background: #F0EBE3; }
   text-transform: uppercase;
 }
 
+.cd-default-branch-label {
+  color: #1a1a1a;
+}
+
 .cd-value-bold {
   font-size: 16px;
   font-weight: 800;
@@ -149,14 +153,21 @@ ion-content { --background: #F0EBE3; }
 }
 
 .cd-input {
-  border: none;
+  border: none !important;
   background: transparent;
   padding: 0;
   font-size: 16px;
   font-weight: 600;
   color: #1a1a1a;
-  outline: none;
+  outline: none !important;
+  box-shadow: none !important;
   width: 100%;
+
+  &:focus, &.ng-valid, &.ng-invalid, &.ng-dirty, &.ng-touched, &.ng-pristine, &.ng-untouched {
+    border: none !important;
+    outline: none !important;
+    box-shadow: none !important;
+  }
 }
 
 .cd-input-bold {
@@ -466,3 +477,242 @@ input:checked + .cd-toggle-slider:before { transform: translateX(20px); }
 .item-avatar {
   min-width: 44px;
 }
+
+:host-context(body.dark) {
+  /* Customer List Page */
+  .icon-btn, .back-btn {
+    --color: var(--ion-text-color) !important;
+    color: var(--ion-text-color) !important;
+  }
+  
+  .page-title {
+    color: var(--ion-text-color) !important;
+  }
+
+  .list-item {
+    background: #1a1a1a !important;
+    border: 1px solid #333333 !important;
+    color: #ffffff !important;
+  }
+
+  .item-name {
+    color: #ffffff !important;
+  }
+
+  .item-avatar {
+    background: #222222 !important;
+  }
+
+  .item-code {
+    background: #333333 !important;
+    color: #aaaaaa !important;
+  }
+
+  /* Customer Details Page (cd-) */
+  .cd-container {
+    background: #121212 !important;
+  }
+
+  .cd-top-bar {
+    border-color: #333333 !important;
+  }
+
+  .cd-title {
+    color: #ffffff !important;
+  }
+
+  .cd-back-btn, .cd-icon-btn {
+    --color: #ffffff !important;
+    color: #ffffff !important;
+  }
+
+  .cd-code-row {
+    color: #888888 !important;
+  }
+
+  .cd-card {
+    background: #1a1a1a !important;
+    border: none !important;
+    box-shadow: none !important;
+    
+    &.cd-card-white {
+      background: #1a1a1a !important;
+      
+      .cd-info-label {
+        color: #ff9f43 !important;
+        
+        ion-icon {
+          color: #ff9f43 !important;
+        }
+      }
+      
+      .cd-percentage, .cd-unit {
+        color: #ff9f43 !important;
+      }
+    }
+
+    &.cd-card-blue {
+      background: #1e2c48 !important;
+    }
+
+    &.cd-card-beige {
+      background: #1e1e1e !important;
+    }
+  }
+
+  .cd-value-bold {
+    color: #ffffff !important;
+  }
+
+  .cd-input {
+    color: #ffffff !important;
+    border: none !important;
+    outline: none !important;
+    box-shadow: none !important;
+
+    &:focus, &.ng-valid, &.ng-invalid, &.ng-dirty, &.ng-touched, &.ng-pristine, &.ng-untouched {
+      border: none !important;
+      outline: none !important;
+      box-shadow: none !important;
+    }
+  }
+
+  .cd-divider {
+    background: rgba(255, 255, 255, 0.08) !important;
+  }
+
+  .cd-textarea {
+    color: #ffffff !important;
+  }
+
+  .cd-pill-display {
+    color: #ffffff !important;
+  }
+
+  .cd-icon-box {
+    background: #222222 !important;
+  }
+
+  .cd-percentage {
+    color: #ffffff !important;
+  }
+
+  .cd-edit-input-box, .cd-small-input {
+    background: #222222 !important;
+    color: #ffffff !important;
+  }
+
+  .cd-toggle-slider {
+    background-color: #333333 !important;
+  }
+
+  .cd-report-card {
+    &.yellow {
+      background: rgba(241, 196, 15, 0.15) !important;
+    }
+    &.pink {
+      background: rgba(231, 76, 60, 0.15) !important;
+    }
+    &.green {
+      background: rgba(39, 174, 96, 0.15) !important;
+    }
+  }
+
+  .report-view-title {
+    color: #ffffff !important;
+  }
+
+  .report-list-item {
+    background: #1a1a1a !important;
+    border: 1px solid #333333 !important;
+    color: #ffffff !important;
+  }
+
+  .item-icon {
+    &.yellow {
+      background: rgba(241, 196, 15, 0.15) !important;
+    }
+    &.pink {
+      background: rgba(231, 76, 60, 0.15) !important;
+    }
+    &.green {
+      background: rgba(39, 174, 96, 0.15) !important;
+    }
+  }
+
+  .item-title, .item-amount {
+    color: #ffffff !important;
+  }
+
+  .item-status {
+    background: #222222 !important;
+    color: #aaaaaa !important;
+    
+    &.paid {
+      background: rgba(39, 174, 96, 0.15) !important;
+      color: #27ae60 !important;
+    }
+  }
+
+  .cd-summary-card {
+    background: #1a1a1a !important;
+    border: none !important;
+    box-shadow: none !important;
+  }
+
+  .credit-amount {
+    color: #ffffff !important;
+  }
+
+  .cd-sub-tabs {
+    background: #222222 !important;
+  }
+
+  .sub-tab {
+    color: #aaaaaa !important;
+    
+    &.active {
+      background: #1a1a1a !important;
+      color: #ffffff !important;
+    }
+  }
+
+  .custom-checkbox {
+    background: #222222 !important;
+    border-color: #333333 !important;
+    
+    &.checked {
+      background: #ffffff !important;
+      border-color: #ffffff !important;
+      
+      ion-icon {
+        color: #1a1a1a !important;
+      }
+    }
+  }
+
+  .save-btn {
+    background: #ffffff !important;
+    color: #1a1a1a !important;
+  }
+
+  .cd-default-branch-label {
+    color: #ffffff !important;
+  }
+
+  // Customer Special Price Tab overrides
+  .price-prod-name {
+    color: #ffffff !important;
+  }
+
+  .price-form-title {
+    color: #ffffff !important;
+  }
+
+  .price-select-input {
+    background: #121212 !important;
+    color: #ffffff !important;
+    border-color: #333333 !important;
+  }
+}
+

@@ -6,15 +6,15 @@
         <ion-icon name="chevron-back-outline"></ion-icon> Back
       </ion-button>
       <span class="page-title">Invoices</span>
-      <ion-button fill="clear" class="icon-btn" (click)="openAddModal()">
+      <ion-button fill="clear" class="icon-btn invoice-add-btn" (click)="openAddModal()">
         <ion-icon name="add-outline"></ion-icon>
       </ion-button>
     </div>
 
     <div style="display:flex;gap:8px;overflow-x:auto;white-space:nowrap;scrollbar-width:none;-webkit-overflow-scrolling:touch;margin-bottom:12px;padding-bottom:4px;">
-      <div *ngFor="let p of allProducts" style="flex-shrink:0;background:#fff;border-radius:12px;padding:8px 12px;display:flex;align-items:center;gap:8px;min-width:120px;">
+      <div *ngFor="let p of allProducts" class="product-stock-card" style="flex-shrink:0;border-radius:12px;padding:8px 12px;display:flex;align-items:center;gap:8px;min-width:120px;">
         <div>
-          <div style="font-size:12px;font-weight:700;color:#1a1a1a;">{{ p.name }}</div>
+          <div class="product-stock-name" style="font-size:12px;font-weight:700;">{{ p.name }}</div>
           <div style="font-size:11px;font-weight:600;" [style.color]="p.stock === 0 ? '#e57373' : p.stock <= 10 ? '#f39c12' : '#27ae60'">Stock: {{ p.stock }}</div>
         </div>
       </div>
@@ -354,7 +354,7 @@
         <ion-button fill="clear" class="icon-btn" (click)="goToCreateCN()" style="--color: #e67e22;">
           <ion-icon name="receipt-outline"></ion-icon>
         </ion-button>
-        <ion-button fill="clear" class="icon-btn" (click)="openCheckPreview()">
+        <ion-button fill="clear" class="icon-btn check-preview-btn" (click)="openCheckPreview()">
           <ion-icon name="document-text-outline"></ion-icon>
         </ion-button>
         <ion-button fill="clear" class="icon-btn" (click)="confirmDeleteInModal()" style="--color:#e57373;">
@@ -388,26 +388,26 @@
     </div>
 
     <div *ngIf="selectedInvoice?.creditNotes?.length > 0" style="margin-bottom:12px;">
-      <div class="section-title"><span>Credit Notes</span></div>
-      <div *ngFor="let cn of selectedInvoice.creditNotes; let i = index" class="list-item" style="background:#fff3cd;">
+      <div class="section-title cn-section-title"><span>Credit Notes</span></div>
+      <div *ngFor="let cn of selectedInvoice.creditNotes; let i = index" class="list-item cn-item-card" style="background:#fff3cd;">
         <div class="item-info">
-          <div class="item-avatar" style="background:#fff;"><ion-icon name="document-outline" style="color:#f39c12;"></ion-icon></div>
+          <div class="item-avatar cn-item-avatar" style="background:#fff;"><ion-icon name="document-outline" style="color:#f39c12;"></ion-icon></div>
           <div>
-            <div class="item-name">{{ cn.cnNumber || 'CN-' + cn.id }}</div>
-            <div class="item-sub" style="color:#e67e22;">- RM {{ cn.amount | number:'1.2-2' }}</div>
-            <div class="item-sub">{{ cn.reason }}</div>
-            <div class="item-sub">{{ cn.createdAt | date:'dd/MM/yyyy' }}</div>
+            <div class="item-name cn-item-name">{{ cn.cnNumber || 'CN-' + cn.id }}</div>
+            <div class="item-sub cn-item-amount-val" style="color:#e67e22;">- RM {{ cn.amount | number:'1.2-2' }}</div>
+            <div class="item-sub cn-item-reason">{{ cn.reason }}</div>
+            <div class="item-sub cn-item-date">{{ cn.createdAt | date:'dd/MM/yyyy' }}</div>
             <div *ngIf="cn.createdAfterPayment" style="margin-top:4px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-              <span style="background:#fff3cd;border-radius:6px;padding:3px 8px;font-size:10px;font-weight:700;color:#f39c12;">Created after partial payment</span>
+              <span style="background:#fff3cd;border-radius:6px;padding:3px 8px;font-size:10px;font-weight:700;color:#f39c12;" class="cn-partial-payment-badge">Created after partial payment</span>
               <span [style.background]="getCNStatusColor(cn, i)" [style.color]="getCNStatusTextColor(cn, i)" style="font-size:10px;font-weight:700;padding:3px 8px;border-radius:6px;">{{ getCNStatusLabel(cn, i) }}</span>
             </div>
           </div>
         </div>
       </div>
-      <div class="form-card" style="background:#fff3cd;margin-top:8px;">
+      <div class="form-card cn-summary-card" style="background:#fff3cd;margin-top:8px;">
         <div style="display:flex;justify-content:space-between;align-items:center;">
-          <span style="font-weight:700;color:#1a1a1a;font-size:15px;">Original Amount</span>
-          <span style="font-weight:700;font-size:15px;">RM {{ selectedInvoice.totalAmount | number:'1.2-2' }}</span>
+          <span style="font-weight:700;color:#1a1a1a;font-size:15px;" class="cn-sum-label">Original Amount</span>
+          <span style="font-weight:700;font-size:15px;" class="cn-sum-value">RM {{ selectedInvoice.totalAmount | number:'1.2-2' }}</span>
         </div>
         <div *ngIf="getTotalCN() > 0" style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;">
           <span style="font-weight:700;color:#e67e22;font-size:15px;">Returns (CN)</span>
@@ -418,8 +418,8 @@
           <span style="font-weight:700;color:#6c5ce7;font-size:15px;">- RM {{ selectedInvoice.creditUsed | number:'1.2-2' }}</span>
         </div>
         <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;border-top:1px dashed rgba(0,0,0,0.1);padding-top:6px;">
-          <span style="font-weight:800;color:#1a1a1a;font-size:16px;">Final Bill</span>
-          <span style="font-weight:800;font-size:16px;">RM {{ (selectedInvoice.totalAmount - getTotalCN() - selectedInvoice.creditUsed > 0 ? selectedInvoice.totalAmount - getTotalCN() - selectedInvoice.creditUsed : 0) | number:'1.2-2' }}</span>
+          <span style="font-weight:800;color:#1a1a1a;font-size:16px;" class="cn-sum-final-label">Final Bill</span>
+          <span style="font-weight:800;font-size:16px;" class="cn-sum-final-value">RM {{ (selectedInvoice.totalAmount - getTotalCN() - selectedInvoice.creditUsed > 0 ? selectedInvoice.totalAmount - getTotalCN() - selectedInvoice.creditUsed : 0) | number:'1.2-2' }}</span>
         </div>
         <div style="height:1px;background:rgba(0,0,0,0.1);margin:8px 0;"></div>
         <div style="display:flex;justify-content:space-between;align-items:center;">
@@ -431,12 +431,12 @@
           <span style="font-weight:700;color:#888;font-size:14px;">RM {{ getChangeCN() | number:'1.2-2' }}</span>
         </div>
         <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;border-top:1px solid #eee;padding-top:4px;">
-          <span style="font-weight:800;color:#1a1a1a;font-size:15px;">Applied to Bill</span>
-          <span style="font-weight:800;color:#2ecc71;font-size:15px;">RM {{ selectedInvoice.paidAmount | number:'1.2-2' }}</span>
+          <span style="font-weight:800;color:#1a1a1a;font-size:15px;" class="cn-sum-applied-label">Applied to Bill</span>
+          <span style="font-weight:800;color:#2ecc71;font-size:15px;" class="cn-sum-applied-value">RM {{ selectedInvoice.paidAmount | number:'1.2-2' }}</span>
         </div>
         <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;border-top:1px solid #eee;padding-top:4px;">
-          <span style="font-weight:800;color:#ff7675;font-size:15px;">Owe (Remaining Balance)</span>
-          <span style="font-weight:800;color:#ff7675;font-size:15px;">RM {{ (selectedInvoice.totalAmount - getTotalCN() - selectedInvoice.creditUsed - selectedInvoice.paidAmount > 0 ? selectedInvoice.totalAmount - getTotalCN() - selectedInvoice.creditUsed - selectedInvoice.paidAmount : 0) | number:'1.2-2' }}</span>
+          <span style="font-weight:800;color:#ff7675;font-size:15px;" class="cn-sum-owe-label">Owe (Remaining Balance)</span>
+          <span style="font-weight:800;color:#ff7675;font-size:15px;" class="cn-sum-owe-value">RM {{ (selectedInvoice.totalAmount - getTotalCN() - selectedInvoice.creditUsed - selectedInvoice.paidAmount > 0 ? selectedInvoice.totalAmount - getTotalCN() - selectedInvoice.creditUsed - selectedInvoice.paidAmount : 0) | number:'1.2-2' }}</span>
         </div>
       </div>
     </div>
@@ -444,7 +444,7 @@
     <div class="form-card" style="background:#E8D5D0;">
       <div class="form-group" *ngIf="selectedInvoice">
         <label>INVOICE NUMBER</label>
-        <div style="font-size:16px; font-weight:800; color:#1a1a1a; padding:6px 0;">{{ selectedInvoice.invoiceNumber }}</div>
+        <div style="font-size:16px; font-weight:800; color:#1a1a1a; padding:6px 0;" class="detail-invoice-num">{{ selectedInvoice.invoiceNumber }}</div>
       </div>
       <div class="form-group">
         <label>INVOICE DATE</label>
@@ -457,21 +457,21 @@
     </div>
 
     <!-- CUSTOMER CARD -->
-    <div *ngIf="selectedInvoice" class="form-card" style="background:#fff; border-radius:16px; padding:20px; box-shadow:0 4px 20px rgba(0,0,0,0.03); margin-top:12px; border: 1px solid #f0f0f0;">
+    <div *ngIf="selectedInvoice" class="form-card detail-customer-card" style="background:#fff; border-radius:16px; padding:20px; box-shadow:0 4px 20px rgba(0,0,0,0.03); margin-top:12px; border: 1px solid #f0f0f0;">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
-        <span style="font-size:11px; font-weight:800; letter-spacing:2px; color:#1a1a1a;">CUSTOMER</span>
-        <div style="width:24px; height:2px; background:#1a1a1a;"></div>
+        <span style="font-size:11px; font-weight:800; letter-spacing:2px; color:#1a1a1a;" class="detail-customer-label">CUSTOMER</span>
+        <div style="width:24px; height:2px; background:#1a1a1a;" class="detail-customer-line"></div>
       </div>
       <div style="margin-bottom:16px;">
         <div style="font-size:10px; font-weight:700; color:#aaa; letter-spacing:1px; margin-bottom:4px;">ACCOUNT NAME</div>
-        <div style="font-size:16px; font-weight:800; color:#1a1a1a; margin-bottom:8px; line-height:1.2;">{{ selectedCustomerDetail?.name || selectedInvoice.customerName || 'Walk-in Cash' }}</div>
-        <div style="display:inline-block; background:#1a1a1a; color:#fff; font-size:10px; font-weight:700; letter-spacing:1px; padding:4px 10px; border-radius:20px;">
+        <div style="font-size:16px; font-weight:800; color:#1a1a1a; margin-bottom:8px; line-height:1.2;" class="detail-customer-name">{{ selectedCustomerDetail?.name || selectedInvoice.customerName || 'Walk-in Cash' }}</div>
+        <div style="display:inline-block; background:#1a1a1a; color:#fff; font-size:10px; font-weight:700; letter-spacing:1px; padding:4px 10px; border-radius:20px;" class="detail-customer-code-badge">
           {{ getCustomerCodeForDetails() }}
         </div>
       </div>
       <div>
         <div style="font-size:10px; font-weight:700; color:#aaa; letter-spacing:1px; margin-bottom:4px;">BILLING ADDRESS</div>
-        <div style="font-size:13px; font-weight:800; color:#1a1a1a; line-height:1.4;">{{ getCustomerAddressForDetails() }}</div>
+        <div style="font-size:13px; font-weight:800; color:#1a1a1a; line-height:1.4;" class="detail-customer-address">{{ getCustomerAddressForDetails() }}</div>
       </div>
     </div>
 
