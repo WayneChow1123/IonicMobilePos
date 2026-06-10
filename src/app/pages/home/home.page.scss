@@ -109,8 +109,8 @@ ion-content {
     justify-content: center;
     align-items: center;
     gap: 22px;
-    background: #cdd9c1;
-    border-color: #cdd9c1;
+    background: #cfe2ff;
+    border-color: #cfe2ff;
     text-align: center;
 
     .card-title-center {
@@ -163,7 +163,7 @@ ion-content {
   cursor: pointer;
 
   &:hover {
-    border-top-color: #cdd9c1;
+    border-top-color: #5c85d6;
     box-shadow: 0 10px 24px #30271e1f;
     transform: translateY(-3px);
   }
@@ -217,7 +217,7 @@ ion-content {
 }
 
 .icon-blue {
-  color: #4A7EC7;
+  color: #5c85d6;
 }
 
 .icon-orange {

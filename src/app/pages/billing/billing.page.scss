@@ -117,7 +117,7 @@ ion-content {
 
 .card:hover,
 .report-list .report-item:hover {
-    border-top-color: #cdd9c1;
+    border-top-color: #5c85d6;
     box-shadow: 0 10px 24px #30271e1f;
     transform: translateY(-3px);
 }
@@ -129,8 +129,8 @@ ion-content {
     &.card-wide {
         grid-column: 1 / -1;
         min-height: 118px;
-        background: #cdd9c1;
-        border-color: #cdd9c1;
+        background: #cfe2ff;
+        border-color: #cfe2ff;
     }
 
     .card-content {

@@ -57,7 +57,7 @@ ion-content {
 
 .tab-btn.tab-active {
   color: #1a1a1a;
-  background: #C5C8E0;
+  background: #cfe2ff;
 }
 
 .product-card {
@@ -176,18 +176,18 @@ ion-content {
       transition: all 0.2s;
 
       &.edit-btn {
-        background: #e8f0fd;
+        background: #cfe2ff;
         color: #5c85d6;
       }
 
       &.stock-btn {
-        background: #d4edda;
-        color: #27ae60;
+        background: #cfe2ff;
+        color: #5c85d6;
       }
 
       &.activate-btn {
-        background: #d4edda;
-        color: #27ae60;
+        background: #cfe2ff;
+        color: #5c85d6;
       }
 
       &.deactivate-btn {
@@ -319,7 +319,7 @@ ion-content {
 
 .save-btn {
   width: 100%;
-  background: #1a1a1a;
+  background: #5c85d6;
   color: #fff;
   border: none;
   border-radius: 16px;
@@ -400,7 +400,7 @@ ion-content {
 }
 
 .pd-card-blue {
-  background: #e8f0fd;
+  background: #cfe2ff;
   padding: 8px 20px;
 }
 
@@ -542,7 +542,7 @@ ion-content {
   }
 
   input:checked+.pd-toggle-slider {
-    background: #1a1a1a;
+    background: #5c85d6;
   }
 
   input:checked+.pd-toggle-slider::before {
@@ -655,7 +655,7 @@ ion-content {
 /* Save Button */
 .pd-save-btn {
   width: 100%;
-  background: #1a1a1a;
+  background: #5c85d6;
   color: #fff;
   border: none;
   border-radius: 16px;

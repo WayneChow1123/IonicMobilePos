@@ -56,6 +56,7 @@ ion-content {
   display: flex;
   flex-direction: column;
   gap: 24px;
+  border: 1px solid #eef2f7;
 }
 
 .slider-group {
@@ -89,9 +90,9 @@ ion-content {
 .range-wrap {
   ion-range {
     --bar-background: #e0e0e0;
-    --bar-background-active: #1a1a1a;
-    --knob-background: #1a1a1a;
-    --pin-background: #1a1a1a;
+    --bar-background-active: #5c85d6;
+    --knob-background: #5c85d6;
+    --pin-background: #5c85d6;
     --pin-color: #fff;
     padding: 0;
   }
@@ -137,6 +138,7 @@ ion-content {
   align-items: center;
   gap: 16px;
   transition: background 0.3s, color 0.3s;
+  border: 1px solid #eef2f7;
   border-bottom: 2px solid transparent;
 
   &.active-dark {

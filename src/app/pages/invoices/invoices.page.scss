@@ -47,6 +47,8 @@ ion-content {
   justify-content: space-between;
   align-items: flex-start;
   margin-bottom: 10px;
+  border: 1px solid #eef2f7;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.03);
 }
 
 .item-info {
@@ -273,6 +275,8 @@ ion-content {
   border-radius: 20px;
   padding: 16px;
   margin-bottom: 12px;
+  border: 1px solid #eef2f7;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.03);
 }
 
 .form-group {
@@ -747,7 +751,7 @@ ion-content {
   left: 0;
   right: 0;
   z-index: 999;
-  background: rgba(255, 255, 255, 0.95);
+  background: rgba(207, 226, 255, 0.95);
   backdrop-filter: blur(15px);
   -webkit-backdrop-filter: blur(15px);
   border-radius: 24px 24px 0 0;
@@ -755,8 +759,8 @@ ion-content {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  box-shadow: 0 -10px 30px rgba(0,0,0,0.1);
-  border-top: 1px solid rgba(255,255,255,0.8);
+  box-shadow: 0 -10px 30px rgba(13, 110, 253, 0.08);
+  border-top: 1px solid #cfe2ff;
 }
 
 .gs-spacer {
@@ -912,7 +916,7 @@ ion-content {
   }
 
   &.green {
-    background: #27AE60;
+    background: #5c85d6;
     color: #fff;
   }
 
@@ -956,6 +960,11 @@ ion-content {
   padding: 20px;
   margin-bottom: 12px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
+  border: 1px solid #eef2f7;
+}
+
+.ni-cust-card {
+  background: #cfe2ff;
 }
 
 .ni-cust-row {
@@ -974,7 +983,7 @@ ion-content {
 .ni-icon-circle {
   width: 32px;
   height: 32px;
-  border: 1.5px solid #F39C12;
+  border: 1.5px solid #5c85d6;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -982,14 +991,14 @@ ion-content {
 
   ion-icon {
     font-size: 18px;
-    color: #F39C12;
+    color: #5c85d6;
   }
 }
 
 .ni-identify-box {
   flex: 1;
   margin: 0 40px;
-  border: 1.5px solid #F0EBE3;
+  border: 1.5px solid #5c85d6;
   border-radius: 50px;
   padding: 8px;
   text-align: center;
@@ -999,13 +1008,13 @@ ion-content {
   font-size: 12px;
   font-weight: 800;
   letter-spacing: 2px;
-  color: #c0392b;
+  color: #5c85d6;
 }
 
 .ni-settings-circle {
   width: 32px;
   height: 32px;
-  background: #E9F7EF;
+  background: #cfe2ff;
   border: none;
   border-radius: 8px;
   display: flex;
@@ -1014,7 +1023,7 @@ ion-content {
 
   ion-icon {
     font-size: 18px;
-    color: #27AE60;
+    color: #5c85d6;
   }
 }
 
@@ -1056,12 +1065,13 @@ ion-content {
 }
 
 .ni-footer {
-  background: #fff;
+  background: #cfe2ff;
   padding: 20px 40px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 -10px 30px rgba(13, 110, 253, 0.08);
+  border-top: 1px solid #b6d4fe;
 }
 
 .ni-summary {
@@ -1102,7 +1112,7 @@ ion-content {
 }
 
 .ni-pay-btn {
-  background: #1a1a1a;
+  background: #5c85d6;
   color: #fff;
   border: none;
   border-radius: 50px;
@@ -1111,7 +1121,7 @@ ion-content {
   align-items: center;
   gap: 12px;
   cursor: pointer;
-  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 4px 15px rgba(13, 110, 253, 0.3);
 
   span {
     font-size: 15px;
@@ -1143,6 +1153,7 @@ ion-content {
   align-items: center;
   padding: 12px 20px;
   background: #fff;
+  border-bottom: 1px solid #eef2f7;
 
   ion-button {
     --color: #1a1a1a;
@@ -1185,6 +1196,8 @@ ion-content {
   gap: 12px;
   cursor: pointer;
   transition: transform 0.1s;
+  border: 1px solid #eef2f7;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.03);
 
   &:active {
     transform: scale(0.98);
@@ -1236,13 +1249,14 @@ ion-content {
   margin-bottom: 16px;
   position: relative;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
+  border: 1px solid #eef2f7;
 }
 
 .ni-item-idx {
   position: absolute;
   top: 0;
   left: 0;
-  background: #1a1a1a;
+  background: #5c85d6;
   color: #fff;
   width: 24px;
   height: 24px;
@@ -1522,10 +1536,11 @@ ion-content {
   border-radius: 40px;
   overflow: hidden;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+  border: 1px solid #eef2f7;
 }
 
 .ni-pay-header {
-  background: #E1E6D9;
+  background: #b6d4fe;
   padding: 18px;
   text-align: center;
 }
@@ -1584,6 +1599,7 @@ ion-content {
   align-items: center;
   position: relative;
   cursor: pointer;
+  border: 1px solid #eef2f7;
 
   ion-icon {
     font-size: 18px;
@@ -1613,14 +1629,15 @@ ion-content {
   display: flex;
   align-items: center;
   gap: 12px;
-  border: 2px solid transparent;
+  border: 2px solid #eef2f7;
 
   &.active {
-    border-color: #1a1a1a;
+    border-color: #5c85d6;
   }
 
   &.gray {
     background: #EBE9E2;
+    border-color: #ddd;
   }
 }
 
@@ -1687,7 +1704,7 @@ ion-content {
 
 .ni-btn-pay {
   flex: 1.4;
-  background: #1a1a1a;
+  background: #5c85d6;
   color: #fff;
   border: none;
   border-radius: 20px;
@@ -1727,14 +1744,14 @@ ion-content {
   transition: all 0.2s ease;
 
   &.selected {
-    border-color: #27ae60;
-    background: #f0fff4;
-    box-shadow: 0 4px 12px rgba(39, 174, 96, 0.1);
+    border-color: #5c85d6;
+    background: #cfe2ff;
+    box-shadow: 0 4px 12px rgba(13, 110, 253, 0.1);
   }
 
   &.preferred {
-    border-color: #1e8449;
-    box-shadow: 0 0 0 2px rgba(30, 132, 73, 0.25);
+    border-color: #0b5ed7;
+    box-shadow: 0 0 0 2px rgba(13, 110, 253, 0.25);
   }
 
   &.disabled {
@@ -1760,7 +1777,7 @@ ion-content {
 .ni-credit-amt {
   font-size: 14px;
   font-weight: 800;
-  color: #27ae60;
+  color: #5c85d6;
 }
 
 .ni-credit-check {
@@ -1775,8 +1792,8 @@ ion-content {
   transition: all 0.2s ease;
 
   &.selected {
-    background: #27ae60;
-    border-color: #27ae60;
+    background: #5c85d6;
+    border-color: #5c85d6;
     color: #fff;
   }
 
@@ -1814,7 +1831,7 @@ ion-content {
 
   ion-icon {
     font-size: 16px;
-    color: #6c5ce7; /* Cohesive premium color from project */
+    color: #5c85d6;
   }
 }
 
@@ -1869,9 +1886,9 @@ ion-content {
   transition: all 0.2s ease;
 
   &:focus {
-    border-color: #6c5ce7;
+    border-color: #5c85d6;
     background: #fff;
-    box-shadow: 0 0 0 3px rgba(108, 92, 231, 0.1);
+    box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.1);
   }
 }
 
@@ -1921,9 +1938,9 @@ ion-content {
   }
 
   &.active {
-    background: #6c5ce7;
+    background: #5c85d6;
     color: #fff;
-    box-shadow: 0 4px 10px rgba(108, 92, 231, 0.2);
+    box-shadow: 0 4px 10px rgba(13, 110, 253, 0.2);
   }
 }
 

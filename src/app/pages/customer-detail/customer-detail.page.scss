@@ -10,6 +10,8 @@ ion-content { --background: #F0EBE3; }
   padding:16px;
   margin-bottom:12px;
   cursor:pointer;
+  border:1px solid #eef2f7;
+  box-shadow:0 2px 8px rgba(0,0,0,0.03);
 
   .customer-header {
     display:flex;

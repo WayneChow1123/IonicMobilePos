@@ -95,18 +95,18 @@
       </div>
     </div>
 
-    <div class="form-card" style="background:#d4edda;">
+    <div class="form-card" style="background:#cfe2ff;">
       <div class="form-group">
         <label>ADD QUANTITY *</label>
         <input type="number" [(ngModel)]="addStockQty" (keydown)="noLeadingZero($event, addStockQty)" placeholder="Enter quantity to add" class="form-input" min="1"/>
       </div>
       <div *ngIf="addStockQty > 0" style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;padding-top:8px;border-top:1px solid rgba(0,0,0,0.1);">
-        <span style="font-size:13px;color:#27ae60;font-weight:600;">New Stock</span>
-        <span style="font-size:20px;font-weight:800;color:#27ae60;">{{ (selectedProduct?.stock || 0) + addStockQty }}</span>
+        <span style="font-size:13px;color:#5c85d6;font-weight:600;">New Stock</span>
+        <span style="font-size:20px;font-weight:800;color:#5c85d6;">{{ (selectedProduct?.stock || 0) + addStockQty }}</span>
       </div>
     </div>
 
-    <button class="save-btn" style="background:#27ae60;" (click)="submitAddStock()">ADD STOCK</button>
+    <button class="save-btn" style="background:#5c85d6;" (click)="submitAddStock()">ADD STOCK</button>
   </div>
 
   <!-- ADD / EDIT PRODUCT PAGE -->

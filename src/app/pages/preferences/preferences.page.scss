@@ -102,7 +102,7 @@ ion-content {
   cursor: pointer;
 
   &.card-half { width: calc(50% - 6px); }
-  &.card-blue { background: #C5C8E0; }
+  &.card-blue { background: #cfe2ff; }
   &.card-yellow { background: #DDD9A3; }
 
   .card-title {
@@ -143,7 +143,7 @@ ion-content {
   flex-direction: column;
   gap: 10px;
 
-  .system-item {
+    .system-item {
     background: #fff;
     border-radius: 16px;
     padding: 16px 18px;
@@ -151,6 +151,8 @@ ion-content {
     justify-content: space-between;
     align-items: center;
     cursor: pointer;
+    border: 1px solid #eef2f7;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.03);
 
     .system-item-left {
       display: flex;
