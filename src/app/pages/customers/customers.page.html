@@ -188,15 +188,15 @@
         <div class="cd-report-grid" *ngIf="!activeReport">
           <div class="cd-report-card yellow" (click)="setActiveReport('INVOICE')">
             <span class="report-label">INVOICE<br>REPORT</span>
-            <ion-icon name="document-outline"></ion-icon>
+            <img src="assets/icon/invoice-report.png" class="icon-custom" style="width: 36px; height: 36px;" />
           </div>
           <div class="cd-report-card pink" (click)="setActiveReport('CN')">
             <span class="report-label">C.N.<br>REPORT</span>
-            <ion-icon name="copy-outline"></ion-icon>
+            <img src="assets/icon/credit-note-report.png" class="icon-custom" style="width: 36px; height: 36px;" />
           </div>
           <div class="cd-report-card green" (click)="setActiveReport('PAYMENTS')">
             <span class="report-label">PAYMENTS</span>
-            <ion-icon name="wallet-outline"></ion-icon>
+            <img src="assets/icon/payment-report.png" class="icon-custom" style="width: 36px; height: 36px;" />
           </div>
         </div>
 
@@ -213,7 +213,7 @@
           <div *ngIf="activeReport === 'INVOICE'">
             <div *ngFor="let inv of customerInvoices" class="report-list-item">
               <div class="item-main">
-                <div class="item-icon yellow"><ion-icon name="document-text-outline"></ion-icon></div>
+                <div class="item-icon yellow"><img src="assets/icon/invoice-report.png" class="icon-custom" /></div>
                 <div class="item-details">
                   <div class="item-title">{{ inv.invoiceNumber }}</div>
                   <div class="item-sub">{{ inv.invoiceDate | date:'dd/MM/yyyy' }}</div>
@@ -229,7 +229,7 @@
           <div *ngIf="activeReport === 'CN'">
             <div *ngFor="let cn of customerCNs" class="report-list-item">
               <div class="item-main">
-                <div class="item-icon pink"><ion-icon name="copy-outline"></ion-icon></div>
+                <div class="item-icon pink"><img src="assets/icon/credit-note-report.png" class="icon-custom" /></div>
                 <div class="item-details">
                   <div class="item-title">{{ cn.cnNumber || 'CN-' + cn.id }}</div>
                   <div class="item-sub">{{ cn.date | date:'dd/MM/yyyy' }} | {{ cn.reason }}</div>
@@ -244,7 +244,7 @@
           <div *ngIf="activeReport === 'PAYMENTS'">
             <div *ngFor="let p of customerPayments" class="report-list-item">
               <div class="item-main">
-                <div class="item-icon green"><ion-icon name="wallet-outline"></ion-icon></div>
+                <div class="item-icon green"><img src="assets/icon/payment-report.png" class="icon-custom" /></div>
                 <div class="item-details">
                   <div class="item-title">{{ p.method }} | {{ p.referenceNo || 'No Ref' }}</div>
                   <div class="item-sub">{{ p.paymentDate | date:'dd/MM/yyyy' }}</div>
