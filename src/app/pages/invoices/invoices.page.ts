@@ -216,7 +216,7 @@ export class InvoicesPage implements OnInit {
     this.api.getProducts().subscribe({
       next: (res) => {
         const all = Array.isArray(res) ? res : [];
-        this.products = all.filter((p: any) => p.stock > 0 && p.isActive !== false);
+        this.products = all.filter((p: any) => p.isActive !== false);
       },
       error: () => { }
     });
@@ -942,9 +942,7 @@ export class InvoicesPage implements OnInit {
   }
 
   isStockInsufficient(item: any): boolean {
-    const product = this.allProducts.find(p => p.id == item.productId);
-    if (!product) return false;
-    return (item.quantity || 0) > (product.stock || 0);
+    return false;
   }
 
   getProductStock(productId: any): number {

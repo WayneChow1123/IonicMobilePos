@@ -136,7 +136,6 @@ export class ProductsPage implements OnInit {
       rate: this.form.rate == null ? 1 : Number(this.form.rate)
     };
     if (payload.price < 0) { this.showToastMsg('Price cannot be negative'); return; }
-    if (payload.stock < 0) { this.showToastMsg('Stock cannot be negative'); return; }
     if (!payload.category) payload.category = 'DEFAULT';
     if (this.isEditing && this.selectedProduct) {
       this.api.editProduct(this.selectedProduct.id, payload).subscribe({

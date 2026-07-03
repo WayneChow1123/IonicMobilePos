@@ -10,7 +10,7 @@ export class ApiService {
   private baseUrl = 'https://td.mobile.pos.xcode.com.my';
   // private baseUrl = 'http://localhost:5262';
 
-  constructor(private http: HttpClient) {}
+  constructor(private http: HttpClient) { }
 
   getFullBackup(): Observable<any> { return this.http.get(this.baseUrl + '/api/backup/full'); }
   getIncrementBackup(): Observable<any> { return this.http.get(this.baseUrl + '/api/backup/increment'); }
