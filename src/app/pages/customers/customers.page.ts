@@ -218,6 +218,28 @@ export class CustomersPage implements OnInit {
       return;
     }
 
+    if (!this.isEditing) {
+      // Local mode (when creating customer)
+      const existsIndex = this.customerPrices.findIndex(p => p.productId == this.newPriceForm.productId);
+      const newPriceItem = {
+        productId: Number(this.newPriceForm.productId),
+        productName: product ? product.name : 'Unknown Product',
+        productCode: product ? product.productCode || product.code : '',
+        originalPrice: originalPrice,
+        specialPrice: Number(this.newPriceForm.specialPrice)
+      };
+      if (existsIndex > -1) {
+        this.customerPrices[existsIndex] = newPriceItem;
+      } else {
+        this.customerPrices.push(newPriceItem);
+      }
+      this.showToastMsg('Price added locally');
+      this.showAddPriceForm = false;
+      this.newPriceForm = { productId: null, specialPrice: null };
+      this.cdr.detectChanges();
+      return;
+    }
+
     const exists = this.customerPrices.some(p => p.productId == this.newPriceForm.productId);
     this.isSavingPrice = true;
 
@@ -260,6 +282,13 @@ export class CustomersPage implements OnInit {
   deleteCustomerPrice(productId: number) {
     this.alertService.confirm('Delete Price', 'Remove this special price?').then(ok => {
       if (!ok) return;
+      if (!this.isEditing) {
+        // Local mode delete
+        this.customerPrices = this.customerPrices.filter(p => p.productId != productId);
+        this.showToastMsg('Price removed locally');
+        this.cdr.detectChanges();
+        return;
+      }
       this.api.deleteCustomerProductPrice(this.selectedCustomer.id, productId).subscribe({
         next: () => {
           this.showToastMsg('Price deleted!');
@@ -301,6 +330,7 @@ export class CustomersPage implements OnInit {
     this.isEditing = false;
     this.isEditMode = true;
     this.selectedCustomer = null;
+    this.customerPrices = [];
     this.form = { 
       name: '', phone: '', email: '', address: '', 
       code: '', term: 'Cash Sale', sequence: '', category: 'DEFAULT', 
@@ -312,6 +342,7 @@ export class CustomersPage implements OnInit {
       isDefaultBranch: false
     };
     this.showModal = true;
+    this.loadPriceProducts();
   }
 
   openEditModal(customer: any) {
@@ -438,7 +469,42 @@ export class CustomersPage implements OnInit {
       });
     } else {
       this.api.createCustomer(payload).subscribe({
-        next: () => { this.showToastMsg('Customer created!'); this.closeModal(); this.loadCustomers(); },
+        next: (res: any) => {
+          const newCustomerId = res?.data?.id || res?.id;
+          if (newCustomerId && this.customerPrices.length > 0) {
+            let hasError = false;
+            const saveNext = (index: number) => {
+              if (index >= this.customerPrices.length) {
+                if (hasError) {
+                  this.showToastMsg('Customer created, but failed to save some special prices.');
+                } else {
+                  this.showToastMsg('Customer created with special prices!');
+                }
+                this.closeModal();
+                this.loadCustomers();
+                return;
+              }
+              const cp = this.customerPrices[index];
+              this.api.createCustomerProductPrice(newCustomerId, {
+                productId: cp.productId,
+                specialPrice: cp.specialPrice
+              }).subscribe({
+                next: () => {
+                  saveNext(index + 1);
+                },
+                error: () => {
+                  hasError = true;
+                  saveNext(index + 1);
+                }
+              });
+            };
+            saveNext(0);
+          } else {
+            this.showToastMsg('Customer created!');
+            this.closeModal();
+            this.loadCustomers();
+          }
+        },
         error: (err: any) => this.showToastMsg('Failed: ' + (err.error?.message || JSON.stringify(err.error) || err.message || 'error'))
       });
     }
