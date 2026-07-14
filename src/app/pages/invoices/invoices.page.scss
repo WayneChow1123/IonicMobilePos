@@ -18,6 +18,7 @@ ion-content {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  padding-top: calc(env(safe-area-inset-top) + 12px); 
   margin-bottom: 16px;
 }
 
@@ -382,6 +383,7 @@ ion-content {
   justify-content: space-between;
   align-items: center;
   padding: 12px 20px;
+  padding-top: calc(env(safe-area-inset-top) + 12px); 
   flex-shrink: 0;
 }
 
@@ -761,6 +763,7 @@ ion-content {
   align-items: center;
   box-shadow: 0 -10px 30px rgba(13, 110, 253, 0.08);
   border-top: 1px solid #cfe2ff;
+  padding-BOTTOM: calc(env(safe-area-inset-top) + 20px); 
 }
 
 .gs-spacer {
@@ -869,12 +872,13 @@ ion-content {
   justify-content: space-between;
   align-items: center;
   padding: 12px 20px;
+  padding-top: calc(env(safe-area-inset-top) + 12px); 
 }
 
 .ni-top-left {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 5px;
 }
 
 .ni-back-btn {
@@ -1071,6 +1075,7 @@ ion-content {
   justify-content: space-between;
   align-items: center;
   box-shadow: 0 -10px 30px rgba(13, 110, 253, 0.08);
+  padding-bottom: calc(env(safe-area-inset-top) + 20px); 
   border-top: 1px solid #b6d4fe;
 }
 
@@ -1152,6 +1157,7 @@ ion-content {
   justify-content: space-between;
   align-items: center;
   padding: 12px 20px;
+  padding-top: calc(env(safe-area-inset-top) + 12px); 
   background: #fff;
   border-bottom: 1px solid #eef2f7;
 

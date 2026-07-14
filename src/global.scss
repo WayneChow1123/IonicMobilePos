@@ -1,5 +1,12 @@
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap');
 
+.top-bar,
+.ni-top-bar,
+.receipt-top-bar,
+.ni-overlay-header {
+  padding-top: calc(env(safe-area-inset-top) + 8px);
+}
+
 * {
   font-family: 'DM Sans', sans-serif;
   box-sizing: border-box;
@@ -153,7 +160,9 @@ body.dark {
     color: #a29bfe !important;
   }
 
-
+ion-content{
+  --padding-top: env(safe-area-inset-top);
+}
 
 
   // Inputs and dropdown fields

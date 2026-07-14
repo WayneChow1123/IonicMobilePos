@@ -79,7 +79,7 @@
         <ion-button fill="clear" class="cd-back-btn" (click)="closeModal()">
           <ion-icon name="chevron-back-outline"></ion-icon>
         </ion-button>
-        <span class="cd-title">{{ activeSubTab === 'BRANCHES' ? 'BRANCHES' : 'CUSTOMER DETAILS' }}</span>
+        <span class="cd-title">{{ activeSubTab === 'BRANCHES' ? 'BRANCHES' :(activeSubTab === 'PRICE' ? 'SPECIAL PRICE' : 'CUSTOMER DETAILS') }}</span>
         <div class="cd-top-right">
           <ion-button fill="clear" class="cd-icon-btn" (click)="toggleEditMode()">
             <ion-icon [name]="isEditMode ? 'save-outline' : 'settings-outline'"></ion-icon>
