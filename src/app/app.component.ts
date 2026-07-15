@@ -15,7 +15,6 @@ export class AppComponent {
 
   private navPages = [
     '/pages/home', 
-    '/pages/billing', 
     '/pages/preferences', 
     '/pages/setting'
   ];
@@ -55,7 +54,6 @@ export class AppComponent {
       if (this.navPages.includes(url)) {
         this.showBottomNav = true;
         if (url === '/pages/home') this.activeIndex = 0;
-        else if (url === '/pages/billing') this.activeIndex = 1;
         else if (url === '/pages/preferences' || url === '/pages/setting') this.activeIndex = 2;
       } else {
         this.showBottomNav = false;
