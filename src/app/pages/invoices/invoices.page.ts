@@ -62,6 +62,7 @@ export class InvoicesPage implements OnInit {
   stockIssues: any[] = [];
   showAvailableCredits = true;
   showInvoiceRemark = false;
+  showActionsDropdown = false;
 
   printerSettings: any = null;
 
@@ -467,6 +468,7 @@ export class InvoicesPage implements OnInit {
   }
 
   openEditModal(invoice: any) {
+    this.showActionsDropdown = false;
     this.isEditing = true;
     this.isEditMode = false;
     this.selectedInvoice = null;
@@ -546,7 +548,23 @@ export class InvoicesPage implements OnInit {
     });
   }
 
+  goToPaymentDetails() {
+    if (!this.selectedInvoice) return;
+    if (!(this.selectedInvoice.paidAmount > 0)) {
+      this.showToastMsg('No payment has been recorded for this invoice yet.');
+      return;
+    }
+    this.showModal = false;
+    this.navCtrl.navigateRoot('pages/billing', {
+      queryParams: {
+        action: 'viewPayment',
+        invoiceNumber: this.selectedInvoice.invoiceNumber
+      }
+    });
+  }
+
   closeModal() {
+    this.showActionsDropdown = false;
     if (this.isDirectEntry) {
       this.goBack(); // Navigate back to Billing
     } else {

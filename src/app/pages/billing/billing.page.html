@@ -629,7 +629,9 @@
         <ion-icon name="chevron-back-outline"></ion-icon> Back
       </ion-button>
       <span class="page-title">Payment Details</span>
-      <div style="width: 48px;"></div> <!-- Spacer to center title -->
+      <ion-button fill="clear" class="icon-btn" (click)="showPaymentPreview = true" style="--color: #5c85d6;">
+        <ion-icon name="document-text-outline"></ion-icon>
+      </ion-button>
     </div>
 
     <!-- Main Payment Card -->
@@ -705,6 +707,115 @@
           </div>
           <div style="font-size:14px; font-weight:900; color:#2f3542;">RM {{ item.total | number:'1.2-2' }}</div>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════
+       PAYMENT RECEIPT PREVIEW OVERLAY
+       ═══════════════════════════════════════ -->
+  <div *ngIf="showPaymentPreview" class="receipt-overlay">
+    <div class="receipt-top-bar">
+      <ion-button fill="clear" class="back-btn" (click)="showPaymentPreview = false">
+        <ion-icon name="chevron-back-outline"></ion-icon> Back
+      </ion-button>
+      <span class="page-title">LIVE PREVIEW</span>
+      <ion-button fill="clear" class="icon-btn" (click)="printPaymentReceipt()">
+        <ion-icon name="download-outline"></ion-icon>
+      </ion-button>
+    </div>
+    <div class="receipt-scroll">
+      <!-- Paper width based on printerSettings (58mm / 80mm) -->
+      <div class="receipt-paper" id="receipt-paper" [style.max-width]="printerSettings?.paperWidth === 58 ? '360px' : '480px'">
+        
+        <!-- Company Header (Optional) -->
+        <div class="receipt-header" *ngIf="isOptionEnabled('Print Company Logo')">
+          <span class="receipt-type">OFFICIAL RECEIPT</span>
+          <div class="receipt-divider"></div>
+          <h2 class="receipt-company">B JAYA TRADING</h2>
+          <span class="receipt-co-reg">(001188861-T)</span>
+          <span class="receipt-address">NO. 467, JALAN PALAS 13, TAMAN PELANGI,</span>
+          <span class="receipt-address">70400 SEREMBAN N.S, SEREMBAN, N.S, MALAYSIA</span>
+          <span class="receipt-contact">TEL: 012-6988080</span>
+        </div>
+
+        <div class="receipt-doc-info">
+          <div class="doc-row"><span class="doc-label">RECEIPT NO</span><span class="doc-value">: {{ selectedPaymentDetail?.receiptNumber }}</span></div>
+          <div class="doc-row"><span class="doc-label">INVOICE NO</span><span class="doc-value">: {{ selectedPaymentDetail?.invoice?.invoiceNumber }}</span></div>
+          
+          <!-- Payment Date (Optional) -->
+          <div class="doc-row" *ngIf="isOptionEnabled('Print Issue Time')">
+            <span class="doc-label">DATE</span>
+            <span class="doc-value">: {{ selectedPaymentDetail?.paymentDate | date:'dd MMMM yyyy HH:mm' }}</span>
+          </div>
+        </div>
+
+        <!-- Customer Address/Tel (Optional) -->
+        <div class="receipt-to" *ngIf="isOptionEnabled('Print Customer Tel') || isOptionEnabled('Print Customer Add')">
+          <span class="to-label">CUSTOMER:</span>
+          <div class="to-box">
+            <strong>{{ selectedPaymentDetail?.customer?.name }}</strong>
+            
+            <div *ngIf="isOptionEnabled('Print Customer Tel') && selectedPaymentDetail?.customer?.phone" 
+                 style="margin-top: 4px; font-size: 11px; font-weight: 700; color: #1a1a1a;">
+              TEL: {{ selectedPaymentDetail?.customer?.phone }}
+            </div>
+          </div>
+        </div>
+
+        <div class="receipt-divider-thin"></div>
+        <div class="receipt-table-header">
+          <span class="col-desc"><em>DESCRIPTION</em></span>
+          <span class="col-sub">SUBTOTAL</span>
+        </div>
+        <div class="receipt-divider-thin"></div>
+
+        <!-- Invoice Items -->
+        <div *ngFor="let item of selectedPaymentDetail?.invoice?.items; let i = index" class="receipt-item">
+          <div class="item-desc-row">
+            <span>{{ i + 1 }}. {{ item.productName }}</span>
+          </div>
+          <div class="item-calc-row">
+            <span>{{ item.quantity }} x {{ (item.unitPrice || 0) | number:'1.2-2' }}</span>
+            <span class="item-subtotal">RM {{ item.total | number:'1.2-2' }}</span>
+          </div>
+        </div>
+
+        <div class="receipt-divider-thin" style="margin-top:16px;"></div>
+        
+        <!-- Payment Details section -->
+        <div class="receipt-payment-detail" style="border: 1px dashed #ddd; padding: 10px 20px; border-radius: 8px; margin-bottom: 16px; background: #fafafa;">
+          <div class="payment-detail-row">
+            <span style="font-weight:700;">PAYMENT METHOD</span>
+            <span style="font-weight:700; text-transform:uppercase;">{{ selectedPaymentDetail?.paymentMethod }}</span>
+          </div>
+          <div *ngIf="selectedPaymentDetail?.referenceNo" class="payment-detail-row">
+            <span>REFERENCE NO</span>
+            <span>{{ selectedPaymentDetail?.referenceNo }}</span>
+          </div>
+          <div class="payment-detail-row" style="border-top: 1px solid #eee; margin-top: 6px; padding-top: 6px;">
+            <span>INVOICE TOTAL</span>
+            <span>RM {{ selectedPaymentDetail?.invoice?.totalAmount | number:'1.2-2' }}</span>
+          </div>
+          <div class="payment-detail-row">
+            <span>INVOICE BALANCE</span>
+            <span>RM {{ selectedPaymentDetail?.invoice?.balance | number:'1.2-2' }}</span>
+          </div>
+        </div>
+
+        <!-- Payment Received Net Bar -->
+        <div class="receipt-net">
+          <span class="net-label">PAYMENT RECEIVED</span>
+          <span class="net-value">RM {{ selectedPaymentDetail?.paymentAmount | number:'1.2-2' }}</span>
+        </div>
+
+        <!-- Signature (Optional) -->
+        <div class="receipt-signature" *ngIf="isOptionEnabled('Sign on Payment')">
+          <span class="sig-label">PAYMENT RECEIVED SIGNATURE</span>
+        </div>
+
+        <!-- Footer (Optional) -->
+        <div class="receipt-thanks" *ngIf="isOptionEnabled('Footer')">THANK YOU</div>
       </div>
     </div>
   </div>

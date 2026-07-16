@@ -351,18 +351,36 @@
       </ion-button>
       <span class="page-title">Edit Invoice</span>
       <div class="top-bar-actions">
-        <ion-button fill="clear" class="icon-btn" (click)="goToCreateCN()" style="--color: #e67e22;">
-          <ion-icon name="receipt-outline"></ion-icon>
+        <ion-button fill="clear" class="icon-btn" (click)="showActionsDropdown = !showActionsDropdown" style="--color: #5c85d6;">
+          <ion-icon name="settings-outline"></ion-icon>
         </ion-button>
-        <ion-button fill="clear" class="icon-btn check-preview-btn" (click)="openCheckPreview()">
-          <ion-icon name="document-text-outline"></ion-icon>
-        </ion-button>
-        <ion-button fill="clear" class="icon-btn" (click)="confirmDeleteInModal()" style="--color:#e57373;">
-          <ion-icon name="trash-outline"></ion-icon>
-        </ion-button>
-        <ion-button fill="clear" class="icon-btn" (click)="toggleEditMode()">
-          <ion-icon [name]="isEditMode ? 'save-outline' : 'create-outline'" [style.color]="isEditMode ? '#5c85d6' : '#5c85d6'"></ion-icon>
-        </ion-button>
+        
+        <div class="actions-dropdown-menu" *ngIf="showActionsDropdown">
+          <button class="dropdown-item" (click)="showActionsDropdown = false; goToCreateCN()" style="color: #e67e22;">
+            <ion-icon name="receipt-outline"></ion-icon>
+            <span>Return Items (CN)</span>
+          </button>
+          
+          <button class="dropdown-item" (click)="showActionsDropdown = false; openCheckPreview()">
+            <ion-icon name="document-text-outline"></ion-icon>
+            <span>Live Preview</span>
+          </button>
+          
+          <button class="dropdown-item" (click)="showActionsDropdown = false; toggleEditMode()" style="color: #5c85d6;">
+            <ion-icon [name]="isEditMode ? 'save-outline' : 'create-outline'"></ion-icon>
+            <span>{{ isEditMode ? 'Save Invoice' : 'Edit Invoice' }}</span>
+          </button>
+          
+          <button class="dropdown-item" (click)="showActionsDropdown = false; goToPaymentDetails()" style="color: #27ae60;">
+            <ion-icon name="wallet-outline"></ion-icon>
+            <span>View Payment Details</span>
+          </button>
+          
+          <button class="dropdown-item" (click)="showActionsDropdown = false; confirmDeleteInModal()" style="color: #e57373; border-top: 1px solid rgba(0,0,0,0.08);">
+            <ion-icon name="trash-outline"></ion-icon>
+            <span>Delete Invoice</span>
+          </button>
+        </div>
       </div>
     </div>
 

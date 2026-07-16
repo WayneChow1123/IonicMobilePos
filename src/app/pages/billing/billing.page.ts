@@ -9,6 +9,7 @@ import { IonicModule } from '@ionic/angular';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../services/api.service';
 import { AppComponent } from '../../app.component';
+import { BluetoothPrintService } from '../../services/bluetooth-print.service';
 
 @Component({
   standalone: true,
@@ -34,6 +35,8 @@ export class BillingPage implements OnInit {
   invoices: any[] = [];
   isLoading = false;
   selectedPaymentDetail: any = null;
+  printerSettings: any = null;
+  showPaymentPreview = false;
   private _currentView = 'home';
   get currentView(): string {
     return this._currentView;
@@ -232,7 +235,8 @@ export class BillingPage implements OnInit {
     private api: ApiService, 
     private cdr: ChangeDetectorRef, 
     private alertService: AlertService,
-    private appComponent: AppComponent
+    private appComponent: AppComponent,
+    private btPrint: BluetoothPrintService
   ) {}
 
   ionViewWillLeave() {
@@ -258,6 +262,28 @@ export class BillingPage implements OnInit {
           this.cnForm.invoiceId = invId;
           this.onCNInvoiceChange();
         }, 300);
+      } else if (params['action'] === 'viewPayment') {
+        const invNum = params['invoiceNumber'];
+        this.isLoading = true;
+        this.api.getPayments().subscribe({
+          next: (res) => {
+            this.payments = Array.isArray(res) ? res : [];
+            this.filteredPayments = [...this.payments];
+            
+            const payment = this.payments.find((p: any) => p.invoiceNumber === invNum);
+            if (payment) {
+              this.viewPaymentDetails(payment);
+            } else {
+              this.showToastMsg('No payment record found for this invoice');
+              this.openPaymentList();
+            }
+            this.isLoading = false;
+          },
+          error: () => {
+            this.isLoading = false;
+            this.showToastMsg('Failed to load payments');
+          }
+        });
       }
     });
   }
@@ -372,6 +398,7 @@ export class BillingPage implements OnInit {
 
   openPaymentList() { this.paymentSearchTerm = ''; this.loadPayments(); this.currentView = 'paymentList'; }
   viewPaymentDetails(payment: any) {
+    this.showPaymentPreview = false;
     this.isLoading = true;
     this.api.getPaymentPreview(payment.id).subscribe({
       next: (res: any) => {
@@ -385,6 +412,146 @@ export class BillingPage implements OnInit {
       }
     });
   }
+
+  loadPrinterSettings() {
+    const saved = localStorage.getItem('printerSettings');
+    if (saved) {
+      try {
+        this.printerSettings = JSON.parse(saved);
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    if (!this.printerSettings) {
+      this.printerSettings = {
+        paperWidth: 80,
+        bottomEmptyLine: 5,
+        contentOptions: [
+          { name: 'Print Company Logo', enabled: true },
+          { name: 'Print Issue Time', enabled: true },
+          { name: 'Print Item Code', enabled: false },
+          { name: 'Print Item U.O.M.', enabled: true },
+          { name: 'Print Term Date', enabled: false },
+          { name: 'Print Customer Tel', enabled: true },
+          { name: 'Print Customer Add', enabled: true },
+          { name: 'Sign on Cash Invoice', enabled: true },
+          { name: 'Sign on Credit Invoice', enabled: true },
+          { name: 'Sign on Credit Note', enabled: true },
+          { name: 'Sign on Payment', enabled: true },
+          { name: 'Footer', enabled: true }
+        ]
+      };
+    }
+  }
+
+  isOptionEnabled(optionName: string): boolean {
+    this.loadPrinterSettings();
+    if (!this.printerSettings || !this.printerSettings.contentOptions) return true;
+    const opt = this.printerSettings.contentOptions.find((o: any) => o.name === optionName);
+    return opt ? opt.enabled : true;
+  }
+
+  printPaymentReceipt() {
+    this.loadPrinterSettings();
+    if (this.printerSettings?.printerInterface === 'Bluetooth' && this.btPrint.isAvailable()) {
+      this.btPrint.printPayment(this.selectedPaymentDetail, this.printerSettings, this.customers, this.allProducts);
+      return;
+    }
+    
+    let iframe = document.getElementById('print-iframe') as HTMLIFrameElement;
+    if (!iframe) {
+      iframe = document.createElement('iframe');
+      iframe.id = 'print-iframe';
+      iframe.style.position = 'fixed';
+      iframe.style.right = '0';
+      iframe.style.bottom = '0';
+      iframe.style.width = '0';
+      iframe.style.height = '0';
+      iframe.style.border = '0';
+      document.body.appendChild(iframe);
+    }
+    const printWindow = iframe.contentWindow || (iframe.contentDocument as any)?.defaultView;
+    if (!printWindow) { this.showToastMsg('Failed to initialize print iframe'); return; }
+
+    const width = this.printerSettings?.paperWidth === 58 ? '360px' : '480px';
+    const styles = `<style>* { margin: 0; padding: 0; box-sizing: border-box; } body { font-family: 'Courier New', monospace; background: #F0EBE3; display: flex; justify-content: center; padding: 40px 20px; } .receipt { background: #fff; border-radius: 24px; padding: 40px 36px; max-width: ${width}; width: 100%; box-shadow: 0 4px 24px rgba(0,0,0,0.08); } .receipt-type { display: block; text-align: center; font-size: 13px; letter-spacing: 6px; color: #888; margin-bottom: 16px; } .divider { height: 1px; background: #1a1a1a; margin: 12px 0; } .divider-thin { height: 1px; background: #ddd; margin: 12px 0; } .company { text-align: center; font-size: 22px; font-weight: 700; margin: 12px 0 4px; } .co-reg { display: block; text-align: center; font-size: 12px; color: #888; margin-bottom: 8px; } .address { display: block; text-align: center; font-size: 11px; color: #666; line-height: 1.6; } .contact { display: block; text-align: center; font-size: 11px; color: #888; margin-top: 6px; } .doc-row { display: flex; gap: 12px; margin: 4px 0; } .doc-label { font-size: 12px; font-weight: 700; min-width: 70px; } .doc-value { font-size: 12px; font-weight: 700; } .to-section { margin: 16px 0; } .to-label { font-size: 12px; font-style: italic; color: #888; } .to-box { border: 1px solid #ddd; border-radius: 8px; padding: 12px; margin-top: 6px; font-size: 12px; line-height: 1.6; } .table-header { display: flex; justify-content: space-between; font-size: 11px; font-weight: 700; font-style: italic; } .item-row { margin: 12px 0; } .item-desc { display: flex; justify-content: space-between; font-size: 12px; font-weight: 700; } .item-calc { font-size: 11px; color: #888; margin-top: 2px; display: flex; justify-content: space-between; } .total-row { display: flex; justify-content: space-between; font-size: 12px; margin: 4px 0; } .net-bar { background: #1a1a1a; color: #fff; border-radius: 8px; padding: 14px 20px; display: flex; justify-content: space-between; align-items: center; margin: 16px 0; } .net-label { font-size: 12px; font-weight: 700; font-style: italic; } .net-value { font-size: 20px; font-weight: 700; } .due-box { border: 1px solid #ddd; border-radius: 8px; padding: 16px; text-align: center; margin: 16px 0; } .due-label { display: block; font-size: 10px; letter-spacing: 3px; color: #888; margin-bottom: 6px; } .due-date { font-size: 18px; font-weight: 700; } .sig-box { border: 1px solid #ddd; border-radius: 8px; padding: 16px; min-height: 100px; margin: 16px 0; } .sig-label { font-size: 11px; color: #ccc; font-style: italic; } .thanks { text-align: center; font-size: 12px; letter-spacing: 6px; color: #ccc; margin-top: 20px; }</style>`;
+
+    const pd = this.selectedPaymentDetail;
+    if (!pd) return;
+
+    // Company Header
+    let companyHeaderHtml = '';
+    if (this.isOptionEnabled('Print Company Logo')) {
+      companyHeaderHtml = `
+        <div class="company">B JAYA TRADING</div>
+        <span class="co-reg">(001188861-T)</span>
+        <span class="address">NO. 467, JALAN PALAS 13, TAMAN PELANGI,</span>
+        <span class="address">70400 SEREMBAN N.S, SEREMBAN, N.S, MALAYSIA</span>
+        <span class="contact">TEL: 012-6988080</span>
+      `;
+    }
+
+    // Date
+    let dateHtml = '';
+    const payDate = pd.paymentDate ? new Date(pd.paymentDate) : new Date();
+    const dateStr = payDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    if (this.isOptionEnabled('Print Issue Time')) {
+      dateHtml = `<div class="doc-row"><span class="doc-label">DATE</span><span class="doc-value">: ${dateStr}</span></div>`;
+    }
+
+    // Customer
+    let customerBoxHtml = '';
+    if (this.isOptionEnabled('Print Customer Tel') || this.isOptionEnabled('Print Customer Add')) {
+      customerBoxHtml = `
+        <div class="to-section">
+          <span class="to-label">CUSTOMER:</span>
+          <div class="to-box">
+            <strong>${pd.customer?.name}</strong>
+            ${this.isOptionEnabled('Print Customer Tel') && pd.customer?.phone ? `<div style="margin-top: 4px; font-weight:bold;">TEL: ${pd.customer?.phone}</div>` : ''}
+          </div>
+        </div>
+      `;
+    }
+
+    // Invoice items table
+    let itemsHtml = '';
+    const items = pd.invoice?.items || [];
+    items.forEach((item: any, i: number) => {
+      const subtotal = item.total.toFixed(2);
+      itemsHtml += `<div class="item-row"><div class="item-desc"><span>${i + 1}. ${item.productName}</span></div><div class="item-calc"><span>${item.quantity} x ${(item.unitPrice || 0).toFixed(2)}</span><span>${subtotal}</span></div></div>`;
+    });
+
+    const receiptNumber = pd.receiptNumber || `RCPT-${pd.id}`;
+    const invoiceNumber = pd.invoice?.invoiceNumber || '';
+    
+    const paymentDetailHtml = `<div style="padding:12px 20px;border:1px dashed #ddd;border-radius:8px;margin-bottom:16px;background:#fcfcfc;">
+        <div style="display:flex;justify-content:space-between;font-size:12px;font-weight:700;padding:3px 0;"><span>PAYMENT METHOD</span><span style="text-transform:uppercase;">${pd.paymentMethod}</span></div>
+        ${pd.referenceNo ? `<div style="display:flex;justify-content:space-between;font-size:12px;font-weight:700;padding:3px 0;"><span>REFERENCE NO</span><span>${pd.referenceNo}</span></div>` : ''}
+        <div style="display:flex;justify-content:space-between;font-size:12px;font-weight:700;padding:3px 0;border-top:1px dashed #eee;margin-top:6px;padding-top:6px;"><span>INVOICE TOTAL</span><span>RM ${(pd.invoice?.totalAmount || 0).toFixed(2)}</span></div>
+        <div style="display:flex;justify-content:space-between;font-size:12px;font-weight:700;padding:3px 0;"><span>INVOICE BALANCE</span><span>RM ${(pd.invoice?.balance || 0).toFixed(2)}</span></div>
+    </div>`;
+
+    let sigBoxHtml = '';
+    if (this.isOptionEnabled('Sign on Payment')) {
+      sigBoxHtml = `<div class="sig-box"><span class="sig-label">PAYMENT RECEIVED SIGNATURE</span></div>`;
+    }
+    
+    let footerHtml = '';
+    if (this.isOptionEnabled('Footer')) {
+      footerHtml = `<div class="thanks">THANK YOU</div>`;
+    }
+
+    let emptyLinesHtml = '';
+    const linesCount = this.printerSettings?.bottomEmptyLine ?? 5;
+    for (let l = 0; l < linesCount; l++) {
+      emptyLinesHtml += `<div style="height: 20px;"></div>`;
+    }
+
+    printWindow.document.write(`<!DOCTYPE html><html><head><title>Receipt ${receiptNumber}</title>${styles}</head><body><div class="receipt"><span class="receipt-type">OFFICIAL RECEIPT</span><div class="divider"></div>${companyHeaderHtml}<div style="margin-top:20px;"><div class="doc-row"><span class="doc-label">RECEIPT NO</span><span class="doc-value">: ${receiptNumber}</span></div><div class="doc-row"><span class="doc-label">INVOICE NO</span><span class="doc-value">: ${invoiceNumber}</span></div>${dateHtml}</div>${customerBoxHtml}<div class="divider-thin"></div><div class="table-header"><span>DESCRIPTION</span><span>SUBTOTAL</span></div><div class="divider-thin"></div>${itemsHtml}<div class="divider-thin"></div>${paymentDetailHtml}<div class="net-bar"><span class="net-label">PAYMENT RECEIVED</span><span class="net-value">RM ${pd.paymentAmount.toFixed(2)}</span></div>${sigBoxHtml}${footerHtml}${emptyLinesHtml}</div></body></html>`);
+    printWindow.document.close();
+    setTimeout(() => printWindow.print(), 500);
+  }
+
   openCNList() { this.cnSearchTerm = ''; this.loadCreditNotes(); this.currentView = 'cnList'; }
 
   onCustomerChange() {

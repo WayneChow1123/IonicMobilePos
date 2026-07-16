@@ -349,6 +349,212 @@ export class BluetoothPrintService {
       );
     });
   }
+
+  printPayment(pd: any, settings: any, customers: any[], products: any[]): Promise<boolean> {
+    return new Promise((resolve, reject) => {
+      if (!this.isAvailable()) {
+        this.alertService.toast('Bluetooth printing is only available on native devices (APK)', 'error');
+        return resolve(false);
+      }
+
+      const mac = settings.macAddress || '02:29:DE:43:D8:2C';
+
+      const permissions = (window as any).plugins?.permissions;
+      if (permissions && permissions.BLUETOOTH_CONNECT) {
+        permissions.hasPermission(permissions.BLUETOOTH_CONNECT, (status: any) => {
+          if (status.hasPermission) {
+            this.connectAndPrintPayment(mac, pd, settings, customers, products, resolve);
+          } else {
+            permissions.requestPermission(permissions.BLUETOOTH_CONNECT, (s: any) => {
+              if (s.hasPermission) {
+                this.connectAndPrintPayment(mac, pd, settings, customers, products, resolve);
+              } else {
+                this.alertService.toast('Nearby Devices permission is required to print.', 'error');
+                resolve(false);
+              }
+            }, () => {
+              resolve(false);
+            });
+          }
+        }, () => resolve(false));
+      } else {
+        this.connectAndPrintPayment(mac, pd, settings, customers, products, resolve);
+      }
+    });
+  }
+
+  private connectAndPrintPayment(mac: string, pd: any, settings: any, customers: any[], products: any[], resolve: any) {
+    this.alertService.toast(`Connecting to printer...`, 'success');
+    this.bluetoothSerial.isEnabled(
+      () => {
+        this.bluetoothSerial.connect(
+          mac,
+          () => {
+            try {
+              this.sendPrintPaymentData(pd, settings, customers, products)
+                .then(() => {
+                  this.bluetoothSerial.disconnect();
+                  resolve(true);
+                })
+                .catch((err) => {
+                  this.bluetoothSerial.disconnect();
+                  this.alertService.toast(`Printing failed: ${err.message || err}`, 'error');
+                  resolve(false);
+                });
+            } catch (e: any) {
+              this.bluetoothSerial.disconnect();
+              this.alertService.toast(`Format error: ${e.message}`, 'error');
+              resolve(false);
+            }
+          },
+          (err: any) => {
+            this.alertService.toast(`Failed to connect to printer: ${err}`, 'error');
+            resolve(false);
+          }
+        );
+      },
+      () => {
+        this.alertService.toast('Please turn on Bluetooth first', 'warning');
+        resolve(false);
+      }
+    );
+  }
+
+  private sendPrintPaymentData(pd: any, settings: any, customers: any[], products: any[]): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const width = settings.paperWidth === 58 ? 32 : 48;
+      const builder = new BufferBuilder();
+
+      const ESC = 0x1B;
+      const GS = 0x1D;
+
+      const CMD_INIT = [ESC, 0x40];
+      const CMD_ALIGN_LEFT = [ESC, 0x61, 0x00];
+      const CMD_ALIGN_CENTER = [ESC, 0x61, 0x01];
+      const CMD_BOLD_ON = [ESC, 0x45, 0x01];
+      const CMD_BOLD_OFF = [ESC, 0x45, 0x00];
+      const CMD_DOUBLE_SIZE = [GS, 0x21, 0x11];
+      const CMD_NORMAL_SIZE = [GS, 0x21, 0x00];
+
+      const getCustomer = (id: any) => customers.find((c: any) => c.id == id);
+      const isOptionEnabled = (name: string): boolean => {
+        if (!settings.contentOptions) return true;
+        const opt = settings.contentOptions.find((o: any) => o.name === name);
+        return opt ? opt.enabled : true;
+      };
+
+      builder.append(CMD_INIT);
+
+      // Title
+      builder.append(CMD_ALIGN_CENTER);
+      builder.append(CMD_BOLD_ON);
+      builder.append(CMD_DOUBLE_SIZE);
+      builder.appendText("OFFICIAL RECEIPT\n");
+      builder.append(CMD_NORMAL_SIZE);
+      builder.append(CMD_BOLD_OFF);
+      builder.append(CMD_ALIGN_LEFT);
+      builder.appendText("-".repeat(width) + "\n");
+
+      // Company Info
+      if (isOptionEnabled('Print Company Logo')) {
+        builder.append(CMD_ALIGN_CENTER);
+        builder.append(CMD_BOLD_ON);
+        builder.appendText("B JAYA TRADING\n");
+        builder.append(CMD_BOLD_OFF);
+        builder.appendText("(001188861-T)\n");
+        builder.appendText("NO. 467, JALAN PALAS 13, TAMAN PELANGI,\n");
+        builder.appendText("70400 SEREMBAN N.S, MALAYSIA\n");
+        builder.appendText("TEL: 012-6988080\n");
+        builder.append(CMD_ALIGN_LEFT);
+        builder.appendText("-".repeat(width) + "\n");
+      }
+
+      // Receipt Meta
+      builder.appendText(`RECEIPT NO: ${pd.receiptNumber || 'RCPT-' + pd.id}\n`);
+      builder.appendText(`INVOICE NO: ${pd.invoice?.invoiceNumber || ''}\n`);
+      if (isOptionEnabled('Print Issue Time')) {
+        const payDate = pd.paymentDate ? new Date(pd.paymentDate) : new Date();
+        const dateStr = payDate.toLocaleDateString('en-GB', {
+          day: '2-digit',
+          month: 'short',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        });
+        builder.appendText(`DATE      : ${dateStr}\n`);
+      }
+
+      // Customer Info
+      if (isOptionEnabled('Print Customer Tel') || isOptionEnabled('Print Customer Add')) {
+        const c = getCustomer(pd.customer?.id);
+        builder.appendText("\nTO:\n");
+        builder.appendText(`${pd.customer?.name || ''}\n`);
+        if (isOptionEnabled('Print Customer Tel') && pd.customer?.phone) {
+          builder.appendText(`TEL: ${pd.customer?.phone}\n`);
+        }
+      }
+
+      builder.appendText("-".repeat(width) + "\n");
+
+      // Items Table Header
+      builder.appendText(this.formatRow("DESCRIPTION", "SUBTOTAL", width) + "\n");
+      builder.appendText("-".repeat(width) + "\n");
+
+      // Items List
+      const items = pd.invoice?.items || [];
+      items.forEach((item: any, i: number) => {
+        const descRow = `${i + 1}. ${item.productName}`;
+        builder.appendText(descRow + "\n");
+        const qtyStr = `${item.quantity} x ${(item.unitPrice || 0).toFixed(2)}`;
+        const subtotal = (item.total || 0).toFixed(2);
+        builder.appendText(this.formatRow(`   ${qtyStr}`, `RM ${subtotal}`, width) + "\n");
+      });
+
+      builder.appendText("-".repeat(width) + "\n");
+
+      // Payment Method
+      builder.appendText(this.formatRow("PAYMENT METHOD", pd.paymentMethod || '', width) + "\n");
+      if (pd.referenceNo) {
+        builder.appendText(this.formatRow("REFERENCE NO", pd.referenceNo, width) + "\n");
+      }
+      builder.appendText(this.formatRow("INVOICE TOTAL", `RM ${(pd.invoice?.totalAmount || 0).toFixed(2)}`, width) + "\n");
+      builder.appendText(this.formatRow("INVOICE BALANCE", `RM ${(pd.invoice?.balance || 0).toFixed(2)}`, width) + "\n");
+      builder.appendText("-".repeat(width) + "\n");
+
+      // Net Amount (BOLD)
+      builder.append(CMD_BOLD_ON);
+      builder.appendText(this.formatRow("PAYMENT RECEIVED", `RM ${(pd.paymentAmount || 0).toFixed(2)}`, width) + "\n");
+      builder.append(CMD_BOLD_OFF);
+
+      // Signature Box
+      if (isOptionEnabled('Sign on Payment')) {
+        builder.appendText("\n\n\n\n\n");
+        builder.append(CMD_ALIGN_CENTER);
+        builder.appendText("...........................\n");
+        builder.appendText("PAYMENT RECEIVED SIGNATURE\n");
+        builder.append(CMD_ALIGN_LEFT);
+      }
+
+      // Footer
+      if (isOptionEnabled('Footer')) {
+        builder.appendText("\n");
+        builder.append(CMD_ALIGN_CENTER);
+        builder.appendText("THANK YOU\n");
+        builder.append(CMD_ALIGN_LEFT);
+      }
+
+      // Spacing lines
+      const emptyLines = settings.bottomEmptyLine ?? 5;
+      builder.appendText("\n".repeat(emptyLines));
+
+      const buffer = builder.getBuffer();
+      this.bluetoothSerial.write(
+        buffer,
+        () => resolve(),
+        (err: any) => reject(err)
+      );
+    });
+  }
 }
 
 /** Helper class to build ESC/POS payload */
