@@ -316,7 +316,7 @@
     </div>
     <div *ngIf="!isLoading">
       <div *ngFor="let payment of filteredPayments" class="list-item">
-        <div class="item-info">
+        <div class="item-info" (click)="viewPaymentDetails(payment)" style="cursor: pointer;">
           <div class="item-avatar"><ion-icon name="wallet-outline"></ion-icon></div>
           <div>
             <div class="item-name">{{ payment.customerName }}</div>
@@ -616,5 +616,95 @@
               style="width:100%; background:#6c5ce7; color:#fff; border:none; border-radius:16px; padding:16px; font-size:16px; font-weight:800; box-shadow:0 6px 20px rgba(108,92,231,0.3); transition:all 0.2s ease; cursor:pointer;">
         Confirm Selection ({{ paymentForm.invoiceIds.length }})
       </button>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════
+       PAYMENT DETAILS PREMIUM DESIGN
+       ═══════════════════════════════════════ -->
+  <div *ngIf="currentView==='paymentDetails'" class="page-container" style="display:flex; flex-direction:column; min-height:100vh;">
+    <!-- Top Bar -->
+    <div class="top-bar" style="margin-bottom: 16px;">
+      <ion-button fill="clear" class="back-btn" (click)="openPaymentList()">
+        <ion-icon name="chevron-back-outline"></ion-icon> Back
+      </ion-button>
+      <span class="page-title">Payment Details</span>
+      <div style="width: 48px;"></div> <!-- Spacer to center title -->
+    </div>
+
+    <!-- Main Payment Card -->
+    <div class="form-card" style="background:#C5C8E0; border-radius:20px; padding:20px; box-shadow:0 4px 12px rgba(0,0,0,0.05); margin-bottom:16px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; border-bottom:1px solid rgba(0,0,0,0.05); padding-bottom:12px;">
+        <span style="font-size:11px; color:#555; font-weight:700; text-transform:uppercase; letter-spacing:1px;">Receipt Number</span>
+        <span style="font-size:16px; font-weight:900; color:#1a1a1a;">{{ selectedPaymentDetail?.receiptNumber }}</span>
+      </div>
+      
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:8px;">
+        <div>
+          <div style="font-size:10px; color:#555; font-weight:700; margin-bottom:4px; letter-spacing:0.5px;">PAYMENT AMOUNT</div>
+          <div style="font-size:22px; font-weight:900; color:#27ae60;">RM {{ selectedPaymentDetail?.paymentAmount | number:'1.2-2' }}</div>
+        </div>
+        <div>
+          <div style="font-size:10px; color:#555; font-weight:700; margin-bottom:4px; letter-spacing:0.5px;">PAYMENT DATE</div>
+          <div style="font-size:14px; font-weight:800; color:#1a1a1a;">{{ selectedPaymentDetail?.paymentDate | date:'dd/MM/yyyy HH:mm' }}</div>
+        </div>
+        <div>
+          <div style="font-size:10px; color:#555; font-weight:700; margin-bottom:4px; letter-spacing:0.5px;">PAYMENT METHOD</div>
+          <div style="font-size:14px; font-weight:800; color:#1a1a1a; text-transform:uppercase;">{{ selectedPaymentDetail?.paymentMethod }}</div>
+        </div>
+        <div>
+          <div style="font-size:10px; color:#555; font-weight:700; margin-bottom:4px; letter-spacing:0.5px;">REFERENCE NO</div>
+          <div style="font-size:14px; font-weight:800; color:#1a1a1a;">{{ selectedPaymentDetail?.referenceNo || 'N/A' }}</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Customer Card -->
+    <div class="form-card" style="background:#fff; border-radius:20px; padding:20px; box-shadow:0 4px 12px rgba(0,0,0,0.02); margin-bottom:16px; border:1px solid #f1f2f6;">
+      <div style="font-size:11px; font-weight:850; letter-spacing:2px; color:#1a1a1a; margin-bottom:16px; display:flex; justify-content:space-between; align-items:center;">
+        <span>CUSTOMER</span>
+        <div style="width:24px; height:2px; background:#1a1a1a;"></div>
+      </div>
+      <div>
+        <div style="font-size:10px; font-weight:700; color:#aaa; letter-spacing:1px; margin-bottom:4px;">ACCOUNT NAME</div>
+        <div style="font-size:16px; font-weight:800; color:#1a1a1a; margin-bottom:8px;">{{ selectedPaymentDetail?.customer?.name }}</div>
+        <div style="display:flex; flex-direction:column; gap:4px; font-size:13px; font-weight:700; color:#555; margin-top:8px;">
+          <span *ngIf="selectedPaymentDetail?.customer?.phone">📞 {{ selectedPaymentDetail?.customer?.phone }}</span>
+          <span *ngIf="selectedPaymentDetail?.customer?.email">✉️ {{ selectedPaymentDetail?.customer?.email }}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Related Invoice Details Card -->
+    <div class="form-card" style="background:#fff; border-radius:20px; padding:20px; box-shadow:0 4px 12px rgba(0,0,0,0.02); margin-bottom:16px; border:1px solid #f1f2f6;">
+      <div style="font-size:11px; font-weight:850; letter-spacing:2px; color:#1a1a1a; margin-bottom:16px; display:flex; justify-content:space-between; align-items:center;">
+        <span>RELATED INVOICE</span>
+        <div style="width:24px; height:2px; background:#1a1a1a;"></div>
+      </div>
+      
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; background:#fdfdfd; border-radius:12px; padding:12px; border:1px solid #fafafa;">
+        <div>
+          <div style="font-size:15px; font-weight:800; color:#2f3542;">{{ selectedPaymentDetail?.invoice?.invoiceNumber }}</div>
+          <div style="font-size:11px; color:#a4b0be; font-weight:700; margin-top:2px;">Date: {{ selectedPaymentDetail?.invoice?.invoiceDate | date:'dd/MM/yyyy' }}</div>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-size:14px; font-weight:800; color:#2f3542;">Total: RM {{ selectedPaymentDetail?.invoice?.totalAmount | number:'1.2-2' }}</div>
+          <div style="font-size:12px; font-weight:700; color:#ff7675; margin-top:2px;">Bal: RM {{ selectedPaymentDetail?.invoice?.balance | number:'1.2-2' }}</div>
+        </div>
+      </div>
+
+      <!-- Items List -->
+      <div style="margin-top:16px; border-top:1px dashed #e8e8e8; padding-top:16px;">
+        <div style="font-size:11px; font-weight:800; color:#888; margin-bottom:12px; text-transform:uppercase; letter-spacing:0.5px;">Items List</div>
+        
+        <div *ngFor="let item of selectedPaymentDetail?.invoice?.items; let i = index" 
+             style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; padding-bottom:12px; border-bottom:1px solid #fcfcfc;">
+          <div>
+            <div style="font-size:14px; font-weight:800; color:#2f3542; margin-bottom:4px;">{{ item.productName }}</div>
+            <div style="font-size:12px; color:#747d8c; font-weight:600;">{{ item.quantity }} pcs x RM {{ item.unitPrice | number:'1.2-2' }}</div>
+          </div>
+          <div style="font-size:14px; font-weight:900; color:#2f3542;">RM {{ item.total | number:'1.2-2' }}</div>
+        </div>
+      </div>
     </div>
   </div>

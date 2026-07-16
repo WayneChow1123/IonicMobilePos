@@ -33,6 +33,7 @@ export class BillingPage implements OnInit {
   customers: any[] = [];
   invoices: any[] = [];
   isLoading = false;
+  selectedPaymentDetail: any = null;
   private _currentView = 'home';
   get currentView(): string {
     return this._currentView;
@@ -370,6 +371,20 @@ export class BillingPage implements OnInit {
   }
 
   openPaymentList() { this.paymentSearchTerm = ''; this.loadPayments(); this.currentView = 'paymentList'; }
+  viewPaymentDetails(payment: any) {
+    this.isLoading = true;
+    this.api.getPaymentPreview(payment.id).subscribe({
+      next: (res: any) => {
+        this.selectedPaymentDetail = res;
+        this.currentView = 'paymentDetails';
+        this.isLoading = false;
+      },
+      error: (err: any) => {
+        this.isLoading = false;
+        this.showToastMsg('Failed to load payment details: ' + (err.error?.message || err.message || 'error'));
+      }
+    });
+  }
   openCNList() { this.cnSearchTerm = ''; this.loadCreditNotes(); this.currentView = 'cnList'; }
 
   onCustomerChange() {
