@@ -8,6 +8,7 @@ import { CommonModule } from '@angular/common';
 import { IonicModule } from '@ionic/angular';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../services/api.service';
+import { AppComponent } from '../../app.component';
 
 @Component({
   standalone: true,
@@ -32,7 +33,20 @@ export class BillingPage implements OnInit {
   customers: any[] = [];
   invoices: any[] = [];
   isLoading = false;
-  currentView = 'home';
+  private _currentView = 'home';
+  get currentView(): string {
+    return this._currentView;
+  }
+  set currentView(value: string) {
+    this._currentView = value;
+    this.updateBottomNav();
+  }
+
+  updateBottomNav() {
+    if (this.appComponent) {
+      this.appComponent.showBottomNav = (this._currentView === 'home');
+    }
+  }
   showDeletePaymentAlert = false;
   showDeleteCNAlert = false;
   showStockAlert = false;
@@ -74,6 +88,7 @@ export class BillingPage implements OnInit {
   paymentForm: any = { customerId: 0, invoiceIds: [], amount: 0, method: 'Cash', referenceNo: '' };
   cnForm: any = { customerId: 0, invoiceId: 0, reason: '', items: [] };
   paymentMethods = ['Cash', 'Card', 'Online Transfer', 'Cheque'];
+  isFirstATMInput = true;
   
   showInvoiceSelectionModal = false;
   selectedInvoicesList: any[] = [];
@@ -209,7 +224,18 @@ export class BillingPage implements OnInit {
     this.cdr.detectChanges();
   }
 
-  constructor(private router: Router, private route: ActivatedRoute, private navCtrl: NavController, private api: ApiService, private cdr: ChangeDetectorRef, private alertService: AlertService) {}
+  constructor(
+    private router: Router, 
+    private route: ActivatedRoute, 
+    private navCtrl: NavController, 
+    private api: ApiService, 
+    private cdr: ChangeDetectorRef, 
+    private alertService: AlertService,
+    private appComponent: AppComponent
+  ) {}
+
+  ionViewWillLeave() {
+  }
 
 
 
@@ -435,6 +461,55 @@ export class BillingPage implements OnInit {
   confirmInvoiceSelection() {
     this.currentView = 'newPayment';
     this.paymentForm.amount = this.getBulkBalance();
+    this.isFirstATMInput = true;
+  }
+
+  handleATMInput(event: any) {
+    const key = event.key;
+    
+    // Allow Tab and Enter to pass through without blocking
+    if (key === 'Tab' || key === 'Enter') {
+      return;
+    }
+    
+    // Prevent default typing/navigation behavior for numbers, Backspace, and other characters
+    event.preventDefault();
+    
+    const balance = this.getBulkBalance();
+    let digits = '';
+    
+    if (this.isFirstATMInput && key >= '0' && key <= '9') {
+      this.isFirstATMInput = false;
+      digits = key;
+    } else {
+      if (key >= '0' && key <= '9') {
+        this.isFirstATMInput = false;
+      }
+      
+      let currentCents = Math.round((this.paymentForm.amount || 0) * 100);
+      let centsStr = currentCents.toString();
+      if (centsStr === '0' || centsStr === 'NaN') {
+        centsStr = '';
+      }
+      
+      if (key >= '0' && key <= '9') {
+        centsStr += key;
+      } else if (key === 'Backspace') {
+        centsStr = centsStr.slice(0, -1);
+      } else {
+        return; // Ignore other keys
+      }
+      digits = centsStr;
+    }
+    
+    const rawVal = digits ? parseInt(digits, 10) : 0;
+    let newVal = rawVal / 100;
+    
+    if (newVal > balance) {
+      newVal = balance;
+    }
+    
+    this.paymentForm.amount = newVal;
   }
 
   getBulkTotalAmount(): number {
@@ -488,11 +563,10 @@ export class BillingPage implements OnInit {
       return 'Amount must be greater than 0';
     }
     
-    if (amount < balance) {
-      return `Amount must be at least the balance due: RM ${balance.toFixed(2)}`;
+    if (amount > balance) {
+      return `Amount cannot exceed the balance due: RM ${balance.toFixed(2)}`;
     }
     
-    // No upper limit — any excess will be auto-converted to a CN-CHG credit note by the backend.
     return null;
   }
 
@@ -524,7 +598,8 @@ export class BillingPage implements OnInit {
 
     for (const inv of sortedInvoices) {
       if (remainingAmount <= 0) break;
-      const amountToApply = Math.min(remainingAmount, inv.balance || 0);
+      const invBalance = inv.balance ?? inv.Balance ?? 0;
+      const amountToApply = Math.min(remainingAmount, invBalance);
       if (amountToApply > 0) {
         payments.push({
           invoiceId: inv.id,
