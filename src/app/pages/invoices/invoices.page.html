@@ -612,6 +612,10 @@
             <span>{{ item.quantity }} x {{ (item.unitPrice || 0) | number:'1.2-2' }}</span>
             <span class="item-subtotal">{{ ((item.quantity || 0) * (item.unitPrice || 0)) | number:'1.2-2' }}</span>
           </div>
+          <!-- 商品Barcode开关 -->
+          <div *ngIf="isOptionEnabled('Print Product Barcode') && (item.barcode || getProductBarcode(item.productId))" style="font-size: 10px; color: #555; margin-top: 2px; padding-left: 16px;">
+            Barcode: {{ item.barcode || getProductBarcode(item.productId) }}
+          </div>
           <div *ngIf="item.remark" style="font-size: 10px; color: #555; font-style: italic; margin-top: 2px; padding-left: 16px;">
             * {{ item.remark }}
           </div>

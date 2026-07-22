@@ -91,7 +91,8 @@ export class InvoicesPage implements OnInit {
           { name: 'Sign on Credit Invoice', enabled: true },
           { name: 'Sign on Credit Note', enabled: true },
           { name: 'Sign on Payment', enabled: true },
-          { name: 'Footer', enabled: true }
+          { name: 'Footer', enabled: true },
+          { name: 'Print Product Barcode', enabled: false }
         ]
       };
     }
@@ -107,6 +108,11 @@ export class InvoicesPage implements OnInit {
   getProductCode(productId: any): string {
     const product = this.allProducts.find(p => p.id == productId);
     return product?.productCode || product?.code || '';
+  }
+
+  getProductBarcode(productId: any): string {
+    const product = this.allProducts.find(p => p.id == productId);
+    return product?.barcode || '';
   }
 
   getBottomEmptyLines(): number[] {

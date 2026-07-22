@@ -438,7 +438,8 @@ export class BillingPage implements OnInit {
           { name: 'Sign on Credit Invoice', enabled: true },
           { name: 'Sign on Credit Note', enabled: true },
           { name: 'Sign on Payment', enabled: true },
-          { name: 'Footer', enabled: true }
+          { name: 'Footer', enabled: true },
+          { name: 'Print Product Barcode', enabled: false }
         ]
       };
     }
