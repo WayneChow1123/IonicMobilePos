@@ -400,6 +400,9 @@ export class BillingPage implements OnInit {
   viewPaymentDetails(payment: any) {
     this.showPaymentPreview = false;
     this.isLoading = true;
+    if (!this.allProducts || this.allProducts.length === 0) {
+      this.api.getProducts().subscribe({ next: (res: any) => { this.allProducts = res || []; } });
+    }
     this.api.getPaymentPreview(payment.id).subscribe({
       next: (res: any) => {
         this.selectedPaymentDetail = res;
@@ -450,6 +453,18 @@ export class BillingPage implements OnInit {
     if (!this.printerSettings || !this.printerSettings.contentOptions) return true;
     const opt = this.printerSettings.contentOptions.find((o: any) => o.name === optionName);
     return opt ? opt.enabled : true;
+  }
+
+  getProductCode(productId: any): string {
+    if (!this.allProducts) return '';
+    const product = this.allProducts.find(p => p.id == productId);
+    return product?.productCode || product?.code || '';
+  }
+
+  getProductBarcode(productId: any): string {
+    if (!this.allProducts) return '';
+    const product = this.allProducts.find(p => p.id == productId);
+    return product?.barcode || '';
   }
 
   printPaymentReceipt() {

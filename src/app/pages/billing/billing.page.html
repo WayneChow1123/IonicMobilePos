@@ -773,11 +773,19 @@
         <!-- Invoice Items -->
         <div *ngFor="let item of selectedPaymentDetail?.invoice?.items; let i = index" class="receipt-item">
           <div class="item-desc-row">
-            <span>{{ i + 1 }}. {{ item.productName }}</span>
+            <span>
+              {{ i + 1 }}. 
+              <span *ngIf="isOptionEnabled('Print Item Code') && (item.productCode || getProductCode(item.productId))">[{{ item.productCode || getProductCode(item.productId) }}] </span>
+              {{ item.productName }}
+            </span>
           </div>
           <div class="item-calc-row">
             <span>{{ item.quantity }} x {{ (item.unitPrice || 0) | number:'1.2-2' }}</span>
             <span class="item-subtotal">RM {{ item.total | number:'1.2-2' }}</span>
+          </div>
+          <!-- 商品Barcode开关 -->
+          <div *ngIf="isOptionEnabled('Print Product Barcode') && (item.barcode || getProductBarcode(item.productId))" style="font-size: 10px; color: #555; margin-top: 2px; padding-left: 16px;">
+            Barcode: {{ item.barcode || getProductBarcode(item.productId) }}
           </div>
         </div>
 

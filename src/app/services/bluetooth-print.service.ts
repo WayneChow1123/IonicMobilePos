@@ -511,7 +511,15 @@ export class BluetoothPrintService {
       // Items List
       const items = pd.invoice?.items || [];
       items.forEach((item: any, i: number) => {
-        const descRow = `${i + 1}. ${item.productName}`;
+        let codeStr = '';
+        if (isOptionEnabled('Print Item Code')) {
+          const product = products.find(p => p.id == item.productId);
+          const code = item.productCode || product?.productCode || product?.code || '';
+          if (code) {
+            codeStr = `[${code}] `;
+          }
+        }
+        const descRow = `${i + 1}. ${codeStr}${item.productName}`;
         builder.appendText(descRow + "\n");
         const qtyStr = `${item.quantity} x ${(item.unitPrice || 0).toFixed(2)}`;
         const subtotal = (item.total || 0).toFixed(2);
