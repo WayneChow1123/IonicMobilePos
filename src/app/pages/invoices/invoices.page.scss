@@ -960,9 +960,9 @@ ion-content {
 
 .ni-card {
   background: #fff;
-  border-radius: 24px;
-  padding: 20px;
-  margin-bottom: 12px;
+  border-radius: 18px;
+  padding: 14px 16px;
+  margin-bottom: 10px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
   border: 1px solid #eef2f7;
 }
@@ -975,18 +975,18 @@ ion-content {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
+  margin-bottom: 12px;
 }
 
 .ni-cust-label-box {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
 }
 
 .ni-icon-circle {
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   border: 1.5px solid #5c85d6;
   border-radius: 50%;
   display: flex;
@@ -994,30 +994,30 @@ ion-content {
   justify-content: center;
 
   ion-icon {
-    font-size: 18px;
+    font-size: 16px;
     color: #5c85d6;
   }
 }
 
 .ni-identify-box {
   flex: 1;
-  margin: 0 40px;
+  margin: 0 16px;
   border: 1.5px solid #5c85d6;
   border-radius: 50px;
-  padding: 8px;
+  padding: 6px 12px;
   text-align: center;
 }
 
 .ni-identify-text {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 800;
-  letter-spacing: 2px;
+  letter-spacing: 1.5px;
   color: #5c85d6;
 }
 
 .ni-settings-circle {
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   background: #cfe2ff;
   border: none;
   border-radius: 8px;
@@ -1026,7 +1026,7 @@ ion-content {
   justify-content: center;
 
   ion-icon {
-    font-size: 18px;
+    font-size: 16px;
     color: #5c85d6;
   }
 }
@@ -1036,24 +1036,24 @@ ion-content {
 }
 
 .ni-cust-name {
-  font-size: 24px;
+  font-size: 19px;
   font-weight: 900;
   color: #1a1a1a;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
 }
 
 .ni-cust-code {
   font-size: 10px;
   font-weight: 800;
   letter-spacing: 1px;
-  color: #ccc;
+  color: #888;
 }
 
 .ni-section-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin: 20px 0 12px;
+  margin: 12px 0 8px;
   padding: 0 4px;
 }
 
@@ -1064,32 +1064,34 @@ ion-content {
 }
 
 .ni-empty-space {
-  height: 200px;
+  height: 120px;
   /* Placeholder for hidden items */
 }
 
 .ni-footer {
   background: #cfe2ff;
-  padding: 20px 40px;
+  padding: 10px 16px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  box-shadow: 0 -10px 30px rgba(13, 110, 253, 0.08);
-  padding-bottom: calc(env(safe-area-inset-top) + 20px); 
+  box-shadow: 0 -6px 20px rgba(13, 110, 253, 0.08);
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 10px); 
   border-top: 1px solid #b6d4fe;
+  flex-shrink: 0;
+  z-index: 10;
 }
 
 .ni-summary {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
 }
 
 .ni-sum-row {
   display: flex;
-  gap: 8px;
-  font-size: 14px;
-  font-weight: 800;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
   color: #1a1a1a;
 
   .ni-sum-label {
@@ -1099,20 +1101,21 @@ ion-content {
 
 .ni-net-row {
   display: flex;
-  gap: 8px;
-  margin-top: 8px;
-  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+  align-items: baseline;
 
   .ni-net-label {
-    font-size: 16px;
+    font-size: 13px;
     font-weight: 800;
     color: #1a1a1a;
   }
 
   .ni-net-val {
-    font-size: 32px;
+    font-size: 22px;
     font-weight: 900;
     color: #1a1a1a;
+    line-height: 1.1;
   }
 }
 
@@ -1121,21 +1124,22 @@ ion-content {
   color: #fff;
   border: none;
   border-radius: 50px;
-  padding: 12px 30px;
+  padding: 10px 22px;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   cursor: pointer;
-  box-shadow: 0 4px 15px rgba(13, 110, 253, 0.3);
+  box-shadow: 0 4px 12px rgba(13, 110, 253, 0.25);
+  flex-shrink: 0;
 
   span {
-    font-size: 15px;
+    font-size: 14px;
     font-weight: 900;
-    letter-spacing: 2px;
+    letter-spacing: 1.5px;
   }
 
   ion-icon {
-    font-size: 18px;
+    font-size: 16px;
   }
 }
 
@@ -1250,9 +1254,9 @@ ion-content {
 /* ─── Item Card Design ─── */
 .ni-item-card {
   background: #fff;
-  border-radius: 24px;
-  padding: 24px;
-  margin-bottom: 16px;
+  border-radius: 18px;
+  padding: 14px 16px;
+  margin-bottom: 12px;
   position: relative;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
   border: 1px solid #eef2f7;
@@ -1264,9 +1268,9 @@ ion-content {
   left: 0;
   background: #5c85d6;
   color: #fff;
-  width: 24px;
-  height: 24px;
-  border-radius: 24px 0 24px 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 18px 0 18px 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1286,14 +1290,14 @@ ion-content {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 
 .ni-item-name {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 900;
   color: #1a1a1a;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
 }
 
 .ni-item-tags {
@@ -1303,30 +1307,30 @@ ion-content {
   color: #1a1a1a;
 
   ion-icon {
-    font-size: 14px;
+    font-size: 13px;
   }
 }
 
 .ni-tag-text {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 500;
 }
 
 .ni-tag-bold {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 800;
   color: #1a1a1a;
 }
 
 .ni-tag-val {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
   color: #1a1a1a;
 }
 
 .ni-item-del {
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   background: #FDEDEC;
   border: none;
   border-radius: 50%;
@@ -1336,7 +1340,7 @@ ion-content {
   cursor: pointer;
 
   ion-icon {
-    font-size: 18px;
+    font-size: 16px;
     color: #E74C3C;
   }
 }
@@ -1345,9 +1349,9 @@ ion-content {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 16px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid #f9f9f9;
+  margin-bottom: 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #f5f5f5;
 }
 
 .ni-unit-label {
@@ -1358,7 +1362,7 @@ ion-content {
 
 .ni-unit-val {
   color: #1a1a1a;
-  font-size: 14px;
+  font-size: 13px;
   margin-left: 4px;
 }
 
@@ -1378,49 +1382,49 @@ ion-content {
 
 .ni-item-qty-box {
   background: #F9F9F9;
-  border-radius: 16px;
-  padding: 14px 20px;
+  border-radius: 12px;
+  padding: 8px 14px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
+  margin-bottom: 10px;
 }
 
 .ni-qty-left {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
 .ni-qty-x {
-  font-size: 16px;
-  color: #ccc;
+  font-size: 14px;
+  color: #aaa;
   font-weight: 700;
 }
 
 .ni-qty-eq {
-  font-size: 16px;
-  color: #ccc;
+  font-size: 14px;
+  color: #aaa;
   font-weight: 700;
 }
 
 .ni-qty-input {
   width: auto;
-  min-width: 48px;
+  min-width: 42px;
   background: transparent;
   border: none;
-  font-size: 20px;
+  font-size: 17px;
   font-weight: 900;
   color: #1a1a1a;
   text-align: center;
   outline: none;
   padding-bottom: 2px;
-  border-bottom: 2px solid #f0f0f0;
+  border-bottom: 2px solid #e0e0e0;
   font-family: 'DM Sans', sans-serif;
   transition: all 0.2s ease;
 
   &:focus {
-    border-bottom-color: #1a1a1a;
+    border-bottom-color: #5c85d6;
   }
 
   /* Remove arrows */
@@ -1437,16 +1441,8 @@ ion-content {
   }
 }
 
-.ni-pay-btn {
-  &.disabled {
-    background: #ccc;
-    cursor: not-allowed;
-    opacity: 0.7;
-  }
-}
-
 .ni-qty-total {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 900;
   color: #1a1a1a;
 }
@@ -1463,12 +1459,12 @@ ion-content {
   justify-content: space-between;
   background: #f9f9f9;
   border-radius: 8px;
-  padding: 8px 12px;
+  padding: 6px 10px;
   cursor: pointer;
   border: 1px solid #f0f0f0;
 
   span {
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 700;
     font-style: italic;
     color: #1a1a1a;
@@ -1476,7 +1472,7 @@ ion-content {
 
   .ni-remark-arrow {
     color: #888;
-    font-size: 14px;
+    font-size: 13px;
   }
 }
 
@@ -1488,8 +1484,8 @@ ion-content {
   width: 100%;
   border: 1px solid #e0e0e0;
   border-radius: 6px;
-  padding: 6px 10px;
-  font-size: 12px;
+  padding: 5px 8px;
+  font-size: 11px;
   font-weight: 600;
   color: #1a1a1a;
   background: #fff;
@@ -1509,12 +1505,12 @@ ion-content {
   font-size: 9px;
   font-weight: 900;
   letter-spacing: 1px;
-  color: #1a1a1a;
-  margin-bottom: 2px;
+  color: #888;
+  margin-bottom: 1px;
 }
 
 .ni-sub-val {
-  font-size: 20px;
+  font-size: 17px;
   font-weight: 900;
   color: #1a1a1a;
 }
@@ -2514,6 +2510,86 @@ ion-content {
   background: #5c85d6;
   border-radius: 50%;
 }
+
+/* ─── Responsive Adjustments (Short Screen / Keyboard open / Small Device) ─── */
+@media screen and (max-height: 650px) {
+  .ni-card {
+    padding: 10px 14px;
+    margin-bottom: 8px;
+  }
+
+  .ni-cust-row {
+    margin-bottom: 8px;
+  }
+
+  .ni-cust-name {
+    font-size: 16px;
+    margin-bottom: 2px;
+  }
+
+  .ni-section-header {
+    margin: 8px 0 6px;
+  }
+
+  .ni-item-card {
+    padding: 10px 14px;
+    margin-bottom: 8px;
+  }
+
+  .ni-item-top {
+    margin-bottom: 6px;
+  }
+
+  .ni-item-name {
+    font-size: 14px;
+  }
+
+  .ni-item-price-row {
+    margin-bottom: 6px;
+    padding-bottom: 4px;
+  }
+
+  .ni-item-qty-box {
+    padding: 6px 12px;
+    margin-bottom: 8px;
+  }
+
+  .ni-qty-input {
+    font-size: 15px;
+    min-width: 36px;
+  }
+
+  .ni-footer {
+    padding: 6px 14px;
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 6px);
+  }
+
+  .ni-net-row .ni-net-val {
+    font-size: 19px;
+  }
+
+  .ni-pay-btn {
+    padding: 8px 18px;
+    span {
+      font-size: 13px;
+    }
+  }
+}
+
+@media screen and (max-width: 360px) {
+  .ni-top-bar {
+    padding: 8px 12px;
+  }
+
+  .ni-footer {
+    padding: 8px 12px;
+  }
+
+  .ni-identify-box {
+    margin: 0 8px;
+  }
+}
+
 
 
 
