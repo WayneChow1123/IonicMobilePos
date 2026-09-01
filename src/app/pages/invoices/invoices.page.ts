@@ -64,6 +64,14 @@ export class InvoicesPage implements OnInit {
   showInvoiceRemark = false;
   showActionsDropdown = false;
 
+  // Edit Invoice Product Select Modal
+  showEditProductSelectModal = false;
+  editingItemIndex: number = -1;
+  selectedTempProduct: any = null;
+  productModalSearchText = '';
+  matchedModalProducts: any[] = [];
+  otherModalProducts: any[] = [];
+
   printerSettings: any = null;
 
   loadPrinterSettings() {
@@ -595,6 +603,68 @@ export class InvoicesPage implements OnInit {
     }
   }
 
+  // =========================
+  // EDIT INVOICE PRODUCT MODAL
+  // =========================
+  openEditProductSelectModal(itemIndex: number) {
+    this.editingItemIndex = itemIndex;
+    this.productModalSearchText = '';
+    const currentProductId = this.editForm.items[itemIndex]?.productId;
+    this.selectedTempProduct = this.products.find(p => p.id === currentProductId) || null;
+    this.onProductModalSearch();
+    this.showEditProductSelectModal = true;
+    this.cdr.detectChanges();
+  }
+
+  closeEditProductSelectModal() {
+    this.showEditProductSelectModal = false;
+    this.editingItemIndex = -1;
+    this.cdr.detectChanges();
+  }
+
+  selectTempProduct(product: any) {
+    this.selectedTempProduct = product;
+    this.cdr.detectChanges();
+  }
+
+  confirmEditProductSelection() {
+    if (this.selectedTempProduct && this.editingItemIndex >= 0 && this.editForm.items[this.editingItemIndex]) {
+      const item = this.editForm.items[this.editingItemIndex];
+      item.productId = this.selectedTempProduct.id;
+      item.productName = this.selectedTempProduct.name;
+      this.onProductChange(item);
+    }
+    this.showEditProductSelectModal = false;
+    this.editingItemIndex = -1;
+    this.cdr.detectChanges();
+  }
+
+  onProductModalSearch() {
+    const keyword = this.productModalSearchText.trim().toLowerCase();
+
+    if (!keyword) {
+      this.matchedModalProducts = [];
+      this.otherModalProducts = [...this.products];
+      return;
+    }
+
+    this.matchedModalProducts = this.products.filter(product =>
+      (product.name || '').toLowerCase().includes(keyword)
+    );
+
+    this.otherModalProducts = this.products.filter(product =>
+      !(product.name || '').toLowerCase().includes(keyword)
+    );
+  }
+
+  getHighlightedProductName(name: string): string {
+    if (!this.productModalSearchText || !name) return name;
+    const keyword = this.productModalSearchText.trim();
+    if (!keyword) return name;
+    const regex = new RegExp(`(${keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+    return name.replace(regex, '<span class="search-highlight">$1</span>');
+  }
+
   cycleTermType() {
     const currentIndex = this.termTypes.indexOf(this.termType);
     const nextIndex = (currentIndex + 1) % this.termTypes.length;
@@ -876,6 +946,18 @@ export class InvoicesPage implements OnInit {
       return sum + ((item.unitPrice || 0) * (item.quantity || 0));
     }, 0);
     return Math.round((total + Number.EPSILON) * 100) / 100;
+  }
+
+  getEditFormTotal(): number {
+    if (!this.editForm.items || this.editForm.items.length === 0) return 0;
+    const total = this.editForm.items.reduce((sum: number, item: any) => {
+      return sum + ((item.unitPrice || 0) * (item.quantity || 0));
+    }, 0);
+    return Math.round((total + Number.EPSILON) * 100) / 100;
+  }
+
+  getEditFormTotalProducts(): number {
+    return (this.editForm.items || []).length;
   }
 
   getCreditNoteId(cn: any): number | null {

@@ -513,9 +513,13 @@
       </div>
       <div class="form-group">
         <label>PRODUCT</label>
-        <select [(ngModel)]="item.productId" class="form-select" (change)="onProductChange(item)" [disabled]="!isEditMode">
-          <option *ngFor="let p of products" [value]="p.id">{{ p.name }}</option>
-        </select>
+        <div (click)="isEditMode ? openEditProductSelectModal(i) : null"
+             [style.cursor]="isEditMode ? 'pointer' : 'default'"
+             style="display:flex; justify-content:space-between; align-items:center; width:100%; border-bottom:1px solid rgba(0,0,0,0.1); padding:4px 0;">
+          <span *ngIf="!item.productId" style="font-size:14px; font-weight:600; color:#888;">-- Select Product --</span>
+          <span *ngIf="item.productId" style="font-size:14px; font-weight:700; color:#1a1a1a; text-transform:uppercase;">{{ getProductName(item.productId) }}</span>
+          <ion-icon *ngIf="isEditMode" name="chevron-down-outline" style="color:#1a1a1a; font-size:16px;"></ion-icon>
+        </div>
       </div>
       <div class="form-group">
         <label>QUANTITY</label>
@@ -532,6 +536,28 @@
     </div>
 
     <button *ngIf="isEditMode" class="save-btn" (click)="saveInvoice()">UPDATE INVOICE</button>
+
+    <!-- Spacer to prevent overlap with fixed footer -->
+    <div class="gs-spacer"></div>
+
+    <!-- Edit Invoice Bottom Summary Card -->
+    <div class="grand-summary-card">
+      <div class="gs-left">
+        <div class="gs-label">
+          <span class="gs-dot"></span>
+          TOTAL
+        </div>
+        <div class="gs-amount">
+          <span class="gs-currency">RM</span> {{ getEditFormTotal() | number:'1.2-2' }}
+        </div>
+      </div>
+      <div class="gs-right">
+        <div class="gs-bills-pill">
+          <div class="gs-bills-label">TOTAL PRODUCTS</div>
+          <div class="gs-bills-value">{{ getEditFormTotalProducts() }} <span class="gs-bills-unit">PCS</span></div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <div *ngIf="showCheckPreview" class="receipt-overlay">
@@ -876,3 +902,167 @@
   <ion-toast [isOpen]="showToast" [message]="toastMessage" duration="2000" position="bottom" (didDismiss)="showToast=false"></ion-toast>
 
 </ion-content>
+
+<!-- =========================
+     PRODUCT SELECTION MODAL FOR EDIT INVOICE
+     ========================= -->
+<ion-modal
+  [isOpen]="showEditProductSelectModal"
+  (didDismiss)="closeEditProductSelectModal()"
+  style="--border-radius: 24px; --height: 90vh; --width: 98vw; --max-width: 600px;">
+  <ng-template>
+    <div style="height: 90vh; max-height: 90vh; display: flex; flex-direction: column; background: #ffffff; overflow: hidden; box-sizing: border-box;">
+      
+      <!-- HEADER (FIXED TOP) -->
+      <div class="modal-header"
+        style="background: #5c85d6; padding: 20px; display: flex; justify-content: space-between; align-items: center; color: #fff; flex-shrink: 0;">
+        <h2 style="margin: 0; font-size: 22px; font-weight: 800; letter-spacing: 1px; color: #ffffff;">Select Product</h2>
+        <ion-button fill="clear" (click)="closeEditProductSelectModal()" style="--color: #fff; margin: 0;">
+          <ion-icon name="close-outline" slot="icon-only" style="font-size: 28px;"></ion-icon>
+        </ion-button>
+      </div>
+
+      <!-- SEARCH BOX (FIXED TOP) -->
+      <div style="padding: 16px 20px 0; background: #ffffff; flex-shrink: 0;">
+        <div class="product-search-box" style="margin-bottom: 12px;">
+          <ion-icon name="search-outline"></ion-icon>
+
+          <input 
+            type="text"
+            [(ngModel)]="productModalSearchText"
+            (input)="onProductModalSearch()"
+            placeholder="Search by name..."
+          />
+
+          <ion-icon
+            *ngIf="productModalSearchText"
+            name="close-circle"
+            (click)="productModalSearchText = ''; onProductModalSearch()"
+            class="search-clear">
+          </ion-icon>
+        </div>
+      </div>
+
+      <!-- SCROLLABLE LIST CONTAINER (FLEX 1 AUTO SCROLL, HIDDEN SCROLLBAR) -->
+      <div class="product-list hide-scrollbar" style="flex: 1 1 0; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 0 20px; box-sizing: border-box;">
+
+        <!-- TOP MATCH -->
+        <div *ngIf="matchedModalProducts.length > 0">
+          <div class="product-section-title top-match">
+            TOP MATCH
+          </div>
+
+          <div
+            *ngFor="let product of matchedModalProducts"
+            (click)="selectTempProduct(product)"
+            class="product-item"
+            [class.selected]="selectedTempProduct?.id === product.id">
+
+            <div class="product-item-left">
+
+              <div class="product-image">
+                <img
+                  *ngIf="product.image"
+                  [src]="product.image"
+                  alt="product">
+
+                <span *ngIf="!product.image">📦</span>
+              </div>
+
+              <div class="product-info">
+                <div
+                  class="product-name"
+                  [innerHTML]="getHighlightedProductName(product.name)">
+                </div>
+
+                <div class="product-price">
+                  Original: RM {{ product.price | number:'1.2-2' }}
+                </div>
+              </div>
+
+            </div>
+
+            <div class="product-radio">
+              <div class="radio-dot"
+                *ngIf="selectedTempProduct?.id === product.id">
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+
+        <!-- ALL PRODUCTS -->
+        <div *ngIf="otherModalProducts.length > 0">
+
+          <div class="product-section-title">
+            {{ matchedModalProducts.length > 0 ? 'ALL PRODUCTS' : 'PRODUCTS' }}
+          </div>
+
+          <div
+            *ngFor="let product of otherModalProducts"
+            (click)="selectTempProduct(product)"
+            class="product-item"
+            [class.selected]="selectedTempProduct?.id === product.id">
+
+            <div class="product-item-left">
+
+              <div class="product-image">
+                <img
+                  *ngIf="product.image"
+                  [src]="product.image"
+                  alt="product">
+
+                <span *ngIf="!product.image">📦</span>
+              </div>
+
+              <div class="product-info">
+
+                <div class="product-name">
+                  {{ product.name }}
+                </div>
+
+                <div class="product-price">
+                  Original: RM {{ product.price | number:'1.2-2' }}
+                </div>
+
+              </div>
+
+            </div>
+
+            <div class="product-radio">
+              <div class="radio-dot"
+                *ngIf="selectedTempProduct?.id === product.id">
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+
+        <!-- EMPTY STATE -->
+        <div *ngIf="matchedModalProducts.length === 0 && otherModalProducts.length === 0" style="text-align: center; color: #a4b0be; padding: 50px 20px;">
+          <ion-icon name="cube-outline" style="font-size: 48px; display: block; margin: 0 auto 12px; opacity: 0.3;"></ion-icon>
+          No products found.
+        </div>
+
+      </div>
+
+      <!-- FOOTER BUTTONS (FIXED BOTTOM) -->
+      <div style="padding: 16px 20px; background: #ffffff; border-top: 1px solid #f1f2f6; display: flex; gap: 12px; flex-shrink: 0;">
+        <button (click)="closeEditProductSelectModal()"
+          style="flex: 1; height: 48px; border: 1.5px solid #5c85d6; background: #ffffff; color: #5c85d6; font-size: 15px; font-weight: 700; border-radius: 14px; cursor: pointer;">
+          Cancel
+        </button>
+        <button [disabled]="!selectedTempProduct" (click)="confirmEditProductSelection()"
+          [style.background]="!selectedTempProduct ? '#cbd5e1' : '#5c85d6'"
+          [style.color]="!selectedTempProduct ? '#f8fafc' : '#ffffff'"
+          [style.cursor]="!selectedTempProduct ? 'not-allowed' : 'pointer'"
+          style="flex: 1; height: 48px; border: none; font-size: 15px; font-weight: 700; border-radius: 14px;">
+          Done
+        </button>
+      </div>
+
+    </div>
+  </ng-template>
+</ion-modal>
