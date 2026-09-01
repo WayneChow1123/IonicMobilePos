@@ -101,7 +101,7 @@ export class BluetoothPrintService {
 
   private sendPrintData(inv: any, pd: any, settings: any, customers: any[], products: any[]): Promise<void> {
     return new Promise((resolve, reject) => {
-      const width = settings.paperWidth === 58 ? 32 : 48;
+      const width = settings.paperWidth === 58 ? 40 : 64;
       const builder = new BufferBuilder();
 
       // --- ESC/POS commands ---
@@ -223,6 +223,14 @@ export class BluetoothPrintService {
         const qtyStr = `${item.quantity} x ${(item.unitPrice || 0).toFixed(2)}`;
         const subtotal = ((item.quantity || 0) * (item.unitPrice || 0)).toFixed(2);
         builder.appendText(this.formatRow(`   ${qtyStr}`, `RM ${subtotal}`, width) + "\n");
+
+        if (isOptionEnabled('Print Product Barcode')) {
+          const product = products.find(p => p.id == item.productId);
+          const barcode = item.barcode || product?.barcode || '';
+          if (barcode) {
+            builder.appendText(`   Barcode: ${barcode}\n`);
+          }
+        }
 
         if (item.remark) {
           builder.appendText(`   * ${item.remark}\n`);
@@ -422,7 +430,7 @@ export class BluetoothPrintService {
 
   private sendPrintPaymentData(pd: any, settings: any, customers: any[], products: any[]): Promise<void> {
     return new Promise((resolve, reject) => {
-      const width = settings.paperWidth === 58 ? 32 : 48;
+      const width = settings.paperWidth === 58 ? 40 : 64;
       const builder = new BufferBuilder();
 
       const ESC = 0x1B;
@@ -503,11 +511,27 @@ export class BluetoothPrintService {
       // Items List
       const items = pd.invoice?.items || [];
       items.forEach((item: any, i: number) => {
-        const descRow = `${i + 1}. ${item.productName}`;
+        let codeStr = '';
+        if (isOptionEnabled('Print Item Code')) {
+          const product = products.find(p => p.id == item.productId);
+          const code = item.productCode || product?.productCode || product?.code || '';
+          if (code) {
+            codeStr = `[${code}] `;
+          }
+        }
+        const descRow = `${i + 1}. ${codeStr}${item.productName}`;
         builder.appendText(descRow + "\n");
         const qtyStr = `${item.quantity} x ${(item.unitPrice || 0).toFixed(2)}`;
         const subtotal = (item.total || 0).toFixed(2);
         builder.appendText(this.formatRow(`   ${qtyStr}`, `RM ${subtotal}`, width) + "\n");
+
+        if (isOptionEnabled('Print Product Barcode')) {
+          const product = products.find(p => p.id == item.productId);
+          const barcode = item.barcode || product?.barcode || '';
+          if (barcode) {
+            builder.appendText(`   Barcode: ${barcode}\n`);
+          }
+        }
       });
 
       builder.appendText("-".repeat(width) + "\n");

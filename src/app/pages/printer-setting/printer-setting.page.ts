@@ -28,9 +28,9 @@ export class PrinterSettingPage {
 
   /** Per-format toggle presets */
   private formatPresets: Record<string, boolean[]> = {
-    'FORMAT 1': [true, true, false, true, false, true, true, true, true, true, true, true],
-    'FORMAT 2': [true, false, true, false, true, true, false, true, false, true, false, true],
-    'FORMAT 3': [false, true, true, true, false, false, true, false, true, false, true, true],
+    'FORMAT 1': [true, true, false, true, false, true, true, true, true, true, true, true, false],
+    'FORMAT 2': [true, false, true, false, true, true, false, true, false, true, false, true, false],
+    'FORMAT 3': [false, true, true, true, false, false, true, false, true, false, true, true, false],
   };
 
   private optionNames = [
@@ -46,6 +46,7 @@ export class PrinterSettingPage {
     'Sign on Credit Note',
     'Sign on Payment',
     'Footer',
+    'Print Product Barcode',
   ];
 
   contentOptions = this.buildOptions('FORMAT 1');
