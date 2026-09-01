@@ -21,7 +21,13 @@ export class LoginPage {
     private authService: AuthService,
     private navCtrl: NavController,
     private alertService: AlertService
-  ) {}
+  ) { }
+
+  ionViewWillEnter() {
+    if (this.authService.isLoggedIn()) {
+      this.navCtrl.navigateRoot('/pages/home');
+    }
+  }
 
   async onSubmit() {
     if (this.authService.login(this.username, this.password)) {

@@ -6,21 +6,21 @@ import { Injectable } from '@angular/core';
 export class AuthService {
   private readonly AUTH_KEY = 'td_pos_logged_in';
 
-  constructor() {}
+  constructor() { }
 
   login(username: string, password: string): boolean {
     if (username === 'admin' && password === 'admin') {
-      sessionStorage.setItem(this.AUTH_KEY, 'true');
+      localStorage.setItem(this.AUTH_KEY, 'true');
       return true;
     }
     return false;
   }
 
   logout(): void {
-    sessionStorage.removeItem(this.AUTH_KEY);
+    localStorage.removeItem(this.AUTH_KEY);
   }
 
   isLoggedIn(): boolean {
-    return sessionStorage.getItem(this.AUTH_KEY) === 'true';
+    return localStorage.getItem(this.AUTH_KEY) === 'true';
   }
 }

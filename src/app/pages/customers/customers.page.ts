@@ -29,10 +29,10 @@ export class CustomersPage implements OnInit {
   showDeleteAlert = false;
   showToast = false;
   toastMessage = '';
-  form: any = { 
-    name: '', phone: '', email: '', address: '', 
-    code: '', term: 'Cash Sale', sequence: '', category: 'DEFAULT', 
-    description: '', processCompany: 'ALL COMPANY', taxStatus: 'Un-Defined', 
+  form: any = {
+    name: '', phone: '', email: '', address: '',
+    code: '', term: 'Cash Sale', sequence: '', category: 'DEFAULT',
+    description: '', processCompany: 'ALL COMPANY', taxStatus: 'Un-Defined',
     taxDocNo: '', discount: null, requireDigitSign: false,
     totalCredit: 0,
     branchCode: '', branchName: '', branchAddress: '',
@@ -51,12 +51,20 @@ export class CustomersPage implements OnInit {
   allProducts: any[] = [];
   showAddPriceForm = false;
   newPriceForm: any = { productId: null, specialPrice: null };
+
+  // Product Selection Modal
+  showProductSelectModal = false;
+  searchText = '';
+  matchedProducts: any[] = [];
+  otherProducts: any[] = [];
+  selectedTempProduct: any = null;
+
   deleteButtons = [
     { text: 'Cancel', role: 'cancel' },
     { text: 'Delete', role: 'destructive', handler: () => this.deleteCustomer() }
   ];
 
-  constructor(private router: Router, private navCtrl: NavController, private api: ApiService, private cdr: ChangeDetectorRef, private alertService: AlertService) {}
+  constructor(private router: Router, private navCtrl: NavController, private api: ApiService, private cdr: ChangeDetectorRef, private alertService: AlertService) { }
 
   ionViewWillEnter() {
     this.showModal = false;
@@ -68,7 +76,7 @@ export class CustomersPage implements OnInit {
     this.activeReport = null;
     this.loadCustomers();
     this.cdr.detectChanges();
-    
+
     // Force another check after a short delay to fix potential "partial display" issues
     setTimeout(() => {
       this.cdr.detectChanges();
@@ -80,10 +88,10 @@ export class CustomersPage implements OnInit {
   loadCustomers() {
     this.isLoading = true;
     this.api.getAllCustomers().subscribe({
-      next: (res) => { 
-        this.customers = Array.isArray(res) ? res : []; 
-        this.filteredCustomers = [...this.customers]; 
-        this.isLoading = false; 
+      next: (res) => {
+        this.customers = Array.isArray(res) ? res : [];
+        this.filteredCustomers = [...this.customers];
+        this.isLoading = false;
         this.loadAllRelatedData();
       },
       error: () => { this.isLoading = false; this.showToastMsg('Failed to load customers'); }
@@ -108,7 +116,7 @@ export class CustomersPage implements OnInit {
   loadCustomerSpecificData(customerId: any) {
     const id = Number(customerId);
     const customerName = this.selectedCustomer?.name;
-    
+
     // Helper to get ID from various possible field names
     const getCustId = (obj: any) => obj.customerId || obj.customer_id || obj.CustomerID || obj.CustomerId;
     const getInvId = (obj: any) => obj.invoiceId || obj.invoice_id || obj.InvoiceId || obj.InvoiceID;
@@ -119,21 +127,21 @@ export class CustomersPage implements OnInit {
       const cId = getCustId(inv);
       return (cId && Number(cId) === id);
     });
-    
+
     // 2. Payments
     this.customerPayments = this.allPayments.filter(p => {
       const pCustId = getCustId(p);
       if (pCustId && Number(pCustId) === id) return true;
-      
+
       const pCustName = p.customerName || p.CustomerName || p.customer_name;
       if (customerName && pCustName === customerName) return true;
-      
+
       const pInvId = getInvId(p);
       if (pInvId) {
         const inv = this.allInvoices.find(i => i.id == pInvId || getInvId(i) == pInvId);
         if (inv && Number(getCustId(inv)) === id) return true;
       }
-      
+
       const pInvNo = getInvNo(p);
       if (pInvNo) {
         const inv = this.allInvoices.find(i => i.invoiceNumber === pInvNo || getInvNo(i) === pInvNo);
@@ -146,16 +154,16 @@ export class CustomersPage implements OnInit {
     this.customerCNs = this.allCNs.filter(cn => {
       const cId = getCustId(cn);
       if (cId && Number(cId) === id) return true;
-      
+
       const cName = cn.customerName || cn.CustomerName || cn.customer_name;
       if (customerName && cName === customerName) return true;
-      
+
       const cInvId = getInvId(cn);
       if (cInvId) {
         const inv = this.allInvoices.find(i => i.id == cInvId || getInvId(i) == cInvId);
         if (inv && Number(getCustId(inv)) === id) return true;
       }
-      
+
       const cInvNo = getInvNo(cn);
       if (cInvNo) {
         const inv = this.allInvoices.find(i => i.invoiceNumber === cInvNo || getInvNo(i) === cInvNo);
@@ -163,13 +171,13 @@ export class CustomersPage implements OnInit {
       }
       return false;
     });
-    
+
     const outstanding = this.customerInvoices.reduce((sum, inv) => {
       const bal = inv.balance !== undefined ? inv.balance : ((inv.totalAmount || 0) - (inv.paidAmount || 0) - (inv.creditUsed || 0));
       return sum + (bal > 0 ? bal : 0);
     }, 0);
     this.form.totalCredit = -outstanding; // negative = owes money
-    
+
     this.cdr.detectChanges();
   }
 
@@ -196,6 +204,85 @@ export class CustomersPage implements OnInit {
   getProductPrice(productId: number): number {
     const p = this.allProducts.find(x => x.id === productId);
     return p ? p.price : 0;
+  }
+
+  openProductSelectModal() {
+    this.searchText = '';
+    this.selectedTempProduct = this.allProducts.find(p => p.id === this.newPriceForm.productId) || null;
+    this.onSearch();
+    this.showProductSelectModal = true;
+    this.cdr.detectChanges();
+  }
+
+  closeProductSelectModal() {
+    this.showProductSelectModal = false;
+    this.cdr.detectChanges();
+  }
+
+  selectProductDirectly(product: any) {
+    if (!product) return;
+    this.selectedTempProduct = product;
+    this.newPriceForm.productId = product.id;
+    this.showProductSelectModal = false;
+    this.cdr.detectChanges();
+  }
+
+  selectTempProduct(product: any) {
+    this.selectedTempProduct = product;
+    this.cdr.detectChanges();
+  }
+
+  confirmProductSelection() {
+    if (this.selectedTempProduct) {
+      this.newPriceForm.productId = this.selectedTempProduct.id;
+    }
+    this.showProductSelectModal = false;
+    this.cdr.detectChanges();
+  }
+
+  // =========================
+  // SEARCH
+  // =========================
+  onSearch() {
+    const keyword = this.searchText
+      .trim()
+      .toLowerCase();
+
+    // =========================
+    // NO SEARCH
+    // =========================
+    if (!keyword) {
+      this.matchedProducts = [];
+      // IMPORTANT: Show ALL products
+      this.otherProducts = [...this.allProducts];
+      return;
+    }
+
+    // =========================
+    // FIND MATCHING PRODUCTS
+    // =========================
+    this.matchedProducts = this.allProducts.filter(product =>
+      product.name
+        .toLowerCase()
+        .includes(keyword)
+    );
+
+    // =========================
+    // OTHER PRODUCTS
+    // =========================
+    this.otherProducts = this.allProducts.filter(product =>
+      !product.name
+        .toLowerCase()
+        .includes(keyword)
+    );
+  }
+
+  getHighlightedName(name: string): string {
+    if (!this.searchText || !name) return name;
+    const keyword = this.searchText.trim();
+    if (!keyword) return name;
+    const regex = new RegExp(`(${keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+    return name.replace(regex, '<span class="search-highlight">$1</span>');
   }
 
   toggleAddPriceForm() {
@@ -331,13 +418,13 @@ export class CustomersPage implements OnInit {
     this.isEditMode = true;
     this.selectedCustomer = null;
     this.customerPrices = [];
-    this.form = { 
-      name: '', phone: '', email: '', address: '', 
-      code: '', term: 'Cash Sale', sequence: '', category: 'DEFAULT', 
-      description: '', processCompany: 'ALL COMPANY', taxStatus: 'Un-Defined', 
+    this.form = {
+      name: '', phone: '', email: '', address: '',
+      code: '', term: 'Cash Sale', sequence: '', category: 'DEFAULT',
+      description: '', processCompany: 'ALL COMPANY', taxStatus: 'Un-Defined',
       taxDocNo: '', discount: null, requireDigitSign: false,
       totalCredit: 0.00,
-      branchCode: '', branchName: '', branchAddress: '', 
+      branchCode: '', branchName: '', branchAddress: '',
       branchPostcode: '', branchCity: '', branchState: '',
       isDefaultBranch: false
     };
@@ -422,7 +509,7 @@ export class CustomersPage implements OnInit {
 
   saveCustomer() {
     if (!this.form.name) { this.showToastMsg('Customer name is required'); return; }
-    
+
     // Build a clean payload with ONLY the fields the backend expects
     const branchPayload: any = {
       code: this.form.branchCode || '',
@@ -451,14 +538,19 @@ export class CustomersPage implements OnInit {
       address: this.form.address || ''
     };
 
-    // Include branches if: (1) customer already has a branch, or (2) user filled in any branch field
-    const hasAnyBranchData = !!(branchPayload.code || branchPayload.name || branchPayload.address || branchPayload.postcode || branchPayload.city || branchPayload.state);
+    // Include branches if: (1) user explicitly provided a branch code/name, or (2) customer already had a branch
+    const hasBranchInput = !!(branchPayload.code || branchPayload.name);
+    const hasOtherBranchDetails = !!(branchPayload.address1 || branchPayload.postcode || branchPayload.city || branchPayload.state);
     const alreadyHasBranch = !!this.form._hasBranch;
 
-    if (hasAnyBranchData || alreadyHasBranch) {
-      // Backend requires Code and Name for branches
-      if (!branchPayload.code) { this.showToastMsg('Branch Code is required'); return; }
-      if (!branchPayload.name) { this.showToastMsg('Branch Name is required'); return; }
+    if (hasBranchInput || (hasOtherBranchDetails && !alreadyHasBranch) || alreadyHasBranch) {
+      // Auto-fill branch code and name from customer name if left empty
+      if (!branchPayload.code) {
+        branchPayload.code = this.form.code || 'MAIN';
+      }
+      if (!branchPayload.name) {
+        branchPayload.name = this.form.name || 'HQ';
+      }
       payload.branches = [branchPayload];
     }
 
@@ -510,7 +602,7 @@ export class CustomersPage implements OnInit {
     }
   }
 
-  confirmDelete(customer: any) { this.selectedCustomer = customer; this.alertService.confirm('Delete Customer', 'Delete ' + (customer.name || '') + '?').then(c => { if(c) this.deleteCustomer(); }); }
+  confirmDelete(customer: any) { this.selectedCustomer = customer; this.alertService.confirm('Delete Customer', 'Delete ' + (customer.name || '') + '?').then(c => { if (c) this.deleteCustomer(); }); }
 
   deleteCustomer() {
     if (!this.selectedCustomer) return;
@@ -534,7 +626,7 @@ export class CustomersPage implements OnInit {
     }
     this.newPriceForm.specialPrice = amount;
     event.target.value = amount.toFixed(2);
-    
+
     // Force cursor to the end
     setTimeout(() => {
       if (event.target) {

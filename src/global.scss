@@ -40,41 +40,107 @@ body.dark {
   }
 
   // Page containers
-  .page-container, .setting-container, .ps-container, .config-container, .container {
+  .page-container,
+  .setting-container,
+  .ps-container,
+  .config-container,
+  .container {
     background: var(--ion-background-color) !important;
     color: var(--ion-text-color) !important;
   }
 
   // Card components & items
-  .list-item, .setting-card, .card, .report-item, .form-card, .hw-card, 
-  .toggles-card, .paper-width-card, .empty-line-card, .config-card, 
-  .dark-mode-card, .item-avatar, .product-stock-card, .date-filter-card {
+  .list-item,
+  .setting-card,
+  .card,
+  .report-item,
+  .form-card,
+  .hw-card,
+  .toggles-card,
+  .paper-width-card,
+  .empty-line-card,
+  .config-card,
+  .dark-mode-card,
+  .item-avatar,
+  .product-stock-card,
+  .date-filter-card {
     background: var(--ion-item-background) !important;
     color: var(--ion-text-color) !important;
     border-color: #333333 !important;
   }
 
   // Card specific backgrounds
-  .card-pink { background: #44322e !important; }
-  .card-blue { background: #2c2f48 !important; }
-  .card-yellow { background: #3c3a20 !important; }
-  .card-purple { background: #352c3c !important; }
-  .card-beige { background: #3a322c !important; }
+  .card-pink {
+    background: #44322e !important;
+  }
+
+  .card-blue {
+    background: #2c2f48 !important;
+  }
+
+  .card-yellow {
+    background: #3c3a20 !important;
+  }
+
+  .card-purple {
+    background: #352c3c !important;
+  }
+
+  .card-beige {
+    background: #3a322c !important;
+  }
 
   // Generic texts
-  .page-title, h1, h2, h3, h4, h5, h6, p, label, 
-  .list-item-title, .list-item-sub, .setting-card-label, .card-title,
-  .report-item span, .pw-label, .pw-value, .pw-hint, .el-label, 
-  .hw-sub-label, .type-value, .mac-label, .mac-value, .toggle-name, 
-  .slider-title, .slider-badge, .dm-title, .dm-subtitle, .preview-text {
+  .page-title,
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6,
+  p,
+  label,
+  .list-item-title,
+  .list-item-sub,
+  .setting-card-label,
+  .card-title,
+  .report-item span,
+  .pw-label,
+  .pw-value,
+  .pw-hint,
+  .el-label,
+  .hw-sub-label,
+  .type-value,
+  .mac-label,
+  .mac-value,
+  .toggle-name,
+  .slider-title,
+  .slider-badge,
+  .dm-title,
+  .dm-subtitle,
+  .preview-text {
     color: var(--ion-text-color) !important;
   }
 
   // Specific home and configuration elements readability fixes
-  .card-title-center, .card-title-small, .card-title-top,
-  .app-title-text, .app-company-text, .section-label, .ticks-labels span,
-  .item-name, .ni-cust-item-name, .ni-item-name, .item-name-row, .item-name-row span,
-  .item-amount, .product-stock-name, .df-title, .gs-label, .gs-amount, .gs-currency {
+  .card-title-center,
+  .card-title-small,
+  .card-title-top,
+  .app-title-text,
+  .app-company-text,
+  .section-label,
+  .ticks-labels span,
+  .item-name,
+  .ni-cust-item-name,
+  .ni-item-name,
+  .item-name-row,
+  .item-name-row span,
+  .item-amount,
+  .product-stock-name,
+  .df-title,
+  .gs-label,
+  .gs-amount,
+  .gs-currency {
     color: var(--ion-text-color) !important;
   }
 
@@ -100,26 +166,26 @@ body.dark {
   ion-modal {
     --background: #121212 !important;
   }
-  
+
   ion-modal div {
     background: #121212 !important;
     color: var(--ion-text-color) !important;
   }
-  
+
   ion-modal .modal-header {
     background: #1a1a1a !important;
   }
 
   // Cards inside select modals (unselected)
-  body.dark ion-modal .modal-header + div > div:first-child > div {
+  body.dark ion-modal .modal-header+div>div:first-child>div {
     background: #1e1e1e !important;
     border-color: #333333 !important;
     color: #ffffff !important;
   }
 
   // Selected card in modal (matches both hex and browser-normalized rgb border colors)
-  body.dark ion-modal .modal-header + div > div:first-child > div[style*="6c5ce7"],
-  body.dark ion-modal .modal-header + div > div:first-child > div[style*="108, 92, 231"] {
+  body.dark ion-modal .modal-header+div>div:first-child>div[style*="6c5ce7"],
+  body.dark ion-modal .modal-header+div>div:first-child>div[style*="108, 92, 231"] {
     background: #2c2f48 !important;
     border-color: #6c5ce7 !important;
   }
@@ -143,30 +209,37 @@ body.dark {
     border-top-color: #333333 !important;
   }
 
-  ion-modal span, ion-modal p, ion-modal label {
+  ion-modal span,
+  ion-modal p,
+  ion-modal label {
     color: var(--ion-text-color) !important;
   }
 
   ion-modal div[style*="color:#ff4757"] {
     color: #ff7675 !important;
   }
+
   ion-modal div[style*="color:#27ae60"] {
     color: #2ecc71 !important;
   }
+
   ion-modal div[style*="color:#e67e22"] {
     color: #f39c12 !important;
   }
+
   ion-modal div[style*="color:#6c5ce7"] {
     color: #a29bfe !important;
   }
 
-ion-content{
-  --padding-top: env(safe-area-inset-top);
-}
+  ion-content {
+    --padding-top: env(safe-area-inset-top);
+  }
 
 
   // Inputs and dropdown fields
-  input, select, textarea {
+  input,
+  select,
+  textarea {
     background: #2a2a2a !important;
     color: #ffffff !important;
     border: 1px solid #444444 !important;
@@ -178,15 +251,24 @@ ion-content{
   }
 
 
-  .form-select, .form-input {
+  .form-select,
+  .form-input {
     background: transparent !important;
     color: #ffffff !important;
     border: none !important;
     border-bottom: 1px solid #444444 !important;
   }
 
-  .form-textarea, .custom-input, input.custom-input, .pd-input, .pd-textarea, .pd-stock-input, .pd-select,
-  .cd-input, .cd-small-input, .cd-textarea {
+  .form-textarea,
+  .custom-input,
+  input.custom-input,
+  .pd-input,
+  .pd-textarea,
+  .pd-stock-input,
+  .pd-select,
+  .cd-input,
+  .cd-small-input,
+  .cd-textarea {
     background: transparent !important;
     color: #ffffff !important;
     border: none !important;
@@ -196,35 +278,45 @@ ion-content{
 
 
   // Icons and back buttons
-  .back-btn, .more-btn {
+  .back-btn,
+  .more-btn {
     --color: var(--ion-text-color) !important;
     color: var(--ion-text-color) !important;
   }
+
   .check-preview-btn {
     --color: var(--ion-text-color) !important;
     color: var(--ion-text-color) !important;
   }
 
   // Restore status indicators
-  .status-enabled, .status-enabled *, .green-text {
+  .status-enabled,
+  .status-enabled *,
+  .green-text {
     color: #3a8f5c !important;
   }
-  .status-disabled, .status-disabled *, .orange-text {
+
+  .status-disabled,
+  .status-disabled *,
+  .orange-text {
     color: #c7622a !important;
   }
-  .red-text, .red-icon, .red-text * {
+
+  .red-text,
+  .red-icon,
+  .red-text * {
     color: #dc2626 !important;
   }
 
   .preset-chip {
     background: #333333 !important;
     color: #aaaaaa !important;
-    
+
     &:hover {
       background: #444444 !important;
       color: #ffffff !important;
     }
-    
+
     &.active {
       background: #6c5ce7 !important;
       color: #ffffff !important;
@@ -237,57 +329,79 @@ ion-content{
     border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
     box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.3) !important;
   }
-  
+
   .gs-bills-pill {
     background: rgba(255, 71, 87, 0.1) !important;
     border-color: rgba(255, 71, 87, 0.2) !important;
   }
 
   /* New Invoice Page Dark Mode (ni-) */
-  .ni-container, .ni-overlay {
+  .ni-container,
+  .ni-overlay {
     background: var(--ion-background-color) !important;
   }
-  
-  .ni-top-bar, .ni-overlay-header, .ni-overlay-search {
+
+  .ni-top-bar,
+  .ni-overlay-header,
+  .ni-overlay-search {
     background: var(--ion-item-background) !important;
     border-color: #333333 !important;
   }
-  
+
   .ni-doc-row {
     background: #1e1e1e !important;
     border-bottom: 1px solid #333333 !important;
   }
-  
-  .ni-card, .ni-item-card, .ni-cust-item {
+
+  .ni-card,
+  .ni-item-card,
+  .ni-cust-item {
     background: var(--ion-item-background) !important;
     border-color: #333333 !important;
     color: var(--ion-text-color) !important;
   }
-  
+
   .ni-footer {
     background: var(--ion-item-background) !important;
     box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.3) !important;
     border-top: 1px solid #333333 !important;
   }
-  
-  .ni-page-title, .ni-value, .ni-cust-name, .ni-count, 
-  .ni-net-label, .ni-net-val, .ni-overlay-title, .ni-cust-item-name, 
-  .ni-sum-label, .ni-sum-val, .ni-cust-item-code, .ni-unit-type, 
-  .ni-unit-val, .ni-qty-total, .ni-sub-val, .ni-qty-eq, .ni-qty-x {
+
+  .ni-page-title,
+  .ni-value,
+  .ni-cust-name,
+  .ni-count,
+  .ni-net-label,
+  .ni-net-val,
+  .ni-overlay-title,
+  .ni-cust-item-name,
+  .ni-sum-label,
+  .ni-sum-val,
+  .ni-cust-item-code,
+  .ni-unit-type,
+  .ni-unit-val,
+  .ni-qty-total,
+  .ni-sub-val,
+  .ni-qty-eq,
+  .ni-qty-x {
     color: var(--ion-text-color) !important;
   }
-  
-  .ni-back-btn, .ni-settings-circle, .ni-cust-arrow, .ni-overlay-header ion-button {
+
+  .ni-back-btn,
+  .ni-settings-circle,
+  .ni-cust-arrow,
+  .ni-overlay-header ion-button {
     --color: var(--ion-text-color) !important;
     color: var(--ion-text-color) !important;
   }
-  
+
   .ni-settings-circle {
     background: #1e2d24 !important;
   }
 
   .ni-cust-item-icon {
     background: #2a2a2a !important;
+
     ion-icon {
       color: #888 !important;
     }
@@ -296,8 +410,10 @@ ion-content{
   .ni-identify-box {
     border-color: #333333 !important;
   }
-  
-  .ni-qty-input, .ni-invoice-remark-input input, .ni-remark-inline-input {
+
+  .ni-qty-input,
+  .ni-invoice-remark-input input,
+  .ni-remark-inline-input {
     background: #2a2a2a !important;
     color: #ffffff !important;
     border: 1px solid #444444 !important;
@@ -342,9 +458,9 @@ ion-content{
   }
 
   /* Popover / Select Dropdown Text Visibility in Dark Mode */
-  ion-popover ion-item, 
-  ion-popover ion-label, 
-  ion-select-popover ion-item, 
+  ion-popover ion-item,
+  ion-popover ion-label,
+  ion-select-popover ion-item,
   ion-select-popover ion-label,
   .popover-viewport ion-item,
   .popover-viewport ion-label,
@@ -361,7 +477,7 @@ ion-content{
   /* Alert Modal Override for Dark Mode */
   ion-alert {
     --background: #1e1e1e !important;
-    
+
     .alert-title,
     .alert-sub-title,
     .alert-message,
@@ -370,7 +486,7 @@ ion-content{
     .alert-input {
       color: #ffffff !important;
     }
-    
+
     .alert-button {
       color: #27ae60 !important;
     }
@@ -380,18 +496,20 @@ ion-content{
   .swal2-popup {
     background: #1e1e1e !important;
     color: #ffffff !important;
-    box-shadow: 0 10px 40px rgba(0,0,0,0.5) !important;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5) !important;
   }
-  .swal2-title, 
-  .swal2-html-container, 
-  .swal2-content, 
+
+  .swal2-title,
+  .swal2-html-container,
+  .swal2-content,
   .swal2-validation-message {
     color: #ffffff !important;
   }
+
   .swal2-toast {
     background: #1e1e1e !important;
     color: #ffffff !important;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
   }
 }
 
@@ -399,6 +517,7 @@ ion-content{
 
 ion-header {
   box-shadow: none;
+
   &::after {
     display: none;
   }
@@ -409,10 +528,14 @@ ion-header {
   align-items: center;
   gap: 12px;
   margin-bottom: 24px;
-  
+
   .app-logo-icon {
-    width: 44px;
-    height: 44px;
+    width: 44px !important;
+    height: 44px !important;
+    min-width: 44px !important;
+    min-height: 44px !important;
+    max-width: 44px !important;
+    max-height: 44px !important;
     background: #1a1a1a;
     border-radius: 12px;
     display: flex;
@@ -420,8 +543,23 @@ ion-header {
     justify-content: center;
     color: #fff;
     font-size: 20px;
+    overflow: hidden !important;
+    position: relative;
+
+    .app-logo-img,
+    .logo-image,
+    .logo-img,
+    img {
+      width: 44px !important;
+      height: 44px !important;
+      max-width: 100% !important;
+      max-height: 100% !important;
+      object-fit: cover !important;
+      display: block;
+      border-radius: 12px;
+    }
   }
-  
+
   .app-title-text {
     font-size: 16px;
     font-weight: 800;
@@ -429,12 +567,24 @@ ion-header {
     letter-spacing: 0.5px;
     margin-bottom: 2px;
   }
-  
+
   .app-company-text {
     font-size: 12px;
     font-weight: 600;
     color: #888;
   }
+}
+
+.app-logo-img,
+.logo-image,
+.logo-img {
+  width: 44px !important;
+  height: 44px !important;
+  max-width: 44px !important;
+  max-height: 44px !important;
+  object-fit: cover !important;
+  border-radius: 12px;
+  display: block;
 }
 
 .icon-custom {
@@ -448,3 +598,9 @@ ion-header {
   }
 }
 
+ion-modal.product-select-modal {
+  --height: 90vh;
+  --width: 98vw;
+  --max-width: 600px;
+  --border-radius: 24px;
+}

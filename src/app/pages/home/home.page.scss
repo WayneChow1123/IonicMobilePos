@@ -43,6 +43,13 @@ ion-content {
     background: #1a1a1a;
     border-radius: 14px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+    overflow: hidden;
+
+    .app-logo-img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
 
     .phone-emoji {
       font-size: 24px;
