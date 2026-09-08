@@ -652,12 +652,14 @@ export class InvoicesPage implements OnInit {
       return;
     }
 
-    this.matchedModalProducts = this.products.filter(product =>
-      (product.name || '').toLowerCase().includes(keyword)
-    );
+    const matchesProduct = (product: any) =>
+      (product.name || product.productName || '').toLowerCase().includes(keyword) ||
+      (product.barcode || '').toLowerCase().includes(keyword);
+
+    this.matchedModalProducts = this.products.filter(matchesProduct);
 
     this.otherModalProducts = this.products.filter(product =>
-      !(product.name || '').toLowerCase().includes(keyword)
+      !matchesProduct(product)
     );
   }
 
