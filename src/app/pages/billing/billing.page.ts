@@ -147,7 +147,8 @@ export class BillingPage implements OnInit {
     const term = this.productSearchTerm.toLowerCase();
     this.filteredProductsSelection = this.allProducts.filter(p =>
       (p.name || '').toLowerCase().includes(term) ||
-      (p.productCode || p.code || '').toLowerCase().includes(term)
+      (p.productCode || p.code || '').toLowerCase().includes(term) ||
+      (p.barcode || '').toLowerCase().includes(term)
     );
   }
 
@@ -871,7 +872,7 @@ export class BillingPage implements OnInit {
       }
     }
     
-    if (!this.cnForm.reason) { this.showToastMsg('Please enter reason'); return; }
+    // if (!this.cnForm.reason) { this.showToastMsg('Please enter reason'); return; }
     
     const itemsToReturn = this.cnForm.items.filter((i: any) => i.returnQuantity > 0);
     if (itemsToReturn.length === 0) {
@@ -892,7 +893,7 @@ export class BillingPage implements OnInit {
       returnToStock: i.returnToStock
     }));
 
-    const payload = { reason: this.cnForm.reason, items: payloadItems };
+    const payload = { reason: this.cnForm.reason || '', items: payloadItems };
 
     // ✅ 智能切换：如果列表里有来自“历史记录”的商品，或者根本没选发票，就走全局接口
     const hasGlobalItems = itemsToReturn.some((i: any) => i.isGlobal);
@@ -907,7 +908,7 @@ export class BillingPage implements OnInit {
     } else {
       // 智能全局模式：支持跨单退货
       const payloadGlobal = { 
-        reason: this.cnForm.reason, 
+        reason: this.cnForm.reason || '', 
         items: payloadItems, 
         isManual: true,
         preferredInvoiceId: this.cnForm.invoiceId && this.cnForm.invoiceId != 0 ? Number(this.cnForm.invoiceId) : null

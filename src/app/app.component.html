@@ -1,7 +1,25 @@
 <ion-app>
-  <ion-router-outlet></ion-router-outlet>
+  <ion-router-outlet *ngIf="!permissionBlocked"></ion-router-outlet>
   
-  <div class="global-bottom-nav" *ngIf="showBottomNav">
+  <!-- Permission Blocked Fullscreen Screen -->
+  <div class="permission-blocked-screen" *ngIf="permissionBlocked">
+    <div class="blocked-card">
+      <div class="blocked-icon-box">
+        <ion-icon name="shield-half-outline"></ion-icon>
+      </div>
+      <h2>Permissions Required</h2>
+      <p>This POS app requires <b>Location</b> and <b>Nearby Devices (Bluetooth)</b> permissions to scan and print receipts. Without these permissions, the app cannot operate.</p>
+      
+      <div class="blocked-actions">
+        <ion-button expand="block" class="grant-btn" (click)="checkAndRequestMandatoryPermissions(true)">
+          <ion-icon name="key-outline" slot="start"></ion-icon>
+          Grant Permissions
+        </ion-button>
+      </div>
+    </div>
+  </div>
+
+  <div class="global-bottom-nav" *ngIf="showBottomNav && !permissionBlocked">
     <div class="nav-bg-slider" [ngStyle]="{'transform': 'translateX(' + getSliderOffset() + 'px)'}"></div>
     
     <ion-button fill="clear" class="nav-btn" [class.active]="activeIndex === 0" (click)="goTo('home', 0)">

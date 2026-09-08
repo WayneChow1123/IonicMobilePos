@@ -42,7 +42,12 @@
                 <span *ngIf="product.isActive === false" class="badge inactive-badge">INACTIVE</span>
                 <span *ngIf="product.stock === 0" class="badge oos-badge">OUT OF STOCK</span>
               </div>
-              <div class="item-sub">{{ product.category || 'DEFAULT' }}</div>
+              <div class="item-sub">
+                {{ product.category || 'DEFAULT' }}
+                <span *ngIf="product.barcode" style="margin-left: 8px; color: #555; background: #eef2f7; padding: 1px 6px; border-radius: 4px; font-size: 11px;">
+                  Barcode: {{ product.barcode }}
+                </span>
+              </div>
               <div class="product-price-row">
                 <span class="product-price">RM {{ product.price | number:'1.2-2' }}</span>
                 <span class="product-stock" [class.low-stock]="product.stock <= 10 && product.stock > 0" [class.no-stock]="product.stock === 0">
@@ -126,7 +131,8 @@
 
     <!-- Barcode Code Display -->
     <div class="pd-code-row" *ngIf="isEditing">
-      CODE: {{ form.code }}
+      <span>CODE: {{ form.code || '-' }}</span>
+      <span *ngIf="form.barcode" style="margin-left: 12px; padding-left: 12px; border-left: 1px solid #ccc;">BARCODE: {{ form.barcode }}</span>
     </div>
 
     <!-- White Info Card: Name, Category, Include Tax -->

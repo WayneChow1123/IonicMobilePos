@@ -66,3 +66,77 @@
     }
   }
 }
+
+/* ─── Permission Blocked Screen ─── */
+.permission-blocked-screen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: #f0ebe3;
+  z-index: 999999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+
+  .blocked-card {
+    background: #ffffff;
+    border-radius: 28px;
+    padding: 36px 24px;
+    max-width: 380px;
+    width: 100%;
+    text-align: center;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.08);
+    border: 1px solid #eef2f7;
+
+    .blocked-icon-box {
+      width: 72px;
+      height: 72px;
+      background: #fee2e2;
+      border-radius: 50%;
+      margin: 0 auto 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+
+      ion-icon {
+        font-size: 38px;
+        color: #ef4444;
+      }
+    }
+
+    h2 {
+      font-size: 20px;
+      font-weight: 900;
+      color: #1a1a1a;
+      margin: 0 0 12px;
+      font-family: 'DM Sans', sans-serif;
+    }
+
+    p {
+      font-size: 13px;
+      line-height: 1.6;
+      color: #64748b;
+      margin: 0 0 28px;
+      font-family: 'DM Sans', sans-serif;
+
+      b {
+        color: #1e293b;
+      }
+    }
+
+    .blocked-actions {
+      .grant-btn {
+        --background: #5c85d6;
+        --border-radius: 14px;
+        --box-shadow: 0 4px 14px rgba(92, 133, 214, 0.4);
+        font-family: 'DM Sans', sans-serif;
+        font-weight: 800;
+        font-size: 15px;
+        height: 48px;
+      }
+    }
+  }
+}

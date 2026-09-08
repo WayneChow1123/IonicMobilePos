@@ -414,10 +414,11 @@ export class InvoicesPage implements OnInit {
   }
 
   filterProductsForSelection() {
-    const term = this.productSearchTerm.toLowerCase();
+    const term = this.productSearchTerm.toLowerCase().trim();
     this.filteredProductsForSelection = this.products.filter(p =>
       (p.name || '').toLowerCase().includes(term) ||
-      (p.code || '').toLowerCase().includes(term)
+      (p.code || '').toLowerCase().includes(term) ||
+      (p.barcode || '').toLowerCase().includes(term)
     );
   }
 
@@ -436,7 +437,8 @@ export class InvoicesPage implements OnInit {
         productName: product.name,
         unitPrice: finalPrice,
         quantity: 1,
-        remark: ''
+        remark: '',
+        barcode: product.barcode || ''
       };
       this.form.items.push(newItem);
     }
@@ -583,6 +585,8 @@ export class InvoicesPage implements OnInit {
       this.goBack(); // Navigate back to Billing
     } else {
       this.showModal = false;
+      this.isEditing = false;
+      this.selectedInvoice = null;
     }
   }
 
@@ -759,7 +763,65 @@ export class InvoicesPage implements OnInit {
         status: (this.termType === 'Net 30 Days' || this.termType === 'On Credit') ? 'Unpaid' : 'Paid'
       };
       this.api.createInvoice(payload).subscribe({
-        next: () => { this.showToastMsg('Invoice created!'); this.closeModal(); this.loadInvoices(); this.loadCustomers(); },
+        next: (res: any) => {
+          this.showToastMsg('Invoice created!');
+          const createdInvoiceId = res?.invoiceId || res?.id;
+          this.loadInvoices();
+          this.loadCustomers();
+
+          if (createdInvoiceId) {
+            this.isLoading = true;
+            this.isDirectEntry = false;
+            this.isEditing = true;
+            this.isEditMode = false;
+            this.selectedInvoice = null;
+
+            this.api.getInvoiceDetails(createdInvoiceId).subscribe({
+              next: (invRes: any) => {
+                this.selectedInvoice = invRes;
+                this.selectedCustomerDetail = this.customers.find(c => c.id === invRes.customerId);
+                const customerId = Number(invRes.customerId);
+                if (customerId) {
+                  this.loadCustomerProductPrices(customerId);
+                }
+                this.editForm = {
+                  invoiceDate: invRes.invoiceDate || this.getMYSDate(),
+                  remark: invRes.remark || '',
+                  items: ((invRes.items || invRes.Items) && (invRes.items || invRes.Items).length > 0)
+                    ? (invRes.items || invRes.Items).map((i: any) => ({
+                      productId: i.productId ?? i.ProductId ?? 0,
+                      quantity: i.quantity ?? i.Quantity ?? 1,
+                      unitPrice: i.unitPrice ?? i.UnitPrice ?? 0,
+                      productName: i.productName ?? i.ProductName ?? '',
+                      returnedQuantity: i.returnedQuantity ?? i.ReturnedQuantity ?? 0,
+                      remark: i.remark ?? i.Remark ?? ''
+                    }))
+                    : [{ productId: this.products.length > 0 ? this.products[0].id : 0, quantity: 1, unitPrice: 0, productName: '', returnedQuantity: 0 }]
+                };
+                this.showModal = true;
+
+                this.api.previewInvoice(createdInvoiceId).subscribe({
+                  next: (prevData: any) => {
+                    this.previewData = prevData;
+                    this.isLoading = false;
+                    this.showCheckPreview = true;
+                  },
+                  error: () => {
+                    this.previewData = null;
+                    this.isLoading = false;
+                    this.showCheckPreview = true;
+                  }
+                });
+              },
+              error: () => {
+                this.isLoading = false;
+                this.closeModal();
+              }
+            });
+          } else {
+            this.closeModal();
+          }
+        },
         error: (err: any) => this.handleInvoiceError(err)
       });
     }
@@ -1082,6 +1144,11 @@ export class InvoicesPage implements OnInit {
       next: (data: any) => { this.previewData = data; this.showCheckPreview = true; },
       error: () => { this.previewData = null; this.showCheckPreview = true; }
     });
+  }
+
+  closeLivePreview() {
+    this.showCheckPreview = false;
+    this.previewData = null;
   }
 
   downloadReceipt() {

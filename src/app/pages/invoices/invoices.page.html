@@ -562,7 +562,7 @@
 
   <div *ngIf="showCheckPreview" class="receipt-overlay">
     <div class="receipt-top-bar">
-      <ion-button fill="clear" class="back-btn" (click)="showCheckPreview=false">
+      <ion-button fill="clear" class="back-btn" (click)="closeLivePreview()">
         <ion-icon name="chevron-back-outline"></ion-icon> Back
       </ion-button>
       <span class="page-title">LIVE PREVIEW</span>
@@ -790,7 +790,7 @@
       <div style="width:48px;"></div>
     </div>
     <div class="ni-overlay-search">
-      <ion-searchbar [(ngModel)]="productSearchTerm" (ionInput)="filterProductsForSelection()" placeholder="Search product name or code..."></ion-searchbar>
+      <ion-searchbar [(ngModel)]="productSearchTerm" (ionInput)="filterProductsForSelection()" placeholder="Search product name, code or barcode..."></ion-searchbar>
     </div>
     <div class="ni-overlay-content">
       <div *ngFor="let p of filteredProductsForSelection" class="ni-cust-item" (click)="selectProduct(p)">
@@ -798,7 +798,12 @@
           <ion-icon name="cube-outline"></ion-icon>
         </div>
         <div class="ni-cust-item-info">
-          <div class="ni-cust-item-name">{{ p.name }}</div>
+          <div class="ni-cust-item-name">
+            {{ p.name }}
+            <span *ngIf="p.barcode" style="font-size: 11px; font-weight: normal; color: #666; margin-left: 6px; background: #eef2f7; padding: 2px 6px; border-radius: 4px;">
+              Barcode: {{ p.barcode }}
+            </span>
+          </div>
           <div class="ni-cust-item-code">
             <span *ngIf="!getCustomerSpecialPrice(p.id) && getCustomerDiscount() === 0">
               RM {{ p.price | number:'1.2-2' }}
