@@ -1,68 +1,64 @@
 <ion-content [fullscreen]="true">
 
-  <div *ngIf="!showModal" class="page-container">
-    <div class="top-bar">
-      <ion-button fill="clear" class="back-btn" (click)="goBack()">
-        <ion-icon name="chevron-back-outline"></ion-icon> Back
-      </ion-button>
-      <span class="page-title">Invoices</span>
-      <ion-button fill="clear" class="icon-btn invoice-add-btn" (click)="openAddModal()">
-        <ion-icon name="add-outline"></ion-icon>
-      </ion-button>
+  <div *ngIf="!showModal" class="page-container" style="display:flex;flex-direction:column;height:100%;">
+    <div class="sticky-header" style="position:sticky;top:0;z-index:10;background:#F0EBE3;padding:12px 16px 8px;margin:-16px -16px 12px;flex-shrink:0;">
+      <div class="top-bar">
+        <ion-button fill="clear" class="back-btn" (click)="goBack()">
+          <ion-icon name="chevron-back-outline"></ion-icon> Back
+        </ion-button>
+        <span class="page-title">Invoices</span>
+        <ion-button fill="clear" class="icon-btn invoice-add-btn" (click)="openAddModal()">
+          <ion-icon name="add-outline"></ion-icon>
+        </ion-button>
+      </div>
+      <div style="display:flex;gap:8px;overflow-x:auto;white-space:nowrap;scrollbar-width:none;-webkit-overflow-scrolling:touch;margin:12px 0 8px;padding-bottom:4px;">
+        <div *ngFor="let p of allProducts" class="product-stock-card" style="flex-shrink:0;border-radius:12px;padding:8px 12px;display:flex;align-items:center;gap:8px;min-width:120px;">
+          <div>
+            <div class="product-stock-name" style="font-size:12px;font-weight:700;">{{ p.name }}</div>
+            <div style="font-size:11px;font-weight:600;" [style.color]="p.stock === 0 ? '#e57373' : p.stock <= 10 ? '#f39c12' : '#27ae60'">Stock: {{ p.stock }}</div>
+          </div>
+        </div>
+      </div>
+      <ion-searchbar [(ngModel)]="searchTerm" (ionInput)="filterInvoices()" placeholder="Search INV- or customer..." style="--background:#fff;--border-radius:16px;--box-shadow:none;padding:0;margin-bottom:0;"></ion-searchbar>
     </div>
-
-    <div style="display:flex;gap:8px;overflow-x:auto;white-space:nowrap;scrollbar-width:none;-webkit-overflow-scrolling:touch;margin-bottom:12px;padding-bottom:4px;">
-      <div *ngFor="let p of allProducts" class="product-stock-card" style="flex-shrink:0;border-radius:12px;padding:8px 12px;display:flex;align-items:center;gap:8px;min-width:120px;">
-        <div>
-          <div class="product-stock-name" style="font-size:12px;font-weight:700;">{{ p.name }}</div>
-          <div style="font-size:11px;font-weight:600;" [style.color]="p.stock === 0 ? '#e57373' : p.stock <= 10 ? '#f39c12' : '#27ae60'">Stock: {{ p.stock }}</div>
+    <div class="scroll-content" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:20px;">
+      <div class="date-filter-card">
+        <div class="date-filter-header">
+          <div class="df-title">
+            <ion-icon name="calendar-outline"></ion-icon>
+            <span>Filter by Date Range</span>
+          </div>
+          <button class="clear-btn" *ngIf="startDate || endDate" (click)="clearDateFilter()">
+            Clear Filter
+          </button>
+        </div>
+        <div class="date-inputs">
+          <div class="date-input-wrapper">
+            <span class="input-label">FROM</span>
+            <input type="date" [(ngModel)]="startDate" (change)="activePreset = ''; filterInvoices()" class="premium-date-input">
+          </div>
+          <div class="date-separator">
+            <ion-icon name="arrow-forward-outline"></ion-icon>
+          </div>
+          <div class="date-input-wrapper">
+            <span class="input-label">TO</span>
+            <input type="date" [(ngModel)]="endDate" (change)="activePreset = ''; filterInvoices()" class="premium-date-input">
+          </div>
+        </div>
+        <div class="preset-chips-container">
+          <button class="preset-chip" [class.active]="activePreset === 'today'" (click)="setPreset('today')">Today</button>
+          <button class="preset-chip" [class.active]="activePreset === 'yesterday'" (click)="setPreset('yesterday')">Yesterday</button>
+          <button class="preset-chip" [class.active]="activePreset === 'week'" (click)="setPreset('week')">This Week</button>
+          <button class="preset-chip" [class.active]="activePreset === 'month'" (click)="setPreset('month')">This Month</button>
+          <button class="preset-chip" [class.active]="activePreset === '30days'" (click)="setPreset('30days')">Last 30 Days</button>
         </div>
       </div>
-    </div>
-
-    <ion-searchbar [(ngModel)]="searchTerm" (ionInput)="filterInvoices()" placeholder="Search INV- or customer..." style="--background:#fff;--border-radius:16px;--box-shadow:none;padding:0;margin-bottom:12px;"></ion-searchbar>
-
-    <!-- Date Range Filter -->
-    <div class="date-filter-card">
-      <div class="date-filter-header">
-        <div class="df-title">
-          <ion-icon name="calendar-outline"></ion-icon>
-          <span>Filter by Date Range</span>
-        </div>
-        <button class="clear-btn" *ngIf="startDate || endDate" (click)="clearDateFilter()">
-          Clear Filter
-        </button>
-      </div>
-      <div class="date-inputs">
-        <div class="date-input-wrapper">
-          <span class="input-label">FROM</span>
-          <input type="date" [(ngModel)]="startDate" (change)="activePreset = ''; filterInvoices()" class="premium-date-input">
-        </div>
-        <div class="date-separator">
-          <ion-icon name="arrow-forward-outline"></ion-icon>
-        </div>
-        <div class="date-input-wrapper">
-          <span class="input-label">TO</span>
-          <input type="date" [(ngModel)]="endDate" (change)="activePreset = ''; filterInvoices()" class="premium-date-input">
-        </div>
-      </div>
-
-      <!-- Preset Quick Filters -->
-      <div class="preset-chips-container">
-        <button class="preset-chip" [class.active]="activePreset === 'today'" (click)="setPreset('today')">Today</button>
-        <button class="preset-chip" [class.active]="activePreset === 'yesterday'" (click)="setPreset('yesterday')">Yesterday</button>
-        <button class="preset-chip" [class.active]="activePreset === 'week'" (click)="setPreset('week')">This Week</button>
-        <button class="preset-chip" [class.active]="activePreset === 'month'" (click)="setPreset('month')">This Month</button>
-        <button class="preset-chip" [class.active]="activePreset === '30days'" (click)="setPreset('30days')">Last 30 Days</button>
-      </div>
-    </div>
-
     <div *ngIf="isLoading" style="display:flex;justify-content:center;padding:60px;">
       <ion-spinner name="crescent"></ion-spinner>
     </div>
 
     <div *ngIf="!isLoading">
-      <div *ngFor="let invoice of filteredInvoices" class="list-item">
+      <div *ngFor="let invoice of displayedInvoices" class="list-item">
         <div class="item-info" (click)="openEditModal(invoice)">
           <div class="item-avatar" [class.paid]="invoice.status==='Paid'" [class.partial]="invoice.status==='Partial'" [class.unpaid]="!invoice.status || invoice.status==='Unpaid'">
             <ion-icon name="receipt-outline"></ion-icon>
@@ -94,10 +90,7 @@
       
 
 
-      <!-- Spacer to prevent overlap with fixed footer -->
-      <div *ngIf="filteredInvoices.length > 0" class="gs-spacer"></div>
-
-      <div *ngIf="filteredInvoices.length > 0" class="grand-summary-card">
+      <div *ngIf="filteredInvoices.length > 0" class="grand-summary-card" style="margin-top:12px;">
         <div class="gs-left">
           <div class="gs-label">
             <span class="gs-dot"></span>
@@ -114,12 +107,19 @@
           </div>
         </div>
       </div>
-
+      <div *ngIf="displayedInvoices.length < filteredInvoices.length" style="display:flex;justify-content:center;padding:16px;">
+        <ion-spinner *ngIf="isLoadingMore" name="crescent"></ion-spinner>
+        <ion-button *ngIf="!isLoadingMore" fill="clear" (click)="loadMoreInvoices()" style="--color:#5c85d6;font-weight:700;">Load more ({{ displayedInvoices.length }}/{{ filteredInvoices.length }})</ion-button>
+      </div>
+      <ion-infinite-scroll threshold="150px" (ionInfinite)="onInfiniteInvoices($event)" *ngIf="displayedInvoices.length < filteredInvoices.length">
+        <ion-infinite-scroll-content loadingSpinner="crescent" loadingText="Loading more invoices..."></ion-infinite-scroll-content>
+      </ion-infinite-scroll>
       <div *ngIf="filteredInvoices.length===0" class="empty-state">
         <ion-icon name="receipt-outline"></ion-icon>
         <p>No invoices found</p>
         <button class="save-btn" (click)="openAddModal()">New Invoice</button>
       </div>
+    </div>
     </div>
   </div>
 
@@ -277,7 +277,7 @@
           <div class="ni-item-qty-box">
             <div class="ni-qty-left">
               <span class="ni-qty-x">×</span>
-              <input type="number" [(ngModel)]="item.quantity" class="ni-qty-input" min="1" [class.qty-error]="isStockInsufficient(item)">
+              <input type="number" [(ngModel)]="item.quantity" placeholder="0" class="ni-qty-input" min="1" [class.qty-error]="isStockInsufficient(item)">
               <span class="ni-qty-eq">=</span>
             </div>
             <div class="ni-qty-total">{{ (item.quantity * item.unitPrice) | number:'1.2-2' }}</div>
@@ -344,8 +344,8 @@
 
   </div>
 
-  <div *ngIf="showModal && isEditing" class="page-container">
-    <div class="top-bar">
+  <div *ngIf="showModal && isEditing" class="page-container" style="display:flex;flex-direction:column;height:100%;">
+    <div class="top-bar" style="position:sticky;top:0;z-index:10;background:#F0EBE3;padding:12px 16px;margin:-16px -16px 12px;flex-shrink:0;">
       <ion-button fill="clear" class="back-btn" (click)="closeModal()">
         <ion-icon name="chevron-back-outline"></ion-icon> Back
       </ion-button>
@@ -383,6 +383,7 @@
         </div>
       </div>
     </div>
+    <div class="scroll-content" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:20px;">
 
     <div *ngIf="selectedInvoice?.status === 'Paid'" style="background:#f8d7da;border-radius:16px;padding:14px 16px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;gap:10px;">
       <div style="display:flex;align-items:center;gap:10px;">
@@ -461,7 +462,7 @@
 
     <div class="form-card" style="background:#cfe2ff;">
       <div class="form-group" *ngIf="selectedInvoice">
-        <label>INVOICE NUMBER</label>
+        <label>INVOICE NUMBER (ID: {{ selectedInvoice.id }})</label>
         <div style="font-size:16px; font-weight:800; color:#1a1a1a; padding:6px 0;" class="detail-invoice-num">{{ selectedInvoice.invoiceNumber }}</div>
       </div>
       <div class="form-group">
@@ -507,9 +508,14 @@
           <span *ngIf="(item.returnedQuantity || 0) >= item.quantity" style="background:#e74c3c;color:#fff;font-size:12px;padding:3px 10px;border-radius:10px;font-weight:800;">FULLY RETURNED</span>
           <span *ngIf="(item.returnedQuantity || 0) > 0 && (item.returnedQuantity || 0) < item.quantity" style="background:#e67e22;color:#fff;font-size:12px;padding:3px 10px;border-radius:10px;font-weight:800;">PARTIALLY RETURNED ({{item.returnedQuantity}} pcs)</span>
         </div>
-        <ion-button *ngIf="isEditMode" fill="clear" style="--color:#e57373;font-size:18px;" (click)="removeItem(i)">
-          <ion-icon name="trash-outline"></ion-icon>
-        </ion-button>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <ion-button *ngIf="isEditMode" fill="solid" size="small" style="--background:#eef2ff;--color:#5c85d6;--border-radius:8px;--padding-start:10px;--padding-end:10px;height:28px;font-size:12px;font-weight:700;box-shadow:0 1px 4px rgba(92,133,214,0.2);" (click)="openEditItemModal(i)">
+            Edit
+          </ion-button>
+          <ion-button *ngIf="isEditMode" fill="clear" size="small" style="--color:#e57373;--padding-start:4px;--padding-end:4px;height:28px;" (click)="removeItem(i)">
+            <ion-icon name="trash-outline" style="font-size:16px;"></ion-icon>
+          </ion-button>
+        </div>
       </div>
       <div class="form-group">
         <label>PRODUCT</label>
@@ -523,11 +529,12 @@
       </div>
       <div class="form-group">
         <label>QUANTITY</label>
-        <input type="number" [(ngModel)]="item.quantity" placeholder="1" class="form-input" min="1" (keydown)="noLeadingZero($event, item.quantity)" [readonly]="!isEditMode"/>
+        <input type="number" [(ngModel)]="item.quantity" placeholder="0" class="form-input" min="1" (keydown)="noLeadingZero($event, item.quantity)" [readonly]="!isEditMode"/>
       </div>
       <div class="form-group">
         <label>UNIT PRICE (RM)</label>
-        <div style="font-size:14px;font-weight:600;color:#888;padding:4px 0;border-bottom:1px solid rgba(0,0,0,0.1);">RM {{ item.unitPrice | number:'1.2-2' }}</div>
+        <input *ngIf="isEditMode" type="number" [(ngModel)]="item.unitPrice" placeholder="0" class="form-input" inputmode="decimal" style="font-weight:700;" />
+        <div *ngIf="!isEditMode" style="font-size:14px;font-weight:600;color:#888;padding:4px 0;border-bottom:1px solid rgba(0,0,0,0.1);">RM {{ (item.unitPrice || 0) | number:'1.2-2' }}</div>
       </div>
       <div class="form-group">
         <label>ITEM REMARK</label>
@@ -536,12 +543,9 @@
     </div>
 
     <button *ngIf="isEditMode" class="save-btn" (click)="saveInvoice()">UPDATE INVOICE</button>
-
-    <!-- Spacer to prevent overlap with fixed footer -->
-    <div class="gs-spacer"></div>
-
+    </div>
     <!-- Edit Invoice Bottom Summary Card -->
-    <div class="grand-summary-card">
+    <div class="grand-summary-card" style="flex-shrink:0;margin-top:12px;">
       <div class="gs-left">
         <div class="gs-label">
           <span class="gs-dot"></span>
@@ -1068,6 +1072,41 @@
         </button>
       </div>
 
+    </div>
+  </ng-template>
+</ion-modal>
+
+<ion-modal [isOpen]="showEditItemModal" (didDismiss)="closeEditItemModal()" style="--border-radius: 24px; --height: auto; --width: 92vw; --max-width: 420px;">
+  <ng-template>
+    <div style="background:#fff;border-radius:24px;padding:20px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+        <span style="font-weight:800;font-size:16px;">Edit Item</span>
+        <ion-button fill="clear" (click)="closeEditItemModal()" style="--color:#888;"><ion-icon name="close-outline"></ion-icon></ion-button>
+      </div>
+      <div (click)="openProductPickerFromEditModal()" style="background:#F0EBE3;border-radius:12px;padding:12px 14px;margin-bottom:16px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;">
+        <div>
+          <div style="font-size:10px;font-weight:700;color:#888;letter-spacing:1px;">PRODUCT</div>
+          <div style="font-size:15px;font-weight:800;color:#1a1a1a;margin-top:4px;">{{ getProductName(editItemForm.productId) || getProductName(editForm.items[editItemIndex]?.productId) || '---' }}</div>
+          <div style="font-size:11px;color:#888;margin-top:2px;">Code: {{ getProductCode(editItemForm.productId || editForm.items[editItemIndex]?.productId) || '-' }}</div>
+        </div>
+        <ion-icon name="chevron-forward-outline" style="color:#888;font-size:18px;"></ion-icon>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+        <label style="width:95px;font-size:11px;font-weight:700;color:#555;letter-spacing:0.5px;flex-shrink:0;">QUANTITY</label>
+        <input type="number" [(ngModel)]="editItemForm.quantity" placeholder="0" class="form-input" style="flex:1;font-weight:800;font-size:15px;text-align:right;" />
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+        <label style="width:95px;font-size:11px;font-weight:700;color:#555;letter-spacing:0.5px;flex-shrink:0;">UNIT PRICE</label>
+        <input type="number" [(ngModel)]="editItemForm.unitPrice" placeholder="0.00" class="form-input" inputmode="decimal" style="flex:1;font-weight:800;font-size:15px;text-align:right;" />
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+        <label style="width:95px;font-size:11px;font-weight:700;color:#555;letter-spacing:0.5px;flex-shrink:0;">REMARK</label>
+        <input type="text" [(ngModel)]="editItemForm.remark" placeholder="No remark" class="form-input" style="flex:1;font-size:14px;font-weight:600;" />
+      </div>
+      <div style="display:flex;gap:10px;">
+        <button class="save-btn" style="flex:1;background:#888;" (click)="closeEditItemModal()">CANCEL</button>
+        <button class="save-btn" style="flex:1;background:#5c85d6;" (click)="saveEditItemAndUpdate()">SAVE</button>
+      </div>
     </div>
   </ng-template>
 </ion-modal>

@@ -579,6 +579,181 @@ export class BluetoothPrintService {
       );
     });
   }
+
+  printCreditNote(cn: any, settings: any, customers: any[], products: any[]): Promise<boolean> {
+    return new Promise((resolve, reject) => {
+      if (!this.isAvailable()) {
+        this.alertService.toast('Bluetooth printing is only available on native devices (APK)', 'error');
+        return resolve(false);
+      }
+      const mac = settings.macAddress || '02:29:DE:43:D8:2C';
+      const permissions = (window as any).plugins?.permissions;
+      if (permissions && permissions.BLUETOOTH_CONNECT) {
+        permissions.hasPermission(permissions.BLUETOOTH_CONNECT, (status: any) => {
+          if (status.hasPermission) {
+            this.connectAndPrintCN(mac, cn, settings, customers, products, resolve);
+          } else {
+            permissions.requestPermission(permissions.BLUETOOTH_CONNECT, (s: any) => {
+              if (s.hasPermission) {
+                this.connectAndPrintCN(mac, cn, settings, customers, products, resolve);
+              } else {
+                this.alertService.toast('Nearby Devices permission is required to print.', 'error');
+                resolve(false);
+              }
+            }, () => resolve(false));
+          }
+        }, () => resolve(false));
+      } else {
+        this.connectAndPrintCN(mac, cn, settings, customers, products, resolve);
+      }
+    });
+  }
+
+  private connectAndPrintCN(mac: string, cn: any, settings: any, customers: any[], products: any[], resolve: any) {
+    this.alertService.toast(`Connecting to printer...`, 'success');
+    this.bluetoothSerial.isEnabled(
+      () => {
+        this.bluetoothSerial.connect(
+          mac,
+          () => {
+            try {
+              this.sendPrintCNData(cn, settings, customers, products)
+                .then(() => {
+                  this.bluetoothSerial.disconnect();
+                  resolve(true);
+                })
+                .catch((err) => {
+                  this.bluetoothSerial.disconnect();
+                  this.alertService.toast(`Printing failed: ${err.message || err}`, 'error');
+                  resolve(false);
+                });
+            } catch (e: any) {
+              this.bluetoothSerial.disconnect();
+              this.alertService.toast(`Format error: ${e.message}`, 'error');
+              resolve(false);
+            }
+          },
+          (err: any) => {
+            this.alertService.toast(`Failed to connect to printer: ${err}`, 'error');
+            resolve(false);
+          }
+        );
+      },
+      () => {
+        this.alertService.toast('Please turn on Bluetooth first', 'warning');
+        resolve(false);
+      }
+    );
+  }
+
+  private sendPrintCNData(cn: any, settings: any, customers: any[], products: any[]): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const width = settings.paperWidth === 58 ? 40 : 64;
+      const builder = new BufferBuilder();
+      const ESC = 0x1B;
+      const GS = 0x1D;
+      const CMD_INIT = [ESC, 0x40];
+      const CMD_ALIGN_LEFT = [ESC, 0x61, 0x00];
+      const CMD_ALIGN_CENTER = [ESC, 0x61, 0x01];
+      const CMD_BOLD_ON = [ESC, 0x45, 0x01];
+      const CMD_BOLD_OFF = [ESC, 0x45, 0x00];
+      const CMD_DOUBLE_SIZE = [GS, 0x21, 0x11];
+      const CMD_NORMAL_SIZE = [GS, 0x21, 0x00];
+      const getCustomer = (id: any) => customers.find((c: any) => c.id == id || c.id == cn.customerId);
+      const getProductName = (id: any) => {
+        const p = products.find((x: any) => x.id == id);
+        return p ? p.name : 'Product #' + id;
+      };
+      const isOptionEnabled = (name: string): boolean => {
+        if (!settings.contentOptions) return true;
+        const opt = settings.contentOptions.find((o: any) => o.name === name);
+        return opt ? opt.enabled : true;
+      };
+      builder.append(CMD_INIT);
+      builder.append(CMD_ALIGN_CENTER);
+      builder.append(CMD_BOLD_ON);
+      builder.append(CMD_DOUBLE_SIZE);
+      builder.appendText("CREDIT NOTE\n");
+      builder.append(CMD_NORMAL_SIZE);
+      builder.append(CMD_BOLD_OFF);
+      builder.append(CMD_ALIGN_LEFT);
+      builder.appendText("-".repeat(width) + "\n");
+      if (isOptionEnabled('Print Company Logo')) {
+        builder.append(CMD_ALIGN_CENTER);
+        builder.append(CMD_BOLD_ON);
+        builder.appendText("B JAYA TRADING\n");
+        builder.append(CMD_BOLD_OFF);
+        builder.appendText("(001188861-T)\n");
+        builder.appendText("NO. 467, JALAN PALAS 13, TAMAN PELANGI,\n");
+        builder.appendText("70400 SEREMBAN N.S, MALAYSIA\n");
+        builder.appendText("TEL: 012-6988080\n");
+        builder.append(CMD_ALIGN_LEFT);
+        builder.appendText("-".repeat(width) + "\n");
+      }
+      builder.appendText(`CN NO  : ${cn.cnNumber || 'CN-' + cn.id}\n`);
+      builder.appendText(`INV NO : ${cn.invoiceNumber || ''}\n`);
+      if (isOptionEnabled('Print Issue Time')) {
+        const cnDate = cn.createdAt ? new Date(cn.createdAt) : new Date();
+        const dateStr = cnDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+        builder.appendText(`DATE   : ${dateStr}\n`);
+      }
+      if (isOptionEnabled('Print Customer Tel') || isOptionEnabled('Print Customer Add')) {
+        builder.appendText("\nTO:\n");
+        const c = getCustomer(cn.customerId);
+        builder.appendText(`${cn.customerName || (c ? c.name : 'Customer')}\n`);
+        if (isOptionEnabled('Print Customer Tel') && (cn.customerPhone || c?.phone)) {
+          builder.appendText(`TEL: ${cn.customerPhone || c.phone}\n`);
+        }
+      }
+      builder.appendText("-".repeat(width) + "\n");
+      builder.appendText(this.formatRow("DESCRIPTION", "SUBTOTAL", width) + "\n");
+      builder.appendText("-".repeat(width) + "\n");
+      const items = cn.Items || cn.items || [];
+      items.forEach((item: any, i: number) => {
+        let prodName = item.productName || item.Name || getProductName(item.productId);
+        if (isOptionEnabled('Print Item Code')) {
+          const product = products.find(p => p.id == item.productId);
+          const code = item.productCode || product?.productCode || product?.code || '';
+          if (code) prodName = `[${code}] ${prodName}`;
+        }
+        const uom = isOptionEnabled('Print Item U.O.M.') ? ` (${item.uom || 'UNIT'})` : '';
+        builder.appendText(this.formatRow(`${i + 1}. ${prodName}${uom}`, "", width) + "\n");
+        const qtyStr = `${item.quantity} x ${(item.unitPrice || 0).toFixed(2)}`;
+        const subtotal = ((item.quantity || 0) * (item.unitPrice || 0)).toFixed(2);
+        builder.appendText(this.formatRow(`   ${qtyStr}`, `RM ${subtotal}`, width) + "\n");
+        if (isOptionEnabled('Print Product Barcode')) {
+          const product = products.find(p => p.id == item.productId);
+          const barcode = item.barcode || product?.barcode || '';
+          if (barcode) builder.appendText(`   Barcode: ${barcode}\n`);
+        }
+      });
+      builder.appendText("-".repeat(width) + "\n");
+      builder.appendText(this.formatRow("REFUND AMOUNT", `RM ${(cn.amount || 0).toFixed(2)}`, width) + "\n");
+      if (cn.reason) {
+        builder.appendText(`Reason: ${cn.reason}\n`);
+      }
+      const status = cn.isUsed ? 'CREDIT USED' : cn.createdAfterPayment ? 'CREDIT ACTIVE' : 'DEBT OFFSET';
+      builder.appendText(this.formatRow("STATUS", status, width) + "\n");
+      builder.appendText("-".repeat(width) + "\n");
+      if (isOptionEnabled('Sign on Credit Note')) {
+        builder.appendText("\n\n\n\n\n");
+        builder.append(CMD_ALIGN_CENTER);
+        builder.appendText("...........................\n");
+        builder.appendText("CREDIT NOTE RECEIVED SIGNATURE\n");
+        builder.append(CMD_ALIGN_LEFT);
+      }
+      if (isOptionEnabled('Footer')) {
+        builder.appendText("\n");
+        builder.append(CMD_ALIGN_CENTER);
+        builder.appendText("THANK YOU\n");
+        builder.append(CMD_ALIGN_LEFT);
+      }
+      const emptyLines = settings.bottomEmptyLine ?? 5;
+      builder.appendText("\n".repeat(emptyLines));
+      const buffer = builder.getBuffer();
+      this.bluetoothSerial.write(buffer, () => resolve(), (err: any) => reject(err));
+    });
+  }
 }
 
 /** Helper class to build ESC/POS payload */

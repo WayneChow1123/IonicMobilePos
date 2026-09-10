@@ -325,8 +325,8 @@
       </div>
 
       <div class="form-group">
-        <label>REASON</label>
-        <textarea [(ngModel)]="cnForm.reason" placeholder="Enter reason for credit note..."
+        <label>REASON (Optional)</label>
+        <textarea [(ngModel)]="cnForm.reason" placeholder="Optional - leave blank if not needed..."
           class="form-textarea"></textarea>
       </div>
     </div>
@@ -334,18 +334,20 @@
   </div>
 
   <div *ngIf="currentView==='paymentList'" class="page-container">
-    <div class="top-bar">
-      <ion-button fill="clear" class="back-btn" (click)="goHome()">
-        <ion-icon name="chevron-back-outline"></ion-icon> Back
-      </ion-button>
-      <span class="page-title">Payment Report</span>
-      <ion-button fill="clear" class="icon-btn" (click)="openNewPayment()">
-        <ion-icon name="add-outline"></ion-icon>
-      </ion-button>
+    <div class="sticky-header" style="position:sticky;top:0;z-index:10;background:#F0EBE3;padding:12px 16px 8px;margin:-16px -16px 12px;">
+      <div class="top-bar">
+        <ion-button fill="clear" class="back-btn" (click)="goHome()">
+          <ion-icon name="chevron-back-outline"></ion-icon> Back
+        </ion-button>
+        <span class="page-title">Payment Report</span>
+        <ion-button fill="clear" class="icon-btn" (click)="openNewPayment()">
+          <ion-icon name="add-outline"></ion-icon>
+        </ion-button>
+      </div>
+      <ion-searchbar [(ngModel)]="paymentSearchTerm" (ionInput)="filterPayments()"
+        placeholder="Search customer / invoice / ref..."
+        style="--background:#fff;--border-radius:16px;--box-shadow:none;padding:0;margin:0;"></ion-searchbar>
     </div>
-    <ion-searchbar [(ngModel)]="paymentSearchTerm" (ionInput)="filterPayments()"
-      placeholder="Search customer / invoice / ref..."
-      style="--background:#fff;--border-radius:16px;--box-shadow:none;padding:0;margin-bottom:12px;"></ion-searchbar>
     <div *ngIf="isLoading" style="display:flex;justify-content:center;padding:60px;">
       <ion-spinner name="crescent"></ion-spinner>
     </div>
@@ -374,23 +376,25 @@
   </div>
 
   <div *ngIf="currentView==='cnList'" class="page-container">
-    <div class="top-bar">
-      <ion-button fill="clear" class="back-btn" (click)="goHome()">
-        <ion-icon name="chevron-back-outline"></ion-icon> Back
-      </ion-button>
-      <span class="page-title">C.N. Report</span>
-      <ion-button fill="clear" class="icon-btn" (click)="openNewCN()">
-        <ion-icon name="add-outline"></ion-icon>
-      </ion-button>
+    <div class="sticky-header" style="position:sticky;top:0;z-index:10;background:#F0EBE3;padding:12px 16px 8px;margin:-16px -16px 12px;">
+      <div class="top-bar">
+        <ion-button fill="clear" class="back-btn" (click)="goHome()">
+          <ion-icon name="chevron-back-outline"></ion-icon> Back
+        </ion-button>
+        <span class="page-title">C.N. Report</span>
+        <ion-button fill="clear" class="icon-btn" (click)="openNewCN()">
+          <ion-icon name="add-outline"></ion-icon>
+        </ion-button>
+      </div>
+      <ion-searchbar [(ngModel)]="cnSearchTerm" (ionInput)="filterCreditNotes()"
+        placeholder="Search CN / invoice / customer..."
+        style="--background:#fff;--border-radius:16px;--box-shadow:none;padding:0;margin:0;"></ion-searchbar>
     </div>
-    <ion-searchbar [(ngModel)]="cnSearchTerm" (ionInput)="filterCreditNotes()"
-      placeholder="Search CN / invoice / customer..."
-      style="--background:#fff;--border-radius:16px;--box-shadow:none;padding:0;margin-bottom:12px;"></ion-searchbar>
     <div *ngIf="isLoading" style="display:flex;justify-content:center;padding:60px;">
       <ion-spinner name="crescent"></ion-spinner>
     </div>
     <div *ngIf="!isLoading">
-      <div *ngFor="let cn of filteredCreditNotes" class="list-item">
+      <div *ngFor="let cn of filteredCreditNotes" class="list-item" (click)="viewCNDetails(cn)" style="cursor:pointer;">
         <div class="item-info">
           <div class="item-avatar"><ion-icon name="document-outline"></ion-icon></div>
           <div>
@@ -408,7 +412,7 @@
             </div>
           </div>
         </div>
-        <ion-button fill="clear" style="--color:#e57373;" (click)="confirmDeleteCN(cn)">
+        <ion-button fill="clear" style="--color:#e57373;" (click)="confirmDeleteCN(cn); $event.stopPropagation()">
           <ion-icon name="trash-outline"></ion-icon>
         </ion-button>
       </div>
@@ -418,6 +422,144 @@
         <button class="save-btn" (click)="openNewCN()">New Credit Note</button>
       </div>
     </div>
+  </div>
+
+  <!-- CN DETAILS (仿 Invoice) -->
+  <div *ngIf="currentView==='cnDetails'" class="page-container" style="display:flex;flex-direction:column;height:100%;">
+    <div class="top-bar" style="position:sticky;top:0;z-index:10;background:#F0EBE3;padding:12px 16px;margin:-16px -16px 12px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap:8px;">
+      <ion-button fill="clear" class="back-btn" (click)="closeCNDetails()">
+        <ion-icon name="chevron-back-outline"></ion-icon> Back
+      </ion-button>
+      <span class="page-title">Credit Note Details</span>
+      <div class="top-bar-actions" style="position:relative;">
+        <ion-button fill="clear" class="icon-btn" (click)="showCNActionsDropdown = !showCNActionsDropdown" style="--color:#5c85d6;">
+          <ion-icon name="settings-outline"></ion-icon>
+        </ion-button>
+        <div class="actions-dropdown-menu" *ngIf="showCNActionsDropdown" style="position:absolute;right:0;top:40px;background:#fff;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,0.12);padding:8px;min-width:180px;z-index:10;">
+          <button class="dropdown-item" (click)="showCNActionsDropdown=false; printCNDetails()" style="color:#5c85d6;display:flex;align-items:center;gap:8px;width:100%;padding:10px;border:none;background:transparent;font-weight:700;">
+            <ion-icon name="print-outline"></ion-icon><span>Print CN</span>
+          </button>
+          <button class="dropdown-item" *ngIf="selectedCNDetail && !selectedCNDetail.isUsed && selectedCNDetail.createdAfterPayment" (click)="showCNActionsDropdown=false; useCreditNote(selectedCNDetail)" style="color:#27ae60;display:flex;align-items:center;gap:8px;width:100%;padding:10px;border:none;background:transparent;font-weight:700;">
+            <ion-icon name="wallet-outline"></ion-icon><span>Use Credit</span>
+          </button>
+          <button class="dropdown-item" (click)="showCNActionsDropdown=false; confirmDeleteCN(selectedCNDetail)" style="color:#e57373;border-top:1px solid rgba(0,0,0,0.08);display:flex;align-items:center;gap:8px;width:100%;padding:10px;border:none;background:transparent;font-weight:700;">
+            <ion-icon name="trash-outline"></ion-icon><span>Delete CN</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div *ngIf="isCNLoading" style="display:flex;justify-content:center;padding:60px;">
+      <ion-spinner name="crescent"></ion-spinner>
+    </div>
+
+    <div *ngIf="!isCNLoading && selectedCNDetail">
+      <!-- CN Main Card -->
+      <div class="form-card" style="background:#C5C8E0;border-radius:20px;padding:20px;box-shadow:0 4px 12px rgba(0,0,0,0.05);margin-bottom:16px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;border-bottom:1px solid rgba(0,0,0,0.05);padding-bottom:12px;">
+          <span style="font-size:11px;color:#555;font-weight:700;letter-spacing:1px;">CN NUMBER</span>
+          <span style="font-size:16px;font-weight:900;color:#1a1a1a;">{{ selectedCNDetail.cnNumber || 'CN-' + selectedCNDetail.id }}</span>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+          <div>
+            <div style="font-size:10px;color:#555;font-weight:700;letter-spacing:0.5px;">REFUND AMOUNT</div>
+            <div style="font-size:22px;font-weight:900;color:#e67e22;">RM {{ selectedCNDetail.amount | number:'1.2-2' }}</div>
+          </div>
+          <div>
+            <div style="font-size:10px;color:#555;font-weight:700;letter-spacing:0.5px;">STATUS</div>
+            <div style="margin-top:4px;"><span [style.background]="selectedCNDetail.isUsed ? '#e0e0e0' : '#00bcd4'" [style.color]="selectedCNDetail.isUsed ? '#888' : '#fff'" style="font-size:11px;font-weight:800;padding:4px 10px;border-radius:8px;">{{ getCNStatusForDetail() }}</span></div>
+          </div>
+          <div>
+            <div style="font-size:10px;color:#555;font-weight:700;letter-spacing:0.5px;">DATE</div>
+            <div style="font-size:14px;font-weight:800;color:#1a1a1a;">{{ selectedCNDetail.createdAt | date:'dd/MM/yyyy HH:mm' }}</div>
+          </div>
+          <div>
+            <div style="font-size:10px;color:#555;font-weight:700;letter-spacing:0.5px;">INVOICE</div>
+            <div style="font-size:14px;font-weight:800;color:#5c85d6;">{{ selectedCNDetail.invoiceNumber || ('#' + selectedCNDetail.invoiceId) }}</div>
+          </div>
+        </div>
+        <div style="margin-top:12px;padding:12px;background:rgba(255,255,255,0.6);border-radius:12px;">
+          <div style="font-size:10px;color:#888;font-weight:700;letter-spacing:0.5px;">REASON</div>
+          <div style="font-size:14px;font-weight:700;color:#1a1a1a;margin-top:4px;">{{ selectedCNDetail.reason || 'No reason' }}</div>
+        </div>
+      </div>
+
+      <!-- Customer Card -->
+      <div class="form-card" style="background:#fff;border-radius:20px;padding:20px;box-shadow:0 4px 12px rgba(0,0,0,0.02);margin-bottom:16px;border:1px solid #f1f2f6;">
+        <div style="font-size:11px;font-weight:850;letter-spacing:2px;color:#1a1a1a;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;">
+          <span>CUSTOMER</span><div style="width:24px;height:2px;background:#1a1a1a;"></div>
+        </div>
+        <div style="font-size:16px;font-weight:800;color:#1a1a1a;">{{ selectedCNDetail.customerName || 'Customer #' + selectedCNDetail.customerId }}</div>
+        <div style="font-size:12px;color:#888;margin-top:4px;">ID: {{ selectedCNDetail.customerId }} | Invoice: {{ selectedCNDetail.invoiceNumber }}</div>
+      </div>
+
+      <!-- Items -->
+      <div *ngIf="selectedCNDetail.Items?.length || selectedCNDetail.items?.length" style="background:#fff;border-radius:20px;padding:20px;box-shadow:0 4px 12px rgba(0,0,0,0.02);margin-bottom:16px;border:1px solid #f1f2f6;">
+        <div style="font-size:11px;font-weight:850;letter-spacing:2px;color:#1a1a1a;margin-bottom:12px;">RETURNED ITEMS</div>
+        <div *ngFor="let item of (selectedCNDetail.Items || selectedCNDetail.items)" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid #fcfcfc;">
+          <div>
+            <div style="font-size:14px;font-weight:800;color:#2f3542;">{{ getCNItemName(item) }}</div>
+            <div style="font-size:12px;color:#747d8c;font-weight:600;">{{ item.quantity }} x RM {{ (item.unitPrice || 0) | number:'1.2-2' }}</div>
+          </div>
+          <div style="font-size:14px;font-weight:900;color:#2f3542;">RM {{ (item.quantity * (item.unitPrice || 0)) | number:'1.2-2' }}</div>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:12px;margin-bottom:16px;">
+        <button class="save-btn" style="background:#5c85d6;flex:1;" (click)="printCNDetails()"><ion-icon name="print-outline" style="margin-right:6px;"></ion-icon> PRINT</button>
+        <button class="save-btn" style="background:#e57373;flex:1;" (click)="confirmDeleteCN(selectedCNDetail)" *ngIf="!selectedCNDetail.isUsed">DELETE</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CN PRINT PREVIEW OVERLAY -->
+  <div *ngIf="showCNPreview" class="receipt-overlay">
+    <div class="receipt-top-bar">
+      <ion-button fill="clear" class="back-btn" (click)="showCNPreview=false">
+        <ion-icon name="chevron-back-outline"></ion-icon> Back
+      </ion-button>
+      <span class="page-title">CN PREVIEW</span>
+      <ion-button fill="clear" class="icon-btn" (click)="btPrint.printCreditNote(selectedCNDetail, printerSettings, customers, allProducts)">
+        <ion-icon name="download-outline"></ion-icon>
+      </ion-button>
+    </div>
+    <div class="receipt-scroll">
+      <div class="receipt-paper" id="cn-receipt-paper" [style.max-width]="printerSettings?.paperWidth === 58 ? '360px' : '480px'">
+        <div class="receipt-header" *ngIf="isOptionEnabled('Print Company Logo')">
+          <span class="receipt-type">CREDIT NOTE</span>
+          <div class="receipt-divider"></div>
+          <h2 class="receipt-company">B JAYA TRADING</h2>
+          <span class="receipt-co-reg">(001188861-T)</span>
+          <span class="receipt-address">NO. 467, JALAN PALAS 13, TAMAN PELANGI,</span>
+          <span class="receipt-address">70400 SEREMBAN N.S, MALAYSIA</span>
+          <span class="receipt-contact">TEL: 012-6988080</span>
+        </div>
+        <div class="receipt-doc-info">
+          <div class="doc-row"><span class="doc-label">CN NO</span><span class="doc-value">: {{ selectedCNDetail?.cnNumber || 'CN-' + selectedCNDetail?.id }}</span></div>
+          <div class="doc-row"><span class="doc-label">INV NO</span><span class="doc-value">: {{ selectedCNDetail?.invoiceNumber }}</span></div>
+          <div class="doc-row" *ngIf="isOptionEnabled('Print Issue Time')"><span class="doc-label">DATE</span><span class="doc-value">: {{ selectedCNDetail?.createdAt | date:'dd MMMM yyyy HH:mm' }}</span></div>
+        </div>
+        <div class="receipt-to" *ngIf="isOptionEnabled('Print Customer Tel') || isOptionEnabled('Print Customer Add')">
+          <span class="to-label">CUSTOMER:</span>
+          <div class="to-box"><strong>{{ selectedCNDetail?.customerName }}</strong></div>
+        </div>
+        <div class="receipt-divider-thin"></div>
+        <div class="receipt-table-header"><span>DESCRIPTION</span><span>SUBTOTAL</span></div>
+        <div class="receipt-divider-thin"></div>
+        <div *ngFor="let item of (selectedCNDetail?.Items || selectedCNDetail?.items || []); let i=index" class="receipt-item">
+          <div class="item-desc-row"><span>{{ i+1 }}. {{ getCNItemName(item) }}</span></div>
+          <div class="item-calc-row"><span>{{ item.quantity }} x {{ (item.unitPrice || 0) | number:'1.2-2' }}</span><span class="item-subtotal">RM {{ (item.quantity * (item.unitPrice || 0)) | number:'1.2-2' }}</span></div>
+        </div>
+        <div class="receipt-divider-thin" style="margin-top:16px;"></div>
+        <div class="total-row" style="font-weight:800;"><span>REFUND AMOUNT</span><span>RM {{ selectedCNDetail?.amount | number:'1.2-2' }}</span></div>
+        <div *ngIf="selectedCNDetail?.reason" style="font-size:11px;font-style:italic;color:#555;margin-top:6px;">Reason: {{ selectedCNDetail?.reason }}</div>
+        <div class="net-bar"><span class="net-label">STATUS</span><span class="net-value">{{ getCNStatusForDetail() }}</span></div>
+        <div *ngIf="isOptionEnabled('Sign on Credit Note')" class="sig-box"><span class="sig-label">CREDIT NOTE RECEIVED SIGNATURE</span></div>
+        <div *ngIf="isOptionEnabled('Footer')" class="thanks">THANK YOU</div>
+        <div *ngFor="let dummy of [].constructor(printerSettings?.bottomEmptyLine ?? 5)" style="height:20px;"></div>
+      </div>
+    </div>
+    <iframe id="cn-print-iframe" style="display:none;"></iframe>
   </div>
 
   <div *ngIf="showStockAlert"

@@ -17,6 +17,10 @@ import { ApiService } from '../../services/api.service';
 export class CustomersPage implements OnInit {
   customers: any[] = [];
   filteredCustomers: any[] = [];
+  displayedCustomers: any[] = [];
+  pageSize = 30;
+  currentPage = 1;
+  isLoadingMore = false;
   isLoading = false;
   isModalLoading = false;
   showSearch = false;
@@ -91,11 +95,39 @@ export class CustomersPage implements OnInit {
       next: (res) => {
         this.customers = Array.isArray(res) ? res : [];
         this.filteredCustomers = [...this.customers];
+        this.currentPage = 1;
+        this.displayedCustomers = this.filteredCustomers.slice(0, this.pageSize);
         this.isLoading = false;
         this.loadAllRelatedData();
       },
       error: () => { this.isLoading = false; this.showToastMsg('Failed to load customers'); }
     });
+  }
+
+  updateDisplayedCustomers() {
+    this.currentPage = 1;
+    this.displayedCustomers = this.filteredCustomers.slice(0, this.pageSize);
+  }
+
+  loadMore() {
+    if (this.displayedCustomers.length >= this.filteredCustomers.length) return;
+    this.isLoadingMore = true;
+    setTimeout(() => {
+      this.currentPage++;
+      this.displayedCustomers = this.filteredCustomers.slice(0, this.currentPage * this.pageSize);
+      this.isLoadingMore = false;
+      this.cdr.detectChanges();
+    }, 300);
+  }
+
+  onInfinite(event: any) {
+    if (this.displayedCustomers.length >= this.filteredCustomers.length) { event.target.complete(); return; }
+    this.currentPage++;
+    setTimeout(() => {
+      this.displayedCustomers = this.filteredCustomers.slice(0, this.currentPage * this.pageSize);
+      event.target.complete();
+      this.cdr.detectChanges();
+    }, 400);
   }
 
   loadAllRelatedData() {
@@ -401,16 +433,18 @@ export class CustomersPage implements OnInit {
       (c.phone || '').toLowerCase().includes(this.searchTerm.toLowerCase()) ||
       (c.email || '').toLowerCase().includes(this.searchTerm.toLowerCase())
     );
+    this.updateDisplayedCustomers();
   }
 
   setTab(tab: string) {
     this.activeTab = tab;
     this.filteredCustomers = tab === 'ALL' ? [...this.customers] : this.customers.filter(c => !c.category || c.category === 'DEFAULT');
+    this.updateDisplayedCustomers();
   }
 
   toggleSearch() {
     this.showSearch = !this.showSearch;
-    if (!this.showSearch) { this.searchTerm = ''; this.filteredCustomers = [...this.customers]; }
+    if (!this.showSearch) { this.searchTerm = ''; this.filteredCustomers = [...this.customers]; this.updateDisplayedCustomers(); }
   }
 
   openAddModal() {
@@ -422,7 +456,7 @@ export class CustomersPage implements OnInit {
       name: '', phone: '', email: '', address: '',
       code: '', term: 'Cash Sale', sequence: '', category: 'DEFAULT',
       description: '', processCompany: 'ALL COMPANY', taxStatus: 'Un-Defined',
-      taxDocNo: '', discount: null, requireDigitSign: false,
+    taxDocNo: '', discount: null, enableDiscount: true, requireDigitSign: false,
       totalCredit: 0.00,
       branchCode: '', branchName: '', branchAddress: '',
       branchPostcode: '', branchCity: '', branchState: '',
@@ -462,6 +496,7 @@ export class CustomersPage implements OnInit {
           taxStatus: fullCustomer.taxStatus || 'Un-Defined',
           taxDocNo: fullCustomer.taxDocNo || '',
           discount: fullCustomer.discountPercent || 0,
+          enableDiscount: fullCustomer.enableDiscount != null ? fullCustomer.enableDiscount : (fullCustomer.discountPercent > 0),
           requireDigitSign: fullCustomer.requireDigitSign || false,
           totalCredit: 0,
           branchCode: branch ? (branch.code || '') : '',
@@ -532,6 +567,7 @@ export class CustomersPage implements OnInit {
       taxStatus: this.form.taxStatus || 'Un-Defined',
       taxDocNo: this.form.taxDocNo || '',
       discountPercent: Number(this.form.discount) || 0,
+      enableDiscount: this.form.enableDiscount != null ? !!this.form.enableDiscount : true,
       requireDigitSign: this.form.requireDigitSign || false,
       phone: this.form.phone || '',
       email: this.form.email || '',

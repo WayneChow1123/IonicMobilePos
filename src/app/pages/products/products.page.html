@@ -1,35 +1,36 @@
 <ion-content [fullscreen]="true">
 
-  <div *ngIf="!showModal && !showAddStockModal" class="page-container">
-    <div class="top-bar">
-      <ion-button fill="clear" class="back-btn" (click)="goBack()">
-        <ion-icon name="chevron-back-outline"></ion-icon> Back
-      </ion-button>
-      <span class="page-title">Products</span>
-      <div class="top-right">
-        <ion-button fill="clear" class="icon-btn" (click)="toggleSearch()">
-          <ion-icon name="search-outline"></ion-icon>
+  <div *ngIf="!showModal && !showAddStockModal" class="page-container" style="display:flex;flex-direction:column;height:100%;">
+    <div class="sticky-header" style="position:sticky;top:0;z-index:10;background:#F0EBE3;padding:12px 16px 8px;margin:-16px -16px 12px;border-radius:0;flex-shrink:0;">
+      <div class="top-bar">
+        <ion-button fill="clear" class="back-btn" (click)="goBack()">
+          <ion-icon name="chevron-back-outline"></ion-icon> Back
         </ion-button>
-        <ion-button fill="clear" class="icon-btn" (click)="openAddModal()">
-          <ion-icon name="add-outline"></ion-icon>
-        </ion-button>
+        <span class="page-title">Products</span>
+        <div class="top-right">
+          <ion-button fill="clear" class="icon-btn" (click)="toggleSearch()">
+            <ion-icon name="search-outline"></ion-icon>
+          </ion-button>
+          <ion-button fill="clear" class="icon-btn" (click)="openAddModal()">
+            <ion-icon name="add-outline"></ion-icon>
+          </ion-button>
+        </div>
+      </div>
+      <div *ngIf="showSearch" style="margin:12px 0 8px;">
+        <ion-searchbar [(ngModel)]="searchTerm" (ionInput)="filterProducts()" placeholder="Search products..." style="--background:#fff;--border-radius:16px;--box-shadow:none;padding:0;"></ion-searchbar>
+      </div>
+      <div class="tab-row" style="overflow-x:auto;white-space:nowrap;scrollbar-width:none;-webkit-overflow-scrolling:touch;">
+        <button *ngFor="let tab of categoryTabs" [class.tab-active]="activeTab===tab" class="tab-btn" (click)="setTab(tab)">{{ tab }}</button>
       </div>
     </div>
-
-    <div *ngIf="showSearch" style="margin-bottom:12px;">
-      <ion-searchbar [(ngModel)]="searchTerm" (ionInput)="filterProducts()" placeholder="Search products..." style="--background:#fff;--border-radius:16px;--box-shadow:none;padding:0;"></ion-searchbar>
-    </div>
-
-    <div class="tab-row" style="overflow-x:auto;white-space:nowrap;scrollbar-width:none;-webkit-overflow-scrolling:touch;">
-      <button *ngFor="let tab of categoryTabs" [class.tab-active]="activeTab===tab" class="tab-btn" (click)="setTab(tab)">{{ tab }}</button>
-    </div>
+    <div class="scroll-content" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:20px;">
 
     <div *ngIf="isLoading" style="display:flex;justify-content:center;padding:60px;">
       <ion-spinner name="crescent"></ion-spinner>
     </div>
 
     <div *ngIf="!isLoading">
-      <div *ngFor="let product of filteredProducts" class="product-card" [class.inactive]="product.isActive === false">
+      <div *ngFor="let product of displayedProducts" class="product-card" [class.inactive]="product.isActive === false">
         <div class="product-main" (click)="openEditModal(product)">
           <div class="product-left">
             <div class="product-icon" [class.out-of-stock]="product.stock === 0">
@@ -79,6 +80,14 @@
         <p>No products found</p>
         <button class="save-btn" (click)="openAddModal()">Add Product</button>
       </div>
+      <div *ngIf="displayedProducts.length < filteredProducts.length" style="display:flex;justify-content:center;padding:16px;">
+        <ion-spinner *ngIf="isLoadingMore" name="crescent"></ion-spinner>
+        <ion-button *ngIf="!isLoadingMore" fill="clear" (click)="loadMore()" style="--color:#5c85d6;font-weight:700;">Load more ({{ displayedProducts.length }}/{{ filteredProducts.length }})</ion-button>
+      </div>
+      <ion-infinite-scroll threshold="150px" (ionInfinite)="onInfinite($event)" *ngIf="displayedProducts.length < filteredProducts.length">
+        <ion-infinite-scroll-content loadingSpinner="crescent" loadingText="Loading more products..."></ion-infinite-scroll-content>
+      </ion-infinite-scroll>
+    </div>
     </div>
   </div>
 
@@ -116,9 +125,8 @@
 
   <!-- ADD / EDIT PRODUCT PAGE -->
   <div *ngIf="showModal" class="pd-container">
-
     <!-- Top Bar -->
-    <div class="pd-top-bar">
+    <div class="pd-top-bar" style="position:sticky;top:0;z-index:10;background:#F0EBE3;padding:12px 20px;margin:-16px -20px 12px;">
       <ion-button fill="clear" class="pd-back-btn" (click)="closeModal()">
         <ion-icon name="chevron-back-outline"></ion-icon>
       </ion-button>

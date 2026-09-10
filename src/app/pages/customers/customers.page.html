@@ -1,38 +1,38 @@
 <ion-content [fullscreen]="true">
 
   <!-- LIST VIEW -->
-  <div *ngIf="!showModal" class="page-container">
-    <div class="top-bar">
-      <ion-button fill="clear" class="back-btn" (click)="goBack()">
-        <ion-icon name="chevron-back-outline"></ion-icon> Back
-      </ion-button>
-      <span class="page-title">Customers</span>
-      <div class="top-right">
-        <ion-button fill="clear" class="icon-btn" (click)="toggleSearch()">
-          <ion-icon name="search-outline"></ion-icon>
+  <div *ngIf="!showModal" class="page-container" style="display:flex;flex-direction:column;height:100%;">
+    <div class="sticky-header" style="position:sticky;top:0;z-index:10;background:#F0EBE3;padding:12px 16px 8px;margin:-16px -16px 12px;flex-shrink:0;">
+      <div class="top-bar">
+        <ion-button fill="clear" class="back-btn" (click)="goBack()">
+          <ion-icon name="chevron-back-outline"></ion-icon> Back
         </ion-button>
-        <ion-button fill="clear" class="icon-btn" (click)="openAddModal()">
-          <ion-icon name="add-outline"></ion-icon>
-        </ion-button>
+        <span class="page-title">Customers</span>
+        <div class="top-right">
+          <ion-button fill="clear" class="icon-btn" (click)="toggleSearch()">
+            <ion-icon name="search-outline"></ion-icon>
+          </ion-button>
+          <ion-button fill="clear" class="icon-btn" (click)="openAddModal()">
+            <ion-icon name="add-outline"></ion-icon>
+          </ion-button>
+        </div>
       </div>
-    </div>
-
-    <div *ngIf="showSearch" style="margin-bottom:12px;">
-      <ion-searchbar [(ngModel)]="searchTerm" (ionInput)="filterCustomers()" placeholder="Search customers..."
-        style="--background:#fff;--border-radius:16px;--box-shadow:none;padding:0;"></ion-searchbar>
-    </div>
-
-    <div class="tab-row">
+      <div *ngIf="showSearch" style="margin:12px 0 8px;">
+        <ion-searchbar [(ngModel)]="searchTerm" (ionInput)="filterCustomers()" placeholder="Search customers..."
+          style="--background:#fff;--border-radius:16px;--box-shadow:none;padding:0;"></ion-searchbar>
+      </div>
+      <div class="tab-row">
       <button [class.tab-active]="activeTab==='ALL'" class="tab-btn" (click)="setTab('ALL')">ALL</button>
 
     </div>
-
+    </div>
+    <div class="scroll-content" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:20px;">
     <div *ngIf="isLoading" style="display:flex;justify-content:center;padding:60px;">
       <ion-spinner name="crescent"></ion-spinner>
     </div>
 
     <div *ngIf="!isLoading">
-      <div *ngFor="let customer of filteredCustomers" class="list-item">
+      <div *ngFor="let customer of displayedCustomers" class="list-item">
         <div class="item-info" (click)="openEditModal(customer)">
           <div class="item-avatar"><ion-icon name="person-outline"></ion-icon></div>
           <div>
@@ -56,16 +56,36 @@
         </div>
       </div>
 
+      <div *ngIf="displayedCustomers.length < filteredCustomers.length" style="display:flex;justify-content:center;padding:16px;">
+        <ion-spinner *ngIf="isLoadingMore" name="crescent"></ion-spinner>
+        <ion-button *ngIf="!isLoadingMore" fill="clear" (click)="loadMore()" style="--color:#5c85d6;font-weight:700;">Load more ({{ displayedCustomers.length }}/{{ filteredCustomers.length }})</ion-button>
+      </div>
+      <ion-infinite-scroll threshold="150px" (ionInfinite)="onInfinite($event)" *ngIf="displayedCustomers.length < filteredCustomers.length">
+        <ion-infinite-scroll-content loadingSpinner="crescent" loadingText="Loading more customers..."></ion-infinite-scroll-content>
+      </ion-infinite-scroll>
       <div *ngIf="filteredCustomers.length===0" class="empty-state">
         <ion-icon name="people-outline"></ion-icon>
         <p>No customers found</p>
         <button class="save-btn" (click)="openAddModal()">Add Customer</button>
       </div>
     </div>
+    </div>
   </div>
 
   <!-- CUSTOMER DETAIL REDESIGN (With Fixed Footer) -->
   <div *ngIf="showModal" class="cd-container">
+
+    <!-- Top Bar fixed outside scroll -->
+    <div class="cd-top-bar" style="flex-shrink:0;background:#F0EBE3;padding:12px 20px;z-index:10;">
+      <ion-button fill="clear" class="cd-back-btn" (click)="closeModal()">
+        <ion-icon name="chevron-back-outline"></ion-icon>
+      </ion-button>
+      <span class="cd-title">{{ activeSubTab === 'BRANCHES' ? 'BRANCHES' :(activeSubTab === 'PRICE' ? 'SPECIAL PRICE' : 'CUSTOMER DETAILS') }}</span>
+      <ion-button fill="clear" class="cd-icon-btn" (click)="toggleEditMode()">
+        <ion-icon [name]="isEditMode ? 'save-outline' : 'settings-outline'"></ion-icon>
+        {{ isEditMode ? 'SAVE' : 'EDIT' }}
+      </ion-button>
+    </div>
 
     <div class="cd-content">
 
@@ -77,25 +97,6 @@
       </div>
 
       <div *ngIf="!isModalLoading">
-        <!-- Top Bar -->
-        <div class="cd-top-bar">
-          <ion-button fill="clear" class="cd-back-btn" (click)="closeModal()">
-            <ion-icon name="chevron-back-outline"></ion-icon>
-          </ion-button>
-          <span class="cd-title">{{ activeSubTab === 'BRANCHES' ? 'BRANCHES' :(activeSubTab === 'PRICE' ? 'SPECIAL
-            PRICE' : 'CUSTOMER DETAILS') }}</span>
-          <div class="cd-top-right">
-            <ion-button fill="clear" class="cd-icon-btn" (click)="toggleEditMode()">
-              <ion-icon [name]="isEditMode ? 'save-outline' : 'settings-outline'"></ion-icon>
-              {{ isEditMode ? 'SAVE' : 'EDIT' }}
-            </ion-button>
-            <ion-button fill="clear" class="cd-icon-btn delete-btn" (click)="confirmDelete(selectedCustomer)"
-              *ngIf="isEditing">
-              <ion-icon name="close-outline"></ion-icon>
-              DELETE
-            </ion-button>
-          </div>
-        </div>
 
         <!-- Code Row -->
         <div class="cd-code-row" *ngIf="isEditing">
@@ -166,12 +167,23 @@
           <div class="cd-card cd-card-white">
             <div class="cd-info-row">
               <div class="cd-info-label">
+                <div class="cd-icon-box"><ion-icon name="pricetag-outline"></ion-icon></div>
+                ENABLE DISCOUNT
+              </div>
+              <label class="cd-toggle">
+                <input type="checkbox" [(ngModel)]="form.enableDiscount" [disabled]="!isEditMode">
+                <span class="cd-toggle-slider"></span>
+              </label>
+            </div>
+            <div class="cd-divider"></div>
+            <div class="cd-info-row">
+              <div class="cd-info-label">
                 <div class="cd-icon-box"><ion-icon name="cash-outline"></ion-icon></div>
                 DISCOUNT
               </div>
-              <div class="cd-percentage" *ngIf="!isEditMode">{{ form.discount }}%</div>
-              <div class="cd-edit-input-box" *ngIf="isEditMode">
-                <input type="number" [(ngModel)]="form.discount" class="cd-small-input" placeholder="0">
+              <div class="cd-percentage" *ngIf="!isEditMode">{{ form.enableDiscount ? (form.discount || 0) + '%' : 'OFF' }}</div>
+              <div class="cd-edit-input-box" *ngIf="isEditMode" [style.opacity]="form.enableDiscount ? '1' : '0.4'">
+                <input type="number" [(ngModel)]="form.discount" class="cd-small-input" placeholder="0" [disabled]="!form.enableDiscount">
                 <span class="cd-unit">%</span>
               </div>
             </div>

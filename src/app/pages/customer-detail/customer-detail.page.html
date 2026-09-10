@@ -2,11 +2,12 @@
 
   <!-- CUSTOMER LIST -->
   <div *ngIf="!showInvoiceList" class="page-container">
-    <div class="top-bar">
-      <ion-button fill="clear" class="back-btn" (click)="goBack()">
-        <ion-icon name="chevron-back-outline"></ion-icon> Back
+    <div class="top-bar" style="position:sticky;top:0;z-index:10;background:#F0EBE3;padding:12px 16px;margin:-16px -16px 12px;display:flex;align-items:center;justify-content:space-between;gap:8px;">
+      <ion-button fill="clear" class="back-btn" (click)="goBack()" style="margin:0;--padding-start:6px;--padding-end:6px;">
+        <ion-icon name="chevron-back-outline" style="font-size:20px;"></ion-icon> Back
       </ion-button>
-      <span class="page-title">Customer Category</span>
+      <span class="page-title" style="flex:1;text-align:center;font-weight:700;">Customer Category</span>
+      <span style="width:60px;"></span>
     </div>
 
     <div *ngIf="isLoading" style="display:flex;justify-content:center;padding:60px;">
@@ -53,11 +54,12 @@
 
   <!-- CUSTOMER INVOICE LIST -->
   <div *ngIf="showInvoiceList" class="page-container">
-    <div class="top-bar">
-      <ion-button fill="clear" class="back-btn" (click)="closeInvoiceList()">
+    <div class="top-bar" style="position:sticky;top:0;z-index:10;background:#F0EBE3;padding:12px 16px;margin:-16px -16px 12px;display:flex;align-items:center;justify-content:space-between;gap:8px;">
+      <ion-button fill="clear" class="back-btn" (click)="closeInvoiceList()" style="margin:0;">
         <ion-icon name="chevron-back-outline"></ion-icon> Back
       </ion-button>
-      <span class="page-title">{{ selectedCustomer?.name }}</span>
+      <span class="page-title" style="flex:1;text-align:center;font-weight:700;">{{ selectedCustomer?.name }}</span>
+      <span style="width:60px;"></span>
     </div>
 
     <div class="summary-card">

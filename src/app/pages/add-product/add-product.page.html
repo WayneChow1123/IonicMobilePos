@@ -1,11 +1,11 @@
 ﻿<ion-content [fullscreen]="true">
 
   <div *ngIf="!showModal" class="page-container">
-    <div class="top-bar">
+    <div class="top-bar" style="position:sticky;top:0;z-index:10;background:#F0EBE3;padding:12px 16px;margin:-16px -16px 12px;">
       <ion-button fill="clear" class="back-btn" (click)="goBack()">
         <ion-icon name="chevron-back-outline"></ion-icon> Back
       </ion-button>
-      <span class="page-title">Item Group</span>
+      <span class="page-title" style="flex:1;text-align:center;">Item Group</span>
       <ion-button fill="clear" class="icon-btn" (click)="openAddModal()">
         <ion-icon name="add-outline"></ion-icon>
       </ion-button>
@@ -44,11 +44,11 @@
 
   <!-- ADD/EDIT FORM -->
   <div *ngIf="showModal" class="page-container">
-    <div class="top-bar">
+    <div class="top-bar" style="position:sticky;top:0;z-index:10;background:#F0EBE3;padding:12px 16px;margin:-16px -16px 12px;">
       <ion-button fill="clear" class="back-btn" (click)="closeModal()">
         <ion-icon name="chevron-back-outline"></ion-icon> Back
       </ion-button>
-      <span class="page-title">{{ isEditing ? 'Edit Category' : 'Add Category' }}</span>
+      <span class="page-title" style="flex:1;text-align:center;">{{ isEditing ? 'Edit Category' : 'Add Category' }}</span>
       <ion-button fill="clear" class="icon-btn" (click)="saveCategory()">
         <ion-icon name="save-outline"></ion-icon>
       </ion-button>

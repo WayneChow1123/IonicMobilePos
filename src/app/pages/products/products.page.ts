@@ -17,6 +17,10 @@ import { ApiService } from '../../services/api.service';
 export class ProductsPage implements OnInit {
   products: any[] = [];
   filteredProducts: any[] = [];
+  displayedProducts: any[] = [];
+  pageSize = 30;
+  currentPage = 1;
+  isLoadingMore = false;
   categories: any[] = [];
   categoryTabs: string[] = ['ALL', 'DEFAULT'];
   isLoading = false;
@@ -78,6 +82,32 @@ export class ProductsPage implements OnInit {
       );
     }
     this.filteredProducts = filtered;
+    this.currentPage = 1;
+    this.displayedProducts = this.filteredProducts.slice(0, this.pageSize);
+  }
+
+  loadMore() {
+    if (this.displayedProducts.length >= this.filteredProducts.length) return;
+    this.isLoadingMore = true;
+    setTimeout(() => {
+      this.currentPage++;
+      this.displayedProducts = this.filteredProducts.slice(0, this.currentPage * this.pageSize);
+      this.isLoadingMore = false;
+      this.cdr.detectChanges();
+    }, 300);
+  }
+
+  onInfinite(event: any) {
+    if (this.displayedProducts.length >= this.filteredProducts.length) {
+      event.target.complete();
+      return;
+    }
+    this.currentPage++;
+    setTimeout(() => {
+      this.displayedProducts = this.filteredProducts.slice(0, this.currentPage * this.pageSize);
+      event.target.complete();
+      this.cdr.detectChanges();
+    }, 400);
   }
 
   setTab(tab: string) { this.activeTab = tab; this.filterProducts(); }

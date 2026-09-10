@@ -1360,6 +1360,9 @@ ion-content {
   font-weight: 700;
 }
 
+.ni-unit-input::placeholder { color: #aaa; opacity: 1; }
+.ni-unit-input { color: #1a1a1a; }
+.ni-qty-input::placeholder { color: #aaa; opacity: 1; }
 .ni-unit-val {
   color: #1a1a1a;
   font-size: 13px;

@@ -58,6 +58,10 @@ export class BillingPage implements OnInit {
   toastMessage = '';
   selectedPayment: any = null;
   selectedCN: any = null;
+  selectedCNDetail: any = null;
+  showCNPreview = false;
+  showCNActionsDropdown = false;
+  isCNLoading = false;
   selectedInvoiceDetail: any = null;
   selectedCNInvoiceDetail: any = null;
   customerProductPrices: any[] = [];
@@ -120,8 +124,9 @@ export class BillingPage implements OnInit {
 
   getSelectedCustomerDiscount(): number {
     if (!this.cnForm.customerId) return 0;
-    const customer = this.customers.find((c: any) => c.id == this.cnForm.customerId);
-    return customer ? (customer.discountPercent || customer.discount || 0) : 0;
+    const customer: any = this.customers.find((c: any) => c.id == this.cnForm.customerId);
+    if (customer && (customer.enableDiscount === false || customer.EnableDiscount === false)) return 0;
+    return customer ? (customer.discountPercent || customer.discount || customer.DiscountPercent || 0) : 0;
   }
 
   getDiscountedPrice(price: number): number {
@@ -237,7 +242,7 @@ export class BillingPage implements OnInit {
     private cdr: ChangeDetectorRef, 
     private alertService: AlertService,
     private appComponent: AppComponent,
-    private btPrint: BluetoothPrintService
+    public btPrint: BluetoothPrintService
   ) {}
 
   ionViewWillLeave() {
@@ -872,8 +877,6 @@ export class BillingPage implements OnInit {
       }
     }
     
-    // if (!this.cnForm.reason) { this.showToastMsg('Please enter reason'); return; }
-    
     const itemsToReturn = this.cnForm.items.filter((i: any) => i.returnQuantity > 0);
     if (itemsToReturn.length === 0) {
       this.showToastMsg('Please select at least one item to return');
@@ -893,22 +896,22 @@ export class BillingPage implements OnInit {
       returnToStock: i.returnToStock
     }));
 
-    const payload = { reason: this.cnForm.reason || '', items: payloadItems };
+    const payload = { reason: (this.cnForm.reason?.trim() ?? ''), items: payloadItems };
 
     // ✅ 智能切换：如果列表里有来自“历史记录”的商品，或者根本没选发票，就走全局接口
     const hasGlobalItems = itemsToReturn.some((i: any) => i.isGlobal);
     const useGlobalMode = !this.cnForm.invoiceId || this.cnForm.invoiceId == 0 || hasGlobalItems;
 
+    console.log('[CN DEBUG] payload', payload, 'invoiceId', this.cnForm.invoiceId);
     if (!useGlobalMode) {
-      // 纯单号模式：所有商品都来自当前选中的发票
       this.api.createCreditNote(Number(this.cnForm.invoiceId), payload).subscribe({
         next: () => { this.showToastMsg('Credit Note created!'); this.openCNList(); },
-        error: (err: any) => this.showToastMsg('Failed: ' + (err.error?.message || err.error || err.message || 'error'))
+        error: (err: any) => { console.error('[CN ERROR]', err); const detail = typeof err.error === 'string' ? err.error : JSON.stringify(err.error); this.showToastMsg('Failed: ' + (err.error?.message || detail || err.message || 'error')); }
       });
     } else {
       // 智能全局模式：支持跨单退货
       const payloadGlobal = { 
-        reason: this.cnForm.reason || '', 
+        reason: (this.cnForm.reason?.trim() ?? ''), 
         items: payloadItems, 
         isManual: true,
         preferredInvoiceId: this.cnForm.invoiceId && this.cnForm.invoiceId != 0 ? Number(this.cnForm.invoiceId) : null
@@ -938,11 +941,75 @@ export class BillingPage implements OnInit {
     this.alertService.confirm('Delete Credit Note', 'Are you sure?').then(c => { if(c) this.deleteCreditNote(); });
   }
   deleteCreditNote() {
-    if (!this.selectedCN) return;
-    this.api.deleteCreditNote(Number(this.selectedCN.invoiceId), Number(this.selectedCN.id)).subscribe({
-      next: () => { this.showToastMsg('Credit Note deleted!'); this.loadCreditNotes(); },
+    const target = this.selectedCNDetail || this.selectedCN;
+    if (!target) return;
+    this.api.deleteCreditNote(Number(target.invoiceId), Number(target.id)).subscribe({
+      next: () => { this.showToastMsg('Credit Note deleted!'); this.showCNActionsDropdown = false; if (this.currentView === 'cnDetails') this.openCNList(); else this.loadCreditNotes(); },
       error: (err: any) => this.showToastMsg('Failed: ' + (err.error || err.message || 'error'))
     });
+  }
+
+  viewCNDetails(cn: any) {
+    this.isCNLoading = true;
+    this.selectedCNDetail = cn;
+    this.currentView = 'cnDetails';
+    this.showCNActionsDropdown = false;
+    if (!this.allProducts || this.allProducts.length === 0) {
+      this.api.getProducts().subscribe({ next: (res: any) => { this.allProducts = res || []; } });
+    }
+    this.api.getCreditNoteById(Number(cn.invoiceId), Number(cn.id)).subscribe({
+      next: (res: any) => {
+        const fetchedItems = res.Items || res.items || res.data?.Items || res.data?.items || [];
+        const mergedItems = fetchedItems.length ? fetchedItems : (cn.Items || cn.items || []);
+        const normalized = mergedItems.map((it: any) => ({
+          ...it,
+          productName: it.productName || it.ProductName || it.Name || it.name || it.product_name || '',
+          productId: it.productId ?? it.ProductId,
+          quantity: it.quantity ?? it.Quantity,
+          unitPrice: it.unitPrice ?? it.UnitPrice
+        }));
+        this.selectedCNDetail = { ...cn, ...res, Items: normalized, items: normalized };
+        this.isCNLoading = false;
+      },
+      error: () => { this.isCNLoading = false; }
+    });
+  }
+
+  closeCNDetails() { this.currentView = 'cnList'; this.showCNActionsDropdown = false; this.showCNPreview = false; }
+
+  getCNStatusForDetail(): string {
+    const cn = this.selectedCNDetail;
+    if (!cn) return '';
+    if (cn.isUsed) return 'Credit Used';
+    if (cn.createdAfterPayment) return 'Credit Active';
+    return 'Debt Offset';
+  }
+
+  getCNItemName(item: any): string {
+    if (item.productName || item.ProductName || item.Name || item.name) return item.productName || item.ProductName || item.Name || item.name;
+    if (!this.allProducts || this.allProducts.length === 0) return 'Product #' + (item.productId ?? item.ProductId);
+    const pid = item.productId ?? item.ProductId;
+    const p = this.allProducts.find((x: any) => x.id == pid);
+    return p ? p.name : 'Product #' + pid;
+  }
+
+  printCNDetails() {
+    const cn = this.selectedCNDetail;
+    if (!cn) return;
+    this.loadPrinterSettings();
+    if (this.printerSettings?.printerInterface === 'Bluetooth' && this.btPrint.isAvailable()) {
+      this.btPrint.printCreditNote(cn, this.printerSettings, this.customers, this.allProducts);
+      return;
+    }
+    this.showCNPreview = true;
+  }
+
+  printCNFromPreview() {
+    const cn = this.selectedCNDetail;
+    if (!cn) return;
+    const printWindow = (document.getElementById('cn-print-iframe') as HTMLIFrameElement)?.contentWindow;
+    if (!printWindow) { this.showToastMsg('Failed to initialize print iframe'); return; }
+    setTimeout(() => printWindow.print(), 500);
   }
 
   noLeadingZero(event: KeyboardEvent, val: any) {

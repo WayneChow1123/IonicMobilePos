@@ -19,6 +19,10 @@ import { BluetoothPrintService } from '../../services/bluetooth-print.service';
 export class InvoicesPage implements OnInit {
   invoices: any[] = [];
   filteredInvoices: any[] = [];
+  displayedInvoices: any[] = [];
+  pageSize = 30;
+  currentPage = 1;
+  isLoadingMore = false;
   customers: any[] = [];
   products: any[] = [];
   allProducts: any[] = [];
@@ -57,12 +61,16 @@ export class InvoicesPage implements OnInit {
   showCheckPreview = false;
   previewData: any = null;
   form: any = { customerId: 0, invoiceDate: this.getMYSDate(), remark: '', useCreditBalance: false, items: [] };
-  editForm: any = { invoiceDate: this.getMYSDate(), remark: '', items: [{ productId: 0, quantity: 1, unitPrice: 0 }] };
+  editForm: any = { invoiceDate: this.getMYSDate(), remark: '', items: [{ productId: 0, quantity: null, unitPrice: null }] };
   showStockAlert = false;
   stockIssues: any[] = [];
   showAvailableCredits = true;
   showInvoiceRemark = false;
   showActionsDropdown = false;
+
+  showEditItemModal = false;
+  editItemForm: any = { quantity: null, unitPrice: null, remark: '' };
+  editItemIndex: number = -1;
 
   // Edit Invoice Product Select Modal
   showEditProductSelectModal = false;
@@ -143,8 +151,11 @@ export class InvoicesPage implements OnInit {
   
   getGrandNetTotal() {
     return (this.filteredInvoices || [])
-      .filter(inv => inv.status === 'Paid')
-      .reduce((sum, inv) => sum + (inv.netTotal || inv.NetTotal || inv.totalAmount || 0), 0);
+      .filter(inv => inv.status === 'Paid' || inv.status === 'Partial')
+      .reduce((sum, inv) => {
+        const net = inv.netTotal ?? inv.NetTotal ?? inv.totalAmount ?? 0;
+        return sum + (Number(net) || 0);
+      }, 0);
   }
 
   getGrandTotalBills() {
@@ -212,7 +223,7 @@ export class InvoicesPage implements OnInit {
   loadInvoices() {
     this.isLoading = true;
     this.api.getInvoices().subscribe({
-      next: (res) => { this.invoices = Array.isArray(res) ? res : []; this.filteredInvoices = [...this.invoices]; this.isLoading = false; },
+      next: (res) => { this.invoices = Array.isArray(res) ? res : []; this.filteredInvoices = [...this.invoices]; this.currentPage = 1; this.displayedInvoices = this.filteredInvoices.slice(0, this.pageSize); this.isLoading = false; },
       error: () => { this.isLoading = false; this.showToastMsg('Failed to load invoices'); }
     });
   }
@@ -253,7 +264,7 @@ export class InvoicesPage implements OnInit {
 
   toggleSearch() {
     this.showSearch = !this.showSearch;
-    if (!this.showSearch) { this.searchTerm = ''; this.filteredInvoices = [...this.invoices]; }
+    if (!this.showSearch) { this.searchTerm = ''; this.filteredInvoices = [...this.invoices]; this.currentPage = 1; this.displayedInvoices = this.filteredInvoices.slice(0, this.pageSize); }
   }
 
   filterInvoices() {
@@ -290,6 +301,29 @@ export class InvoicesPage implements OnInit {
 
       return matchesDate;
     });
+    this.currentPage = 1;
+    this.displayedInvoices = this.filteredInvoices.slice(0, this.pageSize);
+  }
+
+  loadMoreInvoices() {
+    if (this.displayedInvoices.length >= this.filteredInvoices.length) return;
+    this.isLoadingMore = true;
+    setTimeout(() => {
+      this.currentPage++;
+      this.displayedInvoices = this.filteredInvoices.slice(0, this.currentPage * this.pageSize);
+      this.isLoadingMore = false;
+      this.cdr.detectChanges();
+    }, 300);
+  }
+
+  onInfiniteInvoices(event: any) {
+    if (this.displayedInvoices.length >= this.filteredInvoices.length) { event.target.complete(); return; }
+    this.currentPage++;
+    setTimeout(() => {
+      this.displayedInvoices = this.filteredInvoices.slice(0, this.currentPage * this.pageSize);
+      event.target.complete();
+      this.cdr.detectChanges();
+    }, 400);
   }
 
   clearDateFilter() {
@@ -348,7 +382,11 @@ export class InvoicesPage implements OnInit {
       next: (res) => {
         this.customerProductPrices = Array.isArray(res) ? res : [];
         this.loadedCustomerId = customerId;
-        this.applyCustomerDiscount();
+        // Edit模式(Invoice Details)不要整批覆蓋 editForm.items，
+        // 否則剛從DB讀回來 / 剛手改好的 unitPrice 會被原價*折扣洗掉
+        if (!this.isEditing) {
+          this.applyCustomerDiscount();
+        }
       },
       error: () => {
         this.customerProductPrices = [];
@@ -436,7 +474,7 @@ export class InvoicesPage implements OnInit {
         productId: product.id,
         productName: product.name,
         unitPrice: finalPrice,
-        quantity: 1,
+        quantity: null,
         remark: '',
         barcode: product.barcode || ''
       };
@@ -453,6 +491,9 @@ export class InvoicesPage implements OnInit {
     const specialPrice = this.customerProductPrices.find(p => p.productId == product.id);
     const basePrice = specialPrice ? specialPrice.specialPrice : product.price;
     item.unitPrice = basePrice * (1 - (discount / 100));
+  }
+
+  onUnitPriceChange(item: any) {
   }
 
   getCustomerCreditBalance(): number {
@@ -506,12 +547,12 @@ export class InvoicesPage implements OnInit {
             ? (res.items || res.Items).map((i: any) => ({
               productId: i.productId ?? i.ProductId ?? 0,
               quantity: i.quantity ?? i.Quantity ?? 1,
-              unitPrice: i.unitPrice ?? i.UnitPrice ?? 0,
+              unitPrice: i.unitPrice ?? i.UnitPrice ?? null,
               productName: i.productName ?? i.ProductName ?? '',
               returnedQuantity: i.returnedQuantity ?? i.ReturnedQuantity ?? 0,
               remark: i.remark ?? i.Remark ?? ''
             }))
-            : [{ productId: this.products.length > 0 ? this.products[0].id : 0, quantity: 1, unitPrice: 0, productName: '', returnedQuantity: 0 }]
+            : [{ productId: this.products.length > 0 ? this.products[0].id : 0, quantity: 1, unitPrice: null, productName: '', returnedQuantity: 0 }]
         };
         this.showModal = true;
       },
@@ -593,9 +634,9 @@ export class InvoicesPage implements OnInit {
   addItem() {
     if (this.isEditing) {
       const defaultProduct = this.products.length > 0 ? this.products[0] : null;
-      this.editForm.items.push({ productId: defaultProduct?.id || 0, quantity: 1, unitPrice: defaultProduct?.price || 0 });
+      this.editForm.items.push({ productId: defaultProduct?.id || 0, quantity: null, unitPrice: defaultProduct?.price ?? null });
     } else {
-      this.form.items.push({ productId: this.products.length > 0 ? this.products[0].id : 0, quantity: 1 });
+      this.form.items.push({ productId: this.products.length > 0 ? this.products[0].id : 0, quantity: null, unitPrice: null });
     }
   }
 
@@ -605,6 +646,49 @@ export class InvoicesPage implements OnInit {
     } else {
       this.form.items.splice(index, 1);
     }
+  }
+
+  openEditItemModal(index: number) {
+    const item = this.editForm.items[index];
+    if (!item) return;
+    this.editItemIndex = index;
+    this.editItemForm = { productId: item.productId, quantity: item.quantity, unitPrice: item.unitPrice, remark: item.remark || '' };
+    this.showEditItemModal = true;
+    this.cdr.detectChanges();
+  }
+
+  closeEditItemModal() {
+    this.showEditItemModal = false;
+    this.editItemIndex = -1;
+    this.cdr.detectChanges();
+  }
+
+  saveEditItem() {
+    if (this.editItemIndex < 0 || !this.editForm.items[this.editItemIndex]) return;
+    const target = this.editForm.items[this.editItemIndex];
+    target.productId = this.editItemForm.productId ?? target.productId;
+    target.quantity = Number(this.editItemForm.quantity);
+    target.unitPrice = Number(this.editItemForm.unitPrice);
+    target.remark = this.editItemForm.remark ?? '';
+    target.productName = this.getProductName(target.productId);
+    this.editForm.items = [...this.editForm.items];
+    this.closeEditItemModal();
+    this.cdr.detectChanges();
+  }
+
+  saveEditItemAndUpdate() {
+    this.saveEditItem();
+    setTimeout(() => this.saveInvoice(), 300);
+  }
+
+  openProductPickerFromEditModal() {
+    this.editingItemIndex = this.editItemIndex;
+    this.productModalSearchText = '';
+    const pid = this.editItemForm.productId;
+    this.selectedTempProduct = this.products.find(p => p.id == pid) || null;
+    this.onProductModalSearch();
+    this.showEditProductSelectModal = true;
+    this.cdr.detectChanges();
   }
 
   // =========================
@@ -632,11 +716,20 @@ export class InvoicesPage implements OnInit {
   }
 
   confirmEditProductSelection() {
-    if (this.selectedTempProduct && this.editingItemIndex >= 0 && this.editForm.items[this.editingItemIndex]) {
-      const item = this.editForm.items[this.editingItemIndex];
-      item.productId = this.selectedTempProduct.id;
-      item.productName = this.selectedTempProduct.name;
-      this.onProductChange(item);
+    if (this.selectedTempProduct) {
+      if (this.showEditItemModal && this.editItemIndex >= 0) {
+        this.editItemForm.productId = this.selectedTempProduct.id;
+        // 跟 onProductChange 一致：特價優先，其次原價，再套客戶折扣，不要直接用原價蓋掉
+        const discount = this.selectedCustomerDetail?.discountPercent || this.selectedCustomerDetail?.discount || 0;
+        const special = this.customerProductPrices.find((p: any) => p.productId == this.selectedTempProduct.id);
+        const basePrice = special ? special.specialPrice : this.selectedTempProduct.price;
+        this.editItemForm.unitPrice = basePrice * (1 - (discount / 100));
+      } else if (this.editingItemIndex >= 0 && this.editForm.items[this.editingItemIndex]) {
+        const item = this.editForm.items[this.editingItemIndex];
+        item.productId = this.selectedTempProduct.id;
+        item.productName = this.selectedTempProduct.name;
+        this.onProductChange(item);
+      }
     }
     this.showEditProductSelectModal = false;
     this.editingItemIndex = -1;
@@ -746,9 +839,32 @@ export class InvoicesPage implements OnInit {
       }
     }
     if (this.isEditing && this.selectedInvoice) {
-      if (this.selectedInvoice.status === 'Paid') { this.showToastMsg('Invoice is fully paid and cannot be modified'); return; }
+      console.log('Update payload', JSON.stringify(this.editForm));
       this.api.updateInvoice(this.selectedInvoice.id, this.editForm).subscribe({
-        next: () => { this.showToastMsg('Invoice updated!'); this.closeModal(); this.loadInvoices(); this.loadCustomers(); },
+        next: () => {
+          this.showToastMsg('Invoice updated!');
+          this.isEditMode = false;
+          this.showEditItemModal = false;
+          this.loadInvoices();
+          this.loadCustomers();
+          this.api.getInvoiceDetails(this.selectedInvoice.id).subscribe({
+            next: (res: any) => {
+              this.selectedInvoice = res;
+              this.editForm = {
+                invoiceDate: res.invoiceDate || this.getMYSDate(),
+                remark: res.remark || '',
+                items: (res.items || res.Items || []).map((i: any) => ({
+                  productId: i.productId ?? i.ProductId,
+                  quantity: i.quantity ?? i.Quantity,
+                  unitPrice: i.unitPrice ?? i.UnitPrice,
+                  productName: i.productName ?? i.ProductName ?? this.getProductName(i.productId ?? i.ProductId),
+                  remark: i.remark ?? i.Remark ?? ''
+                }))
+              };
+              this.cdr.detectChanges();
+            }
+          });
+        },
         error: (err: any) => this.handleInvoiceError(err)
       });
     } else {
@@ -793,12 +909,12 @@ export class InvoicesPage implements OnInit {
                     ? (invRes.items || invRes.Items).map((i: any) => ({
                       productId: i.productId ?? i.ProductId ?? 0,
                       quantity: i.quantity ?? i.Quantity ?? 1,
-                      unitPrice: i.unitPrice ?? i.UnitPrice ?? 0,
+                      unitPrice: i.unitPrice ?? i.UnitPrice ?? null,
                       productName: i.productName ?? i.ProductName ?? '',
                       returnedQuantity: i.returnedQuantity ?? i.ReturnedQuantity ?? 0,
                       remark: i.remark ?? i.Remark ?? ''
                     }))
-                    : [{ productId: this.products.length > 0 ? this.products[0].id : 0, quantity: 1, unitPrice: 0, productName: '', returnedQuantity: 0 }]
+                    : [{ productId: this.products.length > 0 ? this.products[0].id : 0, quantity: 1, unitPrice: null, productName: '', returnedQuantity: 0 }]
                 };
                 this.showModal = true;
 
@@ -1055,7 +1171,9 @@ export class InvoicesPage implements OnInit {
   }
 
   getCustomerDiscount(): number {
-    return this.selectedCustomerDetail?.discountPercent || this.selectedCustomerDetail?.discount || 0;
+    const c: any = this.selectedCustomerDetail;
+    if (c && (c.enableDiscount === false || c.EnableDiscount === false)) return 0;
+    return c?.discountPercent || c?.discount || c?.DiscountPercent || 0;
   }
 
   getOriginalUnitPrice(productId: any): number {
