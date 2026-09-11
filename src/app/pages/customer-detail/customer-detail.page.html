@@ -2,7 +2,7 @@
 
   <!-- CUSTOMER LIST -->
   <div *ngIf="!showInvoiceList" class="page-container">
-    <div class="top-bar" style="position:sticky;top:0;z-index:10;background:#F0EBE3;padding:12px 16px;margin:-16px -16px 12px;display:flex;align-items:center;justify-content:space-between;gap:8px;">
+    <div class="top-bar" style="position:sticky;top:0;z-index:10;background:#F0EBE3;padding:calc(max(env(safe-area-inset-top, 0px), 32px) + 12px) 16px 12px;margin:-16px -16px 12px;display:flex;align-items:center;justify-content:space-between;gap:8px;">
       <ion-button fill="clear" class="back-btn" (click)="goBack()" style="margin:0;--padding-start:6px;--padding-end:6px;">
         <ion-icon name="chevron-back-outline" style="font-size:20px;"></ion-icon> Back
       </ion-button>
@@ -54,7 +54,7 @@
 
   <!-- CUSTOMER INVOICE LIST -->
   <div *ngIf="showInvoiceList" class="page-container">
-    <div class="top-bar" style="position:sticky;top:0;z-index:10;background:#F0EBE3;padding:12px 16px;margin:-16px -16px 12px;display:flex;align-items:center;justify-content:space-between;gap:8px;">
+    <div class="top-bar" style="position:sticky;top:0;z-index:10;background:#F0EBE3;padding:calc(max(env(safe-area-inset-top, 0px), 32px) + 12px) 16px 12px;margin:-16px -16px 12px;display:flex;align-items:center;justify-content:space-between;gap:8px;">
       <ion-button fill="clear" class="back-btn" (click)="closeInvoiceList()" style="margin:0;">
         <ion-icon name="chevron-back-outline"></ion-icon> Back
       </ion-button>

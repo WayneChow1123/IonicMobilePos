@@ -461,25 +461,20 @@ export class InvoicesPage implements OnInit {
   }
 
   selectProduct(product: any) {
-    const existingItem = this.form.items.find((i: any) => i.productId == product.id);
-    if (existingItem) {
-      existingItem.quantity += 1;
-      this.showToastMsg('Increased quantity for ' + product.name);
-    } else {
-      const discount = this.selectedCustomerDetail?.discountPercent || this.selectedCustomerDetail?.discount || 0;
-      const specialPrice = this.customerProductPrices.find(p => p.productId == product.id);
-      const basePrice = specialPrice ? specialPrice.specialPrice : product.price;
-      const finalPrice = basePrice * (1 - (discount / 100));
-      const newItem = {
-        productId: product.id,
-        productName: product.name,
-        unitPrice: finalPrice,
-        quantity: null,
-        remark: '',
-        barcode: product.barcode || ''
-      };
-      this.form.items.push(newItem);
-    }
+    // 同產品重複選直接加新卡（數量空白、單價自動帶，不再數量+1）
+    const discount = this.selectedCustomerDetail?.discountPercent || this.selectedCustomerDetail?.discount || 0;
+    const specialPrice = this.customerProductPrices.find(p => p.productId == product.id);
+    const basePrice = specialPrice ? specialPrice.specialPrice : product.price;
+    const finalPrice = basePrice * (1 - (discount / 100));
+    const newItem = {
+      productId: product.id,
+      productName: product.name,
+      unitPrice: finalPrice,
+      quantity: null,
+      remark: '',
+      barcode: product.barcode || ''
+    };
+    this.form.items.push(newItem);
     this.showProductSelector = false;
   }
 
@@ -634,7 +629,7 @@ export class InvoicesPage implements OnInit {
   addItem() {
     if (this.isEditing) {
       const defaultProduct = this.products.length > 0 ? this.products[0] : null;
-      this.editForm.items.push({ productId: defaultProduct?.id || 0, quantity: null, unitPrice: defaultProduct?.price ?? null });
+      this.editForm.items.push({ productId: defaultProduct?.id || 0, productName: defaultProduct?.name || '', quantity: null, unitPrice: defaultProduct?.price ?? null, returnedQuantity: 0, remark: '' });
     } else {
       this.form.items.push({ productId: this.products.length > 0 ? this.products[0].id : 0, quantity: null, unitPrice: null });
     }

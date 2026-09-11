@@ -126,7 +126,7 @@
   <!-- ADD / EDIT PRODUCT PAGE -->
   <div *ngIf="showModal" class="pd-container">
     <!-- Top Bar -->
-    <div class="pd-top-bar" style="position:sticky;top:0;z-index:10;background:#F0EBE3;padding:12px 20px;margin:-16px -20px 12px;">
+    <div class="pd-top-bar" style="position:sticky;top:0;z-index:10;background:#F0EBE3;padding:calc(max(env(safe-area-inset-top, 0px), 32px) + 12px) 20px 12px;margin:-16px -20px 12px;">
       <ion-button fill="clear" class="pd-back-btn" (click)="closeModal()">
         <ion-icon name="chevron-back-outline"></ion-icon>
       </ion-button>

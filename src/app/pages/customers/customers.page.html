@@ -76,7 +76,7 @@
   <div *ngIf="showModal" class="cd-container">
 
     <!-- Top Bar fixed outside scroll -->
-    <div class="cd-top-bar" style="flex-shrink:0;background:#F0EBE3;padding:12px 20px;z-index:10;">
+    <div class="cd-top-bar" style="flex-shrink:0;background:#F0EBE3;padding:calc(max(env(safe-area-inset-top, 0px), 32px) + 12px) 20px 12px;z-index:10;">
       <ion-button fill="clear" class="cd-back-btn" (click)="closeModal()">
         <ion-icon name="chevron-back-outline"></ion-icon>
       </ion-button>
