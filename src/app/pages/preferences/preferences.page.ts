@@ -1,4 +1,4 @@
-﻿import { AlertService } from '../../services/alert.service';
+import { AlertService } from '../../services/alert.service';
 import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
 import { NavController } from '@ionic/angular';
 
@@ -64,6 +64,7 @@ export class PreferencesPage implements OnInit {
     if (this.searchTerm) {
       filtered = filtered.filter(inv =>
         (inv.invoiceNumber || '').toLowerCase().includes(this.searchTerm.toLowerCase()) ||
+        (inv.docNo || '').toLowerCase().includes(this.searchTerm.toLowerCase()) ||
         (inv.customerName || '').toLowerCase().includes(this.searchTerm.toLowerCase())
       );
     }
@@ -143,7 +144,7 @@ export class PreferencesPage implements OnInit {
           const netTotal = (inv.totalAmount || 0) - totalCN;
           const balance = netTotal - (inv.paidAmount || 0);
           return [
-            inv.invoiceNumber || 'INV-' + inv.id,
+            inv.docNo || inv.invoiceNumber || 'INV-' + inv.id,
             inv.customerName || '',
             new Date(inv.invoiceDate).toLocaleDateString(),
             'RM ' + (inv.totalAmount || 0).toFixed(2),
@@ -199,7 +200,8 @@ export class PreferencesPage implements OnInit {
         doc.text('Invoice', 14, 20);
         doc.setFontSize(10);
         doc.setFont('helvetica', 'normal');
-        doc.text('Invoice No: ' + invoice.invoiceNumber, 14, 30);
+        const invoiceNum = invoice.docNo || invoice.invoiceNumber;
+        doc.text('Invoice No: ' + invoiceNum, 14, 30);
         doc.text('Customer: ' + invoice.customerName, 14, 37);
         doc.text('Date: ' + new Date(invoice.invoiceDate).toLocaleDateString(), 14, 44);
         doc.text('Status: ' + invoice.status, 14, 51);
@@ -275,7 +277,7 @@ export class PreferencesPage implements OnInit {
           doc.text('Balance:       RM ' + balance.toFixed(2), 14, finalY + 14);
         }
         doc.setTextColor(0, 0, 0);
-        doc.save(invoice.invoiceNumber + '.pdf');
+        doc.save((invoice.docNo || invoice.invoiceNumber) + '.pdf');
         this.showToastMsg('PDF exported!');
       },
       error: () => { this.showToastMsg('Failed to export'); }

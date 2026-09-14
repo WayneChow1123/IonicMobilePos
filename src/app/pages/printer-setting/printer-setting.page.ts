@@ -15,7 +15,10 @@ import { FormsModule } from '@angular/forms';
   styleUrls: ['./printer-setting.page.scss'],
 })
 export class PrinterSettingPage implements OnDestroy {
-  paperWidth = 80;
+  paperWidth = 48;
+  hardwareWidth = 48; // 48: Portable (48/58mm), 80: Desktop (80mm), 0: Auto
+  deviceName = '';
+  autoAdapt = true;
   bottomEmptyLine = 5;
 
   interfaces = ['Bluetooth', 'USB', 'Network'];
@@ -116,7 +119,10 @@ export class PrinterSettingPage implements OnDestroy {
     if (saved) {
       try {
         const config = JSON.parse(saved);
-        this.paperWidth = config.paperWidth ?? 80;
+        this.paperWidth = config.paperWidth ?? 48;
+        this.hardwareWidth = config.hardwareWidth !== undefined ? Number(config.hardwareWidth) : 48;
+        this.deviceName = config.deviceName || '';
+        this.autoAdapt = config.autoAdapt !== undefined ? !!config.autoAdapt : true;
         this.bottomEmptyLine = config.bottomEmptyLine ?? 5;
         this.printerInterface = config.printerInterface ?? 'Bluetooth';
         this.printerType = config.printerType ?? 'JP Printer - Text';
@@ -140,6 +146,30 @@ export class PrinterSettingPage implements OnDestroy {
 
   togglePaperWidth() {
     this.paperWidth = this.paperWidth === 80 ? 58 : 80;
+  }
+
+  setPaperWidth(val: number) {
+    this.paperWidth = val;
+  }
+
+  toggleAutoAdapt() {
+    this.autoAdapt = !this.autoAdapt;
+  }
+
+  getPaperWidthHint(): string {
+    const w = Number(this.paperWidth);
+    if (w === 48) {
+      return '48mm portable format (40 cols)';
+    } else if (w === 58) {
+      return '58mm portable format (40 cols)';
+    } else if (w >= 70) {
+      if (this.autoAdapt) {
+        return '80mm format (Auto-adapts to 48mm format on portable printer)';
+      } else {
+        return '80mm wide format (48 cols)';
+      }
+    }
+    return `${w}mm format`;
   }
 
   refreshMac() {
@@ -395,8 +425,18 @@ export class PrinterSettingPage implements OnDestroy {
           handler: (selectedMac) => {
             if (selectedMac) {
               this.macAddress = selectedMac;
+              const dev = [...uniquePaired, ...uniqueUnpaired].find(d => (d.address || d.id) === selectedMac);
+              if (dev && dev.name) {
+                this.deviceName = dev.name;
+                const upper = dev.name.toUpperCase();
+                if (upper.includes('80') || upper.includes('300') || upper.includes('800') || upper.includes('83')) {
+                  this.hardwareWidth = 80;
+                } else {
+                  this.hardwareWidth = 48;
+                }
+              }
               this.cdr.detectChanges();
-              this.alertService.toast(`Selected: ${selectedMac}`, 'success');
+              this.alertService.toast(`Selected: ${this.deviceName || selectedMac}`, 'success');
             }
           }
         }
@@ -424,7 +464,10 @@ export class PrinterSettingPage implements OnDestroy {
 
   saveSettings() {
     const config = {
-      paperWidth: this.paperWidth,
+      paperWidth: Number(this.paperWidth) || 48,
+      hardwareWidth: Number(this.hardwareWidth) || 48,
+      deviceName: this.deviceName,
+      autoAdapt: this.autoAdapt,
       bottomEmptyLine: this.bottomEmptyLine,
       printerInterface: this.printerInterface,
       printerType: this.printerType,

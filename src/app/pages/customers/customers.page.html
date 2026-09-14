@@ -233,7 +233,7 @@
                 <div class="item-main">
                   <div class="item-icon yellow"><img src="assets/icon/invoice-report.png" class="icon-custom" /></div>
                   <div class="item-details">
-                    <div class="item-title">{{ inv.invoiceNumber }}</div>
+                    <div class="item-title">{{ inv.docNo || inv.invoiceNumber }}</div>
                     <div class="item-sub">{{ inv.invoiceDate | date:'dd/MM/yyyy' }}</div>
                   </div>
                   <div class="item-amount">RM {{ inv.totalAmount | number:'1.2-2' }}</div>

@@ -1,4 +1,4 @@
-﻿<ion-content [fullscreen]="true">
+<ion-content [fullscreen]="true">
   <div class="ps-container">
 
     <!-- Top Bar -->
@@ -16,16 +16,42 @@
 
     <div class="pref-row">
       <!-- Paper Width Card -->
-      <div class="paper-width-card" (click)="togglePaperWidth()">
-        <span class="pw-label">PAPER WIDTH</span>
-        <span class="pw-value">{{ paperWidth }} mm <span class="pw-dot">●</span></span>
-        <span class="pw-hint">Click to switch 58/80mm</span>
+      <div class="paper-width-card">
+        <span class="pw-label">PRINT / PAPER WIDTH</span>
+        <div class="pw-input-wrap">
+          <input type="number" class="pw-input" [(ngModel)]="paperWidth" placeholder="48" />
+          <span class="pw-unit">mm</span>
+        </div>
+        <div class="pw-chips">
+          <span class="pw-chip" [class.active]="paperWidth == 48" (click)="setPaperWidth(48)">48mm</span>
+          <span class="pw-chip" [class.active]="paperWidth == 58" (click)="setPaperWidth(58)">58mm</span>
+          <span class="pw-chip" [class.active]="paperWidth == 80" (click)="setPaperWidth(80)">80mm</span>
+        </div>
+        <span class="pw-hint">{{ getPaperWidthHint() }}</span>
       </div>
 
       <!-- Bottom Empty Line -->
       <div class="empty-line-card">
         <span class="el-label">BOTTOM EMPTY LINE</span>
         <input type="number" class="el-input" [(ngModel)]="bottomEmptyLine" />
+      </div>
+    </div>
+
+    <!-- Auto-Adapt Width Protection Card -->
+    <div class="autoadapt-card" (click)="toggleAutoAdapt()">
+      <div class="aa-left">
+        <div class="aa-title-row">
+          <span class="aa-title">SMART AUTO-ADAPTATION</span>
+          <span class="aa-badge" [class.active]="autoAdapt">{{ autoAdapt ? 'ACTIVE' : 'OFF' }}</span>
+        </div>
+        <span class="aa-desc">
+          {{ autoAdapt 
+            ? 'If 80mm is chosen on a 48mm portable printer, invoice auto-adapts to 48mm format. On an 80mm machine, it prints full 80mm.' 
+            : 'Auto-adaptation off: forces literal format width regardless of machine size.' }}
+        </span>
+      </div>
+      <div class="aa-toggle">
+        <ion-toggle [checked]="autoAdapt" (ionChange)="autoAdapt = $event.detail.checked" (click)="$event.stopPropagation()"></ion-toggle>
       </div>
     </div>
 

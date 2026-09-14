@@ -19,7 +19,7 @@
           </div>
         </div>
       </div>
-      <ion-searchbar [(ngModel)]="searchTerm" (ionInput)="filterInvoices()" placeholder="Search INV- or customer..." style="--background:#fff;--border-radius:16px;--box-shadow:none;padding:0;margin-bottom:0;"></ion-searchbar>
+      <ion-searchbar [(ngModel)]="searchTerm" (ionInput)="filterInvoices()" placeholder="Search DOC NO or customer..." style="--background:#fff;--border-radius:16px;--box-shadow:none;padding:0;margin-bottom:0;"></ion-searchbar>
     </div>
     <div class="scroll-content" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:20px;">
       <div class="date-filter-card">
@@ -70,7 +70,7 @@
                 <span class="item-name">{{ invoice.customerName || invoice.CustomerName || getCustomerName(invoice.customerId) }}</span>
               </div>
               <div class="item-sub">{{ getCustomerCode(invoice) }}</div>
-              <div class="item-sub"># {{ invoice.invoiceNumber || 'INV-' + invoice.id }}</div>
+              <div class="item-sub"># {{ getDocNo(invoice) }}</div>
               <div class="item-sub-date">{{ invoice.invoiceDate | date:'dd/MM/yyyy HH:mm' }}</div>
             </div>
             
@@ -463,7 +463,7 @@
     <div class="form-card" style="background:#cfe2ff;">
       <div class="form-group" *ngIf="selectedInvoice">
         <label>INVOICE NUMBER (ID: {{ selectedInvoice.id }})</label>
-        <div style="font-size:16px; font-weight:800; color:#1a1a1a; padding:6px 0;" class="detail-invoice-num">{{ selectedInvoice.invoiceNumber }}</div>
+        <div style="font-size:16px; font-weight:800; color:#1a1a1a; padding:6px 0;" class="detail-invoice-num">{{ getDocNo(selectedInvoice) }}</div>
       </div>
       <div class="form-group">
         <label>INVOICE DATE</label>
@@ -575,8 +575,8 @@
       </ion-button>
     </div>
     <div class="receipt-scroll">
-      <!-- 纸宽动态设置（58mm / 80mm） -->
-      <div class="receipt-paper" id="receipt-paper" [style.max-width]="printerSettings?.paperWidth === 58 ? '360px' : '480px'">
+      <!-- 纸宽动态设置（48mm / 58mm / 80mm 自适应） -->
+      <div class="receipt-paper" id="receipt-paper" [style.max-width]="(!printerSettings?.paperWidth || printerSettings?.paperWidth <= 58 || (printerSettings?.autoAdapt !== false && (!printerSettings?.hardwareWidth || printerSettings?.hardwareWidth <= 58))) ? '360px' : '480px'">
         
         <!-- 公司信息抬头的条件化渲染 -->
         <div class="receipt-header" *ngIf="isOptionEnabled('Print Company Logo')">
@@ -590,7 +590,7 @@
         </div>
 
         <div class="receipt-doc-info">
-          <div class="doc-row"><span class="doc-label">DOC NO</span><span class="doc-value">: {{ selectedInvoice?.invoiceNumber || 'S001-' + selectedInvoice?.id }}</span></div>
+          <div class="doc-row"><span class="doc-label">DOC NO</span><span class="doc-value">: {{ getDocNo(selectedInvoice) }}</span></div>
           
           <!-- 发票时间条件化渲染 -->
           <div class="doc-row" *ngIf="isOptionEnabled('Print Issue Time')">

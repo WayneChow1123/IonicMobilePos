@@ -10,6 +10,7 @@ import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../services/api.service';
 import { AppComponent } from '../../app.component';
 import { BluetoothPrintService } from '../../services/bluetooth-print.service';
+import { formatDocNo } from '../../utils/invoice-helper';
 
 @Component({
   standalone: true,
@@ -245,6 +246,10 @@ export class BillingPage implements OnInit {
     public btPrint: BluetoothPrintService
   ) {}
 
+  getDocNo(inv: any): string {
+    return inv?.docNo || formatDocNo(inv, this.invoices);
+  }
+
   ionViewWillLeave() {
   }
 
@@ -349,6 +354,8 @@ export class BillingPage implements OnInit {
     this.filteredPayments = this.payments.filter(p =>
       (p.customerName || '').toLowerCase().includes(this.paymentSearchTerm.toLowerCase()) ||
       (p.invoiceNumber || '').toLowerCase().includes(this.paymentSearchTerm.toLowerCase()) ||
+      (p.docNo || '').toLowerCase().includes(this.paymentSearchTerm.toLowerCase()) ||
+      this.getDocNo(p.invoiceNumber || p).toLowerCase().includes(this.paymentSearchTerm.toLowerCase()) ||
       (p.referenceNo || '').toLowerCase().includes(this.paymentSearchTerm.toLowerCase())
     );
   }
@@ -357,6 +364,8 @@ export class BillingPage implements OnInit {
     this.filteredCreditNotes = this.creditNotes.filter(cn =>
       (cn.cnNumber || '').toLowerCase().includes(this.cnSearchTerm.toLowerCase()) ||
       (cn.invoiceNumber || '').toLowerCase().includes(this.cnSearchTerm.toLowerCase()) ||
+      (cn.docNo || '').toLowerCase().includes(this.cnSearchTerm.toLowerCase()) ||
+      this.getDocNo(cn.invoiceNumber || cn).toLowerCase().includes(this.cnSearchTerm.toLowerCase()) ||
       (cn.customerName || '').toLowerCase().includes(this.cnSearchTerm.toLowerCase()) ||
       (cn.reason || '').toLowerCase().includes(this.cnSearchTerm.toLowerCase())
     );
@@ -388,7 +397,9 @@ export class BillingPage implements OnInit {
       this.filteredPaymentInvoices = [...this.paymentInvoices];
     } else {
       this.filteredPaymentInvoices = this.paymentInvoices.filter(inv =>
-        (inv.invoiceNumber || '').toLowerCase().includes(term)
+        (inv.invoiceNumber || '').toLowerCase().includes(term) ||
+        (inv.docNo || '').toLowerCase().includes(term) ||
+        this.getDocNo(inv).toLowerCase().includes(term)
       );
     }
     this.cdr.detectChanges();
@@ -427,13 +438,17 @@ export class BillingPage implements OnInit {
     if (saved) {
       try {
         this.printerSettings = JSON.parse(saved);
+        if (this.printerSettings.autoAdapt === undefined) {
+          this.printerSettings.autoAdapt = true;
+        }
       } catch (e) {
         console.error(e);
       }
     }
     if (!this.printerSettings) {
       this.printerSettings = {
-        paperWidth: 80,
+        paperWidth: 58,
+        autoAdapt: true,
         bottomEmptyLine: 5,
         contentOptions: [
           { name: 'Print Company Logo', enabled: true },
@@ -495,7 +510,10 @@ export class BillingPage implements OnInit {
     const printWindow = iframe.contentWindow || (iframe.contentDocument as any)?.defaultView;
     if (!printWindow) { this.showToastMsg('Failed to initialize print iframe'); return; }
 
-    const width = this.printerSettings?.paperWidth === 58 ? '360px' : '480px';
+    const isSmall = !this.printerSettings?.paperWidth || 
+      this.printerSettings.paperWidth <= 58 || 
+      (this.printerSettings?.autoAdapt !== false && (!this.printerSettings?.hardwareWidth || this.printerSettings.hardwareWidth <= 58));
+    const width = isSmall ? '360px' : '480px';
     const styles = `<style>* { margin: 0; padding: 0; box-sizing: border-box; } body { font-family: 'Courier New', monospace; background: #F0EBE3; display: flex; justify-content: center; padding: 40px 20px; } .receipt { background: #fff; border-radius: 24px; padding: 40px 36px; max-width: ${width}; width: 100%; box-shadow: 0 4px 24px rgba(0,0,0,0.08); } .receipt-type { display: block; text-align: center; font-size: 13px; letter-spacing: 6px; color: #888; margin-bottom: 16px; } .divider { height: 1px; background: #1a1a1a; margin: 12px 0; } .divider-thin { height: 1px; background: #ddd; margin: 12px 0; } .company { text-align: center; font-size: 22px; font-weight: 700; margin: 12px 0 4px; } .co-reg { display: block; text-align: center; font-size: 12px; color: #888; margin-bottom: 8px; } .address { display: block; text-align: center; font-size: 11px; color: #666; line-height: 1.6; } .contact { display: block; text-align: center; font-size: 11px; color: #888; margin-top: 6px; } .doc-row { display: flex; gap: 12px; margin: 4px 0; } .doc-label { font-size: 12px; font-weight: 700; min-width: 70px; } .doc-value { font-size: 12px; font-weight: 700; } .to-section { margin: 16px 0; } .to-label { font-size: 12px; font-style: italic; color: #888; } .to-box { border: 1px solid #ddd; border-radius: 8px; padding: 12px; margin-top: 6px; font-size: 12px; line-height: 1.6; } .table-header { display: flex; justify-content: space-between; font-size: 11px; font-weight: 700; font-style: italic; } .item-row { margin: 12px 0; } .item-desc { display: flex; justify-content: space-between; font-size: 12px; font-weight: 700; } .item-calc { font-size: 11px; color: #888; margin-top: 2px; display: flex; justify-content: space-between; } .total-row { display: flex; justify-content: space-between; font-size: 12px; margin: 4px 0; } .net-bar { background: #1a1a1a; color: #fff; border-radius: 8px; padding: 14px 20px; display: flex; justify-content: space-between; align-items: center; margin: 16px 0; } .net-label { font-size: 12px; font-weight: 700; font-style: italic; } .net-value { font-size: 20px; font-weight: 700; } .due-box { border: 1px solid #ddd; border-radius: 8px; padding: 16px; text-align: center; margin: 16px 0; } .due-label { display: block; font-size: 10px; letter-spacing: 3px; color: #888; margin-bottom: 6px; } .due-date { font-size: 18px; font-weight: 700; } .sig-box { border: 1px solid #ddd; border-radius: 8px; padding: 16px; min-height: 100px; margin: 16px 0; } .sig-label { font-size: 11px; color: #ccc; font-style: italic; } .thanks { text-align: center; font-size: 12px; letter-spacing: 6px; color: #ccc; margin-top: 20px; }</style>`;
 
     const pd = this.selectedPaymentDetail;
@@ -544,7 +562,7 @@ export class BillingPage implements OnInit {
     });
 
     const receiptNumber = pd.receiptNumber || `RCPT-${pd.id}`;
-    const invoiceNumber = pd.invoice?.invoiceNumber || '';
+    const invoiceNumber = this.getDocNo(pd.invoice || pd.invoiceNumber);
     
     const paymentDetailHtml = `<div style="padding:12px 20px;border:1px dashed #ddd;border-radius:8px;margin-bottom:16px;background:#fcfcfc;">
         <div style="display:flex;justify-content:space-between;font-size:12px;font-weight:700;padding:3px 0;"><span>PAYMENT METHOD</span><span style="text-transform:uppercase;">${pd.paymentMethod}</span></div>

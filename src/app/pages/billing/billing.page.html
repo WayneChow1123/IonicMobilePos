@@ -184,7 +184,7 @@
         <div style="display:flex;gap:8px;">
           <select [(ngModel)]="cnForm.invoiceId" class="form-select" (change)="onCNInvoiceChange()" style="flex:1;">
             <option [ngValue]="0">Select Invoice</option>
-            <option *ngFor="let inv of cnFilteredInvoices" [ngValue]="inv.id">{{ inv.invoiceNumber }} - {{
+            <option *ngFor="let inv of cnFilteredInvoices" [ngValue]="inv.id">{{ getDocNo(inv) }} - {{
               inv.customerName }} (RM {{
               inv.totalAmount | number:'1.2-2' }}) ({{ inv.status }})</option>
           </select>
@@ -357,7 +357,7 @@
           <div class="item-avatar"><ion-icon name="wallet-outline"></ion-icon></div>
           <div>
             <div class="item-name">{{ payment.customerName }}</div>
-            <div class="item-sub">{{ payment.invoiceNumber }}</div>
+            <div class="item-sub">{{ getDocNo(payment.invoiceNumber || payment) }}</div>
             <div class="item-sub">RM {{ payment.amount | number:'1.2-2' }} | {{ payment.method }}</div>
             <div class="item-sub">{{ payment.paymentDate | date:'dd/MM/yyyy HH:mm' }}</div>
             <div class="item-sub" *ngIf="payment.referenceNo">Ref: {{ payment.referenceNo }}</div>
@@ -399,7 +399,7 @@
           <div class="item-avatar"><ion-icon name="document-outline"></ion-icon></div>
           <div>
             <div class="item-name">{{ cn.cnNumber || 'CN-' + cn.id }}</div>
-            <div class="item-sub">{{ cn.invoiceNumber }}</div>
+            <div class="item-sub">{{ getDocNo(cn.invoiceNumber || cn) }}</div>
             <div class="item-sub">{{ cn.customerName }}</div>
             <div class="item-sub">RM {{ cn.amount | number:'1.2-2' }}</div>
             <div class="item-sub">{{ cn.reason }}</div>
@@ -475,7 +475,7 @@
           </div>
           <div>
             <div style="font-size:10px;color:#555;font-weight:700;letter-spacing:0.5px;">INVOICE</div>
-            <div style="font-size:14px;font-weight:800;color:#5c85d6;">{{ selectedCNDetail.invoiceNumber || ('#' + selectedCNDetail.invoiceId) }}</div>
+            <div style="font-size:14px;font-weight:800;color:#5c85d6;">{{ getDocNo(selectedCNDetail.invoiceNumber || selectedCNDetail) }}</div>
           </div>
         </div>
         <div style="margin-top:12px;padding:12px;background:rgba(255,255,255,0.6);border-radius:12px;">
@@ -490,7 +490,7 @@
           <span>CUSTOMER</span><div style="width:24px;height:2px;background:#1a1a1a;"></div>
         </div>
         <div style="font-size:16px;font-weight:800;color:#1a1a1a;">{{ selectedCNDetail.customerName || 'Customer #' + selectedCNDetail.customerId }}</div>
-        <div style="font-size:12px;color:#888;margin-top:4px;">ID: {{ selectedCNDetail.customerId }} | Invoice: {{ selectedCNDetail.invoiceNumber }}</div>
+        <div style="font-size:12px;color:#888;margin-top:4px;">ID: {{ selectedCNDetail.customerId }} | Invoice: {{ getDocNo(selectedCNDetail.invoiceNumber || selectedCNDetail) }}</div>
       </div>
 
       <!-- Items -->
@@ -524,7 +524,7 @@
       </ion-button>
     </div>
     <div class="receipt-scroll">
-      <div class="receipt-paper" id="cn-receipt-paper" [style.max-width]="printerSettings?.paperWidth === 58 ? '360px' : '480px'">
+      <div class="receipt-paper" id="cn-receipt-paper" [style.max-width]="(!printerSettings?.paperWidth || printerSettings?.paperWidth <= 58 || (printerSettings?.autoAdapt !== false && (!printerSettings?.hardwareWidth || printerSettings?.hardwareWidth <= 58))) ? '360px' : '480px'">
         <div class="receipt-header" *ngIf="isOptionEnabled('Print Company Logo')">
           <span class="receipt-type">CREDIT NOTE</span>
           <div class="receipt-divider"></div>
@@ -536,7 +536,7 @@
         </div>
         <div class="receipt-doc-info">
           <div class="doc-row"><span class="doc-label">CN NO</span><span class="doc-value">: {{ selectedCNDetail?.cnNumber || 'CN-' + selectedCNDetail?.id }}</span></div>
-          <div class="doc-row"><span class="doc-label">INV NO</span><span class="doc-value">: {{ selectedCNDetail?.invoiceNumber }}</span></div>
+          <div class="doc-row"><span class="doc-label">INV NO</span><span class="doc-value">: {{ getDocNo(selectedCNDetail?.invoiceNumber || selectedCNDetail) }}</span></div>
           <div class="doc-row" *ngIf="isOptionEnabled('Print Issue Time')"><span class="doc-label">DATE</span><span class="doc-value">: {{ selectedCNDetail?.createdAt | date:'dd MMMM yyyy HH:mm' }}</span></div>
         </div>
         <div class="receipt-to" *ngIf="isOptionEnabled('Print Customer Tel') || isOptionEnabled('Print Customer Add')">
@@ -783,8 +783,7 @@
         <!-- Invoice Details -->
         <div style="flex:1;">
           <div style="display:flex; justify-content:space-between; margin-bottom:6px; align-items:center;">
-            <span style="font-size:15px; font-weight:800; color:#2f3542;" class="invoice-num">{{ inv.invoiceNumber
-              }}</span>
+            <span style="font-size:15px; font-weight:800; color:#2f3542;" class="invoice-num">{{ getDocNo(inv) }}</span>
             <span class="invoice-status-badge"
               style="font-size:11px; padding:4px 10px; border-radius:8px;  color:#d35400; font-weight:700; text-transform:uppercase; letter-spacing:0.5px;">{{
               inv.status }}</span>
@@ -916,8 +915,7 @@
       <div
         style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; background:#fdfdfd; border-radius:12px; padding:12px; border:1px solid #fafafa;">
         <div>
-          <div style="font-size:15px; font-weight:800; color:#2f3542;">{{ selectedPaymentDetail?.invoice?.invoiceNumber
-            }}</div>
+          <div style="font-size:15px; font-weight:800; color:#2f3542;">{{ getDocNo(selectedPaymentDetail?.invoice || selectedPaymentDetail?.invoiceNumber) }}</div>
           <div style="font-size:11px; color:#a4b0be; font-weight:700; margin-top:2px;">Date: {{
             selectedPaymentDetail?.invoice?.invoiceDate | date:'dd/MM/yyyy' }}</div>
         </div>
@@ -964,7 +962,7 @@
     <div class="receipt-scroll">
       <!-- Paper width based on printerSettings (58mm / 80mm) -->
       <div class="receipt-paper" id="receipt-paper"
-        [style.max-width]="printerSettings?.paperWidth === 58 ? '360px' : '480px'">
+        [style.max-width]="(!printerSettings?.paperWidth || printerSettings?.paperWidth <= 58 || (printerSettings?.autoAdapt !== false && (!printerSettings?.hardwareWidth || printerSettings?.hardwareWidth <= 58))) ? '360px' : '480px'">
 
         <!-- Company Header (Optional) -->
         <div class="receipt-header" *ngIf="isOptionEnabled('Print Company Logo')">
@@ -981,7 +979,7 @@
           <div class="doc-row"><span class="doc-label">RECEIPT NO</span><span class="doc-value">: {{
               selectedPaymentDetail?.receiptNumber }}</span></div>
           <div class="doc-row"><span class="doc-label">INVOICE NO</span><span class="doc-value">: {{
-              selectedPaymentDetail?.invoice?.invoiceNumber }}</span></div>
+              getDocNo(selectedPaymentDetail?.invoice || selectedPaymentDetail?.invoiceNumber) }}</span></div>
 
           <!-- Payment Date (Optional) -->
           <div class="doc-row" *ngIf="isOptionEnabled('Print Issue Time')">

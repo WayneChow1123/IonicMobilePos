@@ -108,7 +108,7 @@
           style="background:#fff;border-radius:16px;padding:12px 16px;margin-bottom:10px;">
           <div style="display:flex;justify-content:space-between;align-items:center;">
             <div>
-              <div style="font-size:14px;font-weight:700;color:#1a1a1a;">{{ invoice.invoiceNumber }}</div>
+              <div style="font-size:14px;font-weight:700;color:#1a1a1a;">{{ invoice.docNo || invoice.invoiceNumber }}</div>
               <div style="font-size:12px;color:#888;margin-top:2px;">{{ invoice.invoiceDate | date:'dd/MM/yyyy' }}</div>
             </div>
             <div style="text-align:right;">
@@ -132,7 +132,7 @@
 
     <!-- SINGLE -->
     <div *ngIf="exportType==='single'">
-      <ion-searchbar [(ngModel)]="searchTerm" (ionInput)="filterInvoices()" placeholder="Search INV- or customer..."
+      <ion-searchbar [(ngModel)]="searchTerm" (ionInput)="filterInvoices()" placeholder="Search DOC NO or customer..."
         style="--background:#fff;--border-radius:16px;--box-shadow:none;padding:0;margin-bottom:12px;"></ion-searchbar>
 
       <div *ngFor="let invoice of filteredInvoices"
@@ -140,7 +140,7 @@
         (click)="selectedInvoiceId=invoice.id; exportSingle(invoice)">
         <div style="display:flex;justify-content:space-between;align-items:center;">
           <div>
-            <div style="font-size:14px;font-weight:700;color:#1a1a1a;">{{ invoice.invoiceNumber }}</div>
+            <div style="font-size:14px;font-weight:700;color:#1a1a1a;">{{ invoice.docNo || invoice.invoiceNumber }}</div>
             <div style="font-size:12px;color:#888;margin-top:2px;">{{ invoice.customerName }}</div>
             <div style="font-size:12px;color:#888;">{{ invoice.invoiceDate | date:'dd/MM/yyyy' }}</div>
           </div>

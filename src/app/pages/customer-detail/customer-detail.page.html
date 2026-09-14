@@ -88,7 +88,7 @@
           <ion-icon name="receipt-outline"></ion-icon>
         </div>
         <div>
-          <div class="item-name">{{ invoice.invoiceNumber }}</div>
+          <div class="item-name">{{ invoice.docNo || invoice.invoiceNumber }}</div>
           <div class="item-sub">{{ invoice.invoiceDate | date:'dd/MM/yyyy' }}</div>
           <div class="item-sub">RM {{ invoice.totalAmount | number:'1.2-2' }}</div>
         </div>

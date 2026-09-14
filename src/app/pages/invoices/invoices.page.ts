@@ -8,6 +8,7 @@ import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../services/api.service';
 import { ActivatedRoute } from '@angular/router';
 import { BluetoothPrintService } from '../../services/bluetooth-print.service';
+import { formatDocNo, updateInvoiceDocNos } from '../../utils/invoice-helper';
 
 @Component({
   standalone: true,
@@ -87,13 +88,17 @@ export class InvoicesPage implements OnInit {
     if (saved) {
       try {
         this.printerSettings = JSON.parse(saved);
+        if (this.printerSettings.autoAdapt === undefined) {
+          this.printerSettings.autoAdapt = true;
+        }
       } catch (e) {
         console.error(e);
       }
     }
     if (!this.printerSettings) {
       this.printerSettings = {
-        paperWidth: 80,
+        paperWidth: 58,
+        autoAdapt: true,
         bottomEmptyLine: 5,
         contentOptions: [
           { name: 'Print Company Logo', enabled: true },
@@ -119,6 +124,10 @@ export class InvoicesPage implements OnInit {
     if (!this.printerSettings || !this.printerSettings.contentOptions) return true;
     const opt = this.printerSettings.contentOptions.find((o: any) => o.name === optionName);
     return opt ? opt.enabled : true;
+  }
+
+  getDocNo(inv: any): string {
+    return inv?.docNo || formatDocNo(inv, this.invoices);
   }
 
   getProductCode(productId: any): string {
@@ -223,7 +232,14 @@ export class InvoicesPage implements OnInit {
   loadInvoices() {
     this.isLoading = true;
     this.api.getInvoices().subscribe({
-      next: (res) => { this.invoices = Array.isArray(res) ? res : []; this.filteredInvoices = [...this.invoices]; this.currentPage = 1; this.displayedInvoices = this.filteredInvoices.slice(0, this.pageSize); this.isLoading = false; },
+      next: (res) => {
+        this.invoices = Array.isArray(res) ? res : [];
+        updateInvoiceDocNos(this.invoices);
+        this.filteredInvoices = [...this.invoices];
+        this.currentPage = 1;
+        this.displayedInvoices = this.filteredInvoices.slice(0, this.pageSize);
+        this.isLoading = false;
+      },
       error: () => { this.isLoading = false; this.showToastMsg('Failed to load invoices'); }
     });
   }
@@ -272,6 +288,7 @@ export class InvoicesPage implements OnInit {
     this.filteredInvoices = this.invoices.filter(inv => {
       // Search term filtering
       const matchesSearch = (inv.invoiceNumber || '').toLowerCase().includes(term) ||
+        (inv.docNo || '').toLowerCase().includes(term) ||
         (inv.customerName || '').toLowerCase().includes(term);
 
       if (!matchesSearch) return false;
@@ -961,7 +978,7 @@ export class InvoicesPage implements OnInit {
     }
   }
 
-  confirmDelete(invoice: any) { this.selectedInvoice = invoice; this.alertService.confirm('Delete Invoice', 'Delete ' + (invoice.invoiceNumber || 'INV-' + invoice.id) + '?').then(c => { if (c) this.deleteInvoice(); }); }
+  confirmDelete(invoice: any) { this.selectedInvoice = invoice; this.alertService.confirm('Delete Invoice', 'Delete ' + this.getDocNo(invoice) + '?').then(c => { if (c) this.deleteInvoice(); }); }
 
   deleteInvoice() {
     if (!this.selectedInvoice) return;
@@ -1287,7 +1304,10 @@ export class InvoicesPage implements OnInit {
     const printWindow = iframe.contentWindow || (iframe.contentDocument as any)?.defaultView;
     if (!printWindow) { this.showToastMsg('Failed to initialize print iframe'); return; }
 
-    const width = this.printerSettings?.paperWidth === 58 ? '360px' : '480px';
+    const isSmall = !this.printerSettings?.paperWidth || 
+      this.printerSettings.paperWidth <= 58 || 
+      (this.printerSettings?.autoAdapt !== false && (!this.printerSettings?.hardwareWidth || this.printerSettings.hardwareWidth <= 58));
+    const width = isSmall ? '360px' : '480px';
     const styles = `<style>* { margin: 0; padding: 0; box-sizing: border-box; } body { font-family: 'Courier New', monospace; background: #F0EBE3; display: flex; justify-content: center; padding: 40px 20px; } .receipt { background: #fff; border-radius: 24px; padding: 40px 36px; max-width: ${width}; width: 100%; box-shadow: 0 4px 24px rgba(0,0,0,0.08); } .receipt-type { display: block; text-align: center; font-size: 13px; letter-spacing: 6px; color: #888; margin-bottom: 16px; } .divider { height: 1px; background: #1a1a1a; margin: 12px 0; } .divider-thin { height: 1px; background: #ddd; margin: 12px 0; } .company { text-align: center; font-size: 22px; font-weight: 700; margin: 12px 0 4px; } .co-reg { display: block; text-align: center; font-size: 12px; color: #888; margin-bottom: 8px; } .address { display: block; text-align: center; font-size: 11px; color: #666; line-height: 1.6; } .contact { display: block; text-align: center; font-size: 11px; color: #888; margin-top: 6px; } .doc-row { display: flex; gap: 12px; margin: 4px 0; } .doc-label { font-size: 12px; font-weight: 700; min-width: 70px; } .doc-value { font-size: 12px; font-weight: 700; } .to-section { margin: 16px 0; } .to-label { font-size: 12px; font-style: italic; color: #888; } .to-box { border: 1px solid #ddd; border-radius: 8px; padding: 12px; margin-top: 6px; font-size: 12px; line-height: 1.6; } .table-header { display: flex; justify-content: space-between; font-size: 11px; font-weight: 700; font-style: italic; } .item-row { margin: 12px 0; } .item-desc { display: flex; justify-content: space-between; font-size: 12px; font-weight: 700; } .item-calc { font-size: 11px; color: #888; margin-top: 2px; display: flex; justify-content: space-between; } .total-row { display: flex; justify-content: space-between; font-size: 12px; margin: 4px 0; } .net-bar { background: #1a1a1a; color: #fff; border-radius: 8px; padding: 14px 20px; display: flex; justify-content: space-between; align-items: center; margin: 16px 0; } .net-label { font-size: 12px; font-weight: 700; font-style: italic; } .net-value { font-size: 20px; font-weight: 700; } .due-box { border: 1px solid #ddd; border-radius: 8px; padding: 16px; text-align: center; margin: 16px 0; } .due-label { display: block; font-size: 10px; letter-spacing: 3px; color: #888; margin-bottom: 6px; } .due-date { font-size: 18px; font-weight: 700; } .sig-box { border: 1px solid #ddd; border-radius: 8px; padding: 16px; min-height: 100px; margin: 16px 0; } .sig-label { font-size: 11px; color: #ccc; font-style: italic; } .thanks { text-align: center; font-size: 12px; letter-spacing: 6px; color: #ccc; margin-top: 20px; } .cn-header { font-size: 11px; font-weight: 700; letter-spacing: 2px; color: #1a1a1a; margin: 8px 0; } .cn-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 12px; } .cn-number { font-weight: 700; } .cn-amount { font-weight: 700; color: #1a1a1a; } .cn-deduct { color: #1a1a1a; font-weight: 700; }</style>`;
 
     const inv = this.selectedInvoice;
@@ -1431,7 +1451,8 @@ export class InvoicesPage implements OnInit {
       emptyLinesHtml += `<div style="height: 20px;"></div>`;
     }
 
-    printWindow.document.write(`<!DOCTYPE html><html><head><title>Invoice ${inv?.invoiceNumber || ''}</title>${styles}</head><body><div class="receipt"><span class="receipt-type">TAX INVOICE</span><div class="divider"></div>${companyHeaderHtml}<div style="margin-top:20px;"><div class="doc-row"><span class="doc-label">DOC NO</span><span class="doc-value">: ${inv?.invoiceNumber || 'S001-' + inv?.id}</span></div>${dateHtml}</div>${customerBoxHtml}<div class="divider-thin"></div><div class="table-header"><span>DESCRIPTION</span><span>GST SUBTOTAL</span></div><div class="divider-thin"></div>${itemsHtml}<div class="divider-thin"></div><div class="total-row"><span>GROSS TOTAL</span><span>RM ${(inv?.totalAmount || 0).toFixed(2)}</span></div>${returnsHtml}${cnListHtml}<div class="net-bar"><span class="net-label">NET AMOUNT</span><span class="net-value">RM ${netAmount.toFixed(2)}</span></div><div style="display:flex;justify-content:space-between;padding:12px 20px;border:1px dashed #ddd;border-radius:8px;margin-bottom:0;"><span style="font-size:11px;font-weight:700;letter-spacing:2px;color:#888;">PAYMENT STATUS</span><span style="font-size:14px;font-weight:800;">${paymentStatus}</span></div>${paymentDetailHtml}${termDateHtml}${sigBoxHtml}${footerHtml}${emptyLinesHtml}</div></body></html>`);
+    const docNo = this.getDocNo(inv);
+    printWindow.document.write(`<!DOCTYPE html><html><head><title>Invoice ${docNo}</title>${styles}</head><body><div class="receipt"><span class="receipt-type">TAX INVOICE</span><div class="divider"></div>${companyHeaderHtml}<div style="margin-top:20px;"><div class="doc-row"><span class="doc-label">DOC NO</span><span class="doc-value">: ${docNo}</span></div>${dateHtml}</div>${customerBoxHtml}<div class="divider-thin"></div><div class="table-header"><span>DESCRIPTION</span><span>GST SUBTOTAL</span></div><div class="divider-thin"></div>${itemsHtml}<div class="divider-thin"></div><div class="total-row"><span>GROSS TOTAL</span><span>RM ${(inv?.totalAmount || 0).toFixed(2)}</span></div>${returnsHtml}${cnListHtml}<div class="net-bar"><span class="net-label">NET AMOUNT</span><span class="net-value">RM ${netAmount.toFixed(2)}</span></div><div style="display:flex;justify-content:space-between;padding:12px 20px;border:1px dashed #ddd;border-radius:8px;margin-bottom:0;"><span style="font-size:11px;font-weight:700;letter-spacing:2px;color:#888;">PAYMENT STATUS</span><span style="font-size:14px;font-weight:800;">${paymentStatus}</span></div>${paymentDetailHtml}${termDateHtml}${sigBoxHtml}${footerHtml}${emptyLinesHtml}</div></body></html>`);
     printWindow.document.close();
     setTimeout(() => printWindow.print(), 500);
   }

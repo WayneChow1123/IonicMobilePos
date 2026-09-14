@@ -1,14 +1,16 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { map } from 'rxjs/operators';
+import { updateInvoiceDocNos, formatDocNo } from '../utils/invoice-helper';
 
 @Injectable({
   providedIn: 'root'
 })
 export class ApiService {
 
-  private baseUrl = 'http://localhost:5262';
-  //private baseUrl = 'https://td.mobile.pos.xcode.com.my';
+  // private baseUrl = 'http://localhost:5262';
+  private baseUrl = 'https://td.mobile.pos.xcode.com.my';
 
   constructor(private http: HttpClient) { }
 
@@ -46,11 +48,38 @@ export class ApiService {
   createInvoice(data: any): Observable<any> { return this.http.post(this.baseUrl + '/Invoice/CreateInvoice/invoices', data); }
   getStockReadyInvoices(): Observable<any> { return this.http.get(this.baseUrl + '/Invoice/GetStockReadyInvoices/invoices/stock-ready'); }
 
-  getInvoices(params?: any): Observable<any> { return this.http.get(this.baseUrl + '/Invoice/GetInvoices/invoices', { params }); }
-  getInvoiceDetails(id: any): Observable<any> { return this.http.get(this.baseUrl + '/Invoice/GetInvoiceDetails/invoices/' + id); }
+  getInvoices(params?: any): Observable<any> {
+    return this.http.get(this.baseUrl + '/Invoice/GetInvoices/invoices', { params }).pipe(
+      map((res: any) => {
+        if (Array.isArray(res)) {
+          updateInvoiceDocNos(res);
+        }
+        return res;
+      })
+    );
+  }
+  getInvoiceDetails(id: any): Observable<any> {
+    return this.http.get(this.baseUrl + '/Invoice/GetInvoiceDetails/invoices/' + id).pipe(
+      map((res: any) => {
+        if (res) {
+          res.docNo = formatDocNo(res);
+        }
+        return res;
+      })
+    );
+  }
   updateInvoice(id: any, data: any): Observable<any> { return this.http.patch(this.baseUrl + '/Invoice/UpdateInvoice/invoices/' + id, data); }
   deleteInvoice(id: any): Observable<any> { return this.http.delete(this.baseUrl + '/Invoice/DeleteInvoice/invoices/' + id, { responseType: 'text' }); }
-  previewInvoice(id: any): Observable<any> { return this.http.get(this.baseUrl + '/Invoice/PreviewInvoice/invoices/' + id + '/preview'); }
+  previewInvoice(id: any): Observable<any> {
+    return this.http.get(this.baseUrl + '/Invoice/PreviewInvoice/invoices/' + id + '/preview').pipe(
+      map((res: any) => {
+        if (res) {
+          res.docNo = formatDocNo(res);
+        }
+        return res;
+      })
+    );
+  }
 
   createPayment(data: any): Observable<any> { return this.http.post(this.baseUrl + '/Payment/CreatePayment/payments', data); }
   createBulkPayment(data: any): Observable<any> { return this.http.post(this.baseUrl + '/Payment/CreateBulkPayment/bulk-payments', data); }
