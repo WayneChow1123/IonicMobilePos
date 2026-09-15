@@ -123,6 +123,10 @@ export class BillingPage implements OnInit {
   filteredProductsSelection: any[] = [];
   productSearchTerm = '';
 
+  showCustomerModal = false;
+  customerSearchTerm = '';
+  filteredCustomers: any[] = [];
+
   getSelectedCustomerDiscount(): number {
     if (!this.cnForm.customerId) return 0;
     const customer: any = this.customers.find((c: any) => c.id == this.cnForm.customerId);
@@ -301,7 +305,14 @@ export class BillingPage implements OnInit {
 
   loadCustomers() {
     this.api.getAllCustomers().subscribe({
-      next: (res) => { this.customers = Array.isArray(res) ? res : []; },
+      next: (res) => { 
+        this.customers = Array.isArray(res) ? res : []; 
+        this.filteredCustomers = [...this.customers];
+        if (this.currentView === 'newPayment' && (!this.paymentForm.customerId || this.paymentForm.customerId === 0) && this.customers.length > 0) {
+          this.paymentForm.customerId = this.customers[0].id;
+          this.loadInvoicesByCustomer(this.customers[0].id);
+        }
+      },
       error: () => {}
     });
   }
@@ -600,6 +611,113 @@ export class BillingPage implements OnInit {
       this.paymentForm.invoiceIds = [];
       this.selectedInvoicesList = [];
     }
+  }
+
+  openCustomerModal() {
+    this.customerSearchTerm = '';
+    this.filteredCustomers = [...this.customers];
+    this.showCustomerModal = true;
+    this.cdr.detectChanges();
+  }
+
+  closeCustomerModal() {
+    this.showCustomerModal = false;
+    this.cdr.detectChanges();
+  }
+
+  focusCustomerSearch() {
+    setTimeout(() => {
+      const input = document.getElementById('customer-modal-search-input') as HTMLInputElement;
+      if (input) input.focus();
+    }, 100);
+  }
+
+  onCustomerSearch(event: any) {
+    const val = event?.target?.value ?? '';
+    this.customerSearchTerm = val;
+    this.applyCustomerSearchFilter(val);
+  }
+
+  clearCustomerSearch() {
+    this.customerSearchTerm = '';
+    this.filteredCustomers = [...this.customers];
+    this.cdr.detectChanges();
+    const input = document.getElementById('customer-modal-search-input') as HTMLInputElement;
+    if (input) {
+      input.value = '';
+      input.focus();
+    }
+  }
+
+  filterCustomers() {
+    this.applyCustomerSearchFilter(this.customerSearchTerm);
+  }
+
+  applyCustomerSearchFilter(query: string) {
+    const term = (query || '').trim().toLowerCase();
+    if (!term) {
+      this.filteredCustomers = [...this.customers];
+    } else {
+      // 严格仅匹配客户名字：排除任何与输入无关的名字
+      const matches = this.customers.filter((c: any) => {
+        if (!c) return false;
+        const name = (c.name || c.Name || c.customerName || c.CustomerName || '').toString().trim().toLowerCase();
+        return name.includes(term);
+      });
+
+      // 排序：以输入字符开头的名字排在最顶部
+      matches.sort((a: any, b: any) => {
+        const nameA = (a.name || a.Name || a.customerName || a.CustomerName || '').toString().trim().toLowerCase();
+        const nameB = (b.name || b.Name || b.customerName || b.CustomerName || '').toString().trim().toLowerCase();
+        const aStarts = nameA.startsWith(term);
+        const bStarts = nameB.startsWith(term);
+        if (aStarts && !bStarts) return -1;
+        if (!aStarts && bStarts) return 1;
+
+        return nameA.localeCompare(nameB);
+      });
+
+      this.filteredCustomers = matches;
+    }
+    this.cdr.detectChanges();
+  }
+
+  selectPaymentCustomer(customer: any) {
+    if (!customer) return;
+    this.paymentForm.customerId = customer.id;
+    this.onCustomerChange();
+    this.closeCustomerModal();
+  }
+
+  getSelectedPaymentCustomer(): any {
+    if (!this.paymentForm.customerId) return null;
+    return this.customers.find((c: any) => c.id == this.paymentForm.customerId) || null;
+  }
+
+  getSelectedCustomerName(): string {
+    const cust = this.getSelectedPaymentCustomer();
+    return cust ? cust.name : 'Select Customer...';
+  }
+
+  getCustomerInitials(name: string): string {
+    if (!name) return '?';
+    const parts = name.trim().split(/\s+/);
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+    return name.slice(0, 2).toUpperCase();
+  }
+
+  getCustomerUnpaidInvoicesCount(customerId: any): number {
+    if (!customerId || !this.invoices) return 0;
+    return this.invoices.filter((inv: any) => inv.customerId == customerId && inv.status !== 'Paid').length;
+  }
+
+  getCustomerTotalUnpaidBalance(customerId: any): number {
+    if (!customerId || !this.invoices) return 0;
+    return this.invoices
+      .filter((inv: any) => inv.customerId == customerId && inv.status !== 'Paid')
+      .reduce((sum: number, inv: any) => sum + (Number(inv.balance) || 0), 0);
   }
 
   onInvoiceChange() {

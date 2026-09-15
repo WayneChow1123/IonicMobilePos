@@ -76,9 +76,11 @@
     <div class="form-card" style="background:#E8D5D0;">
       <div class="form-group">
         <label>CUSTOMER *</label>
-        <select [(ngModel)]="paymentForm.customerId" class="form-select" (change)="onCustomerChange()">
-          <option *ngFor="let c of customers" [value]="c.id">{{ c.name }}</option>
-        </select>
+        <div class="form-select" (click)="openCustomerModal()"
+          style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;">
+          <span>{{ getSelectedCustomerName() }}</span>
+          <ion-icon name="chevron-down-outline" style="font-size:16px;color:#1a1a1a;pointer-events:none;"></ion-icon>
+        </div>
       </div>
       <div class="form-group">
         <label>INVOICES *</label>
@@ -595,6 +597,128 @@
 
 
 
+
+  <!-- Customer Selection Modal with Search -->
+  <ion-modal [isOpen]="showCustomerModal" (didDismiss)="closeCustomerModal()" (didPresent)="focusCustomerSearch()"
+    class="customer-select-modal"
+    style="--border-radius: 24px; --height: 90vh; --width: 98vw; --max-width: 600px;">
+    <ng-template>
+      <div class="cust-modal-container" style="height:90vh;max-height:90vh;display:flex;flex-direction:column;background:#fdfdfd;overflow:hidden;box-sizing:border-box;">
+        <!-- Modal Header -->
+        <div class="cust-modal-header"
+          style="background:linear-gradient(135deg, #6c5ce7 0%, #5344c9 100%);padding:18px 20px;display:flex;justify-content:space-between;align-items:center;color:#fff;flex-shrink:0;">
+          <div>
+            <h2 style="margin:0;font-size:20px;font-weight:800;letter-spacing:0.5px;color:#fff;">Select Customer</h2>
+            <div style="font-size:12px;opacity:0.85;margin-top:2px;font-weight:600;">
+              {{ filteredCustomers.length }} Customer{{ filteredCustomers.length !== 1 ? 's' : '' }} Available
+            </div>
+          </div>
+          <ion-button fill="clear" (click)="closeCustomerModal()" style="--color:#fff;margin:0;">
+            <ion-icon name="close-outline" slot="icon-only" style="font-size:28px;"></ion-icon>
+          </ion-button>
+        </div>
+
+        <!-- Search Bar Area -->
+        <div style="padding:16px 20px 8px;background:#fdfdfd;flex-shrink:0;">
+          <div class="cust-search-box"
+            style="background:#f1f2f6;border-radius:16px;padding:4px 16px;display:flex;align-items:center;border:1.5px solid #eef2f7;transition:border-color 0.2s;">
+            <ion-icon name="search-outline" style="color:#a4b0be;font-size:22px;flex-shrink:0;"></ion-icon>
+            <input id="customer-modal-search-input" type="text"
+              [(ngModel)]="customerSearchTerm"
+              (ngModelChange)="applyCustomerSearchFilter($event)"
+              (input)="onCustomerSearch($event)"
+              placeholder="Search customer name..."
+              autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false"
+              style="border:none;background:transparent;padding:12px 10px;flex:1;outline:none;font-size:15px;color:#2f3542;min-width:0;" />
+            <ion-button *ngIf="customerSearchTerm" fill="clear" (click)="clearCustomerSearch()"
+              style="--color:#a4b0be;--padding-start:0;--padding-end:0;height:32px;margin:0;">
+              <ion-icon name="close-circle" slot="icon-only" style="font-size:20px;"></ion-icon>
+            </ion-button>
+          </div>
+        </div>
+
+        <!-- Customer List -->
+        <div class="cust-modal-list" style="flex:1 1 0;min-height:0;max-height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;touch-action:pan-y;padding:8px 20px 30px;box-sizing:border-box;">
+          <div *ngFor="let c of filteredCustomers" (click)="selectPaymentCustomer(c)"
+            class="cust-card-item"
+            [style.background]="paymentForm.customerId == c.id ? '#f7f6ff' : '#fff'"
+            [style.border-color]="paymentForm.customerId == c.id ? '#6c5ce7' : '#f1f2f6'"
+            style="border-radius:18px;padding:16px;margin-bottom:12px;border-width:1.5px;border-style:solid;transition:all 0.2s ease;cursor:pointer;display:flex;align-items:center;gap:14px;box-shadow:0 2px 8px rgba(0,0,0,0.02);position:relative;">
+
+            <!-- Avatar -->
+            <div class="cust-card-avatar"
+              [style.background]="paymentForm.customerId == c.id ? 'linear-gradient(135deg, #6c5ce7 0%, #8c7ae6 100%)' : '#eef0f8'"
+              [style.color]="paymentForm.customerId == c.id ? '#fff' : '#5c6ac4'"
+              style="width:46px;height:46px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px;flex-shrink:0;">
+              {{ getCustomerInitials(c.name) }}
+            </div>
+
+            <!-- Details -->
+            <div style="flex:1;min-width:0;">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap;">
+                <span style="font-size:16px;font-weight:800;color:#2f3542;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                  {{ c.name }}
+                </span>
+                <span *ngIf="c.customerCode || c.code"
+                  style="font-size:10px;font-weight:800;color:#6c5ce7;background:#ede9fe;padding:2px 7px;border-radius:6px;">
+                  {{ c.customerCode || c.code }}
+                </span>
+              </div>
+
+              <!-- Contact Row -->
+              <div style="display:flex;align-items:center;gap:12px;font-size:12px;color:#747d8c;margin-bottom:6px;flex-wrap:wrap;">
+                <span *ngIf="c.phone" style="display:flex;align-items:center;gap:4px;">
+                  <ion-icon name="call-outline" style="font-size:13px;"></ion-icon> {{ c.phone }}
+                </span>
+                <span *ngIf="c.email" style="display:flex;align-items:center;gap:4px;">
+                  <ion-icon name="mail-outline" style="font-size:13px;"></ion-icon> {{ c.email }}
+                </span>
+              </div>
+
+              <!-- Invoice Status Pill -->
+              <div style="display:flex;align-items:center;gap:6px;">
+                <span *ngIf="getCustomerUnpaidInvoicesCount(c.id) > 0"
+                  style="font-size:11px;font-weight:700;color:#d35400;background:#fef5e7;border:1px solid #fdebd0;padding:2px 8px;border-radius:6px;display:inline-flex;align-items:center;gap:4px;">
+                  <ion-icon name="alert-circle-outline" style="font-size:13px;"></ion-icon>
+                  {{ getCustomerUnpaidInvoicesCount(c.id) }} Unpaid · RM {{ getCustomerTotalUnpaidBalance(c.id) | number:'1.2-2' }}
+                </span>
+                <span *ngIf="getCustomerUnpaidInvoicesCount(c.id) === 0"
+                  style="font-size:11px;font-weight:700;color:#27ae60;background:#e8f8f5;border:1px solid #d4efdf;padding:2px 8px;border-radius:6px;display:inline-flex;align-items:center;gap:4px;">
+                  <ion-icon name="checkmark-circle-outline" style="font-size:13px;"></ion-icon>
+                  All Settled
+                </span>
+              </div>
+            </div>
+
+            <!-- Selection Indicator -->
+            <div style="flex-shrink:0;">
+              <div *ngIf="paymentForm.customerId == c.id"
+                style="width:28px;height:28px;border-radius:50%;background:#6c5ce7;color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(108,92,231,0.4);">
+                <ion-icon name="checkmark-outline" style="font-size:18px;"></ion-icon>
+              </div>
+              <ion-icon *ngIf="paymentForm.customerId != c.id" name="chevron-forward-outline"
+                style="color:#cfd8dc;font-size:20px;"></ion-icon>
+            </div>
+          </div>
+
+          <!-- Empty State -->
+          <div *ngIf="filteredCustomers.length === 0" style="text-align:center;padding:50px 20px;color:#888;">
+            <div style="width:64px;height:64px;border-radius:50%;background:#f1f2f6;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;">
+              <ion-icon name="people-outline" style="font-size:32px;color:#a4b0be;"></ion-icon>
+            </div>
+            <div style="font-size:17px;font-weight:800;color:#2f3542;margin-bottom:6px;">No Customers Found</div>
+            <p *ngIf="customerSearchTerm" style="font-size:13px;color:#a4b0be;margin:0 0 16px;">
+              No match found for "<strong>{{ customerSearchTerm }}</strong>"
+            </p>
+            <button *ngIf="customerSearchTerm" (click)="clearCustomerSearch()"
+              style="background:#6c5ce7;color:#fff;border:none;border-radius:12px;padding:10px 20px;font-size:13px;font-weight:700;cursor:pointer;">
+              Clear Search
+            </button>
+          </div>
+        </div>
+      </div>
+    </ng-template>
+  </ion-modal>
 
   <!-- Purchase History Modal (Standard Ionic Modal) -->
   <ion-modal [isOpen]="showHistoryModal" (didDismiss)="showHistoryModal = false"

@@ -716,4 +716,97 @@ ion-content {
   padding-bottom: 8px;
 }
 
+// ═════════════════════════════════════════════
+// ═════════════════════════════════════════════
+// NEW PAYMENT CUSTOMER PICKER & MODAL STYLES
+// ═════════════════════════════════════════════
+
+.customer-select-modal {
+  --height: 90vh;
+  --max-height: 90vh;
+  --border-radius: 24px;
+  --width: 98vw;
+  --max-width: 600px;
+}
+
+.cust-modal-container {
+  height: 90vh !important;
+  max-height: 90vh !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  box-sizing: border-box !important;
+}
+
+.cust-modal-list {
+  flex: 1 1 0 !important;
+  min-height: 0 !important;
+  max-height: 100% !important;
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch !important;
+  touch-action: pan-y !important;
+  overscroll-behavior-y: contain !important;
+
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: #ddd;
+    border-radius: 3px;
+  }
+}
+
+.cust-card-item {
+  &:active {
+    transform: scale(0.985);
+  }
+}
+
+.cust-search-box {
+  &:focus-within {
+    border-color: #6c5ce7 !important;
+    background: #fff !important;
+    box-shadow: 0 0 0 3px rgba(108, 92, 231, 0.12) !important;
+  }
+}
+
+// Dark mode overrides
+body.dark {
+  .cust-modal-container {
+    background: #141419 !important;
+  }
+
+  .cust-search-box {
+    background: #202028 !important;
+    border-color: #30303c !important;
+
+    input {
+      color: #fff !important;
+    }
+  }
+
+  .cust-card-item {
+    background: #1e1e24 !important;
+    border-color: #2c2c36 !important;
+
+    &.selected,
+    &[style*="f7f6ff"] {
+      background: #252238 !important;
+      border-color: #6c5ce7 !important;
+    }
+
+    .cust-card-name {
+      color: #fff !important;
+    }
+
+    .cust-card-avatar {
+      background: #2a2a36 !important;
+      color: #a29bfe !important;
+    }
+  }
+}
+
 
