@@ -1072,9 +1072,8 @@ export class BillingPage implements OnInit {
   }
 
   confirmDeleteCN(cn: any) {
-    if (cn.isUsed) { this.showToastMsg('This credit note has been used and cannot be deleted'); return; }
     this.selectedCN = cn;
-    this.alertService.confirm('Delete Credit Note', 'Are you sure?').then(c => { if(c) this.deleteCreditNote(); });
+    this.alertService.confirm('Delete Credit Note', 'Are you sure you want to delete ' + (cn.cnNumber || 'CN-' + cn.id) + '?').then(c => { if(c) this.deleteCreditNote(); });
   }
   deleteCreditNote() {
     const target = this.selectedCNDetail || this.selectedCN;

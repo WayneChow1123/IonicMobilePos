@@ -1131,6 +1131,31 @@ export class InvoicesPage implements OnInit, OnDestroy {
     });
   }
 
+  confirmDeleteCNFromInvoice(cn: any) {
+    this.alertService.confirm('Delete Credit Note', 'Are you sure you want to delete ' + (cn.cnNumber || 'CN-' + cn.id) + '?').then(c => {
+      if (c) {
+        const invId = this.selectedInvoice?.id || cn.invoiceId;
+        this.api.deleteCreditNote(invId, cn.id).subscribe({
+          next: () => {
+            this.showToastMsg('Credit Note deleted!');
+            if (this.selectedInvoice?.id) {
+              this.api.getInvoiceDetails(this.selectedInvoice.id).subscribe({
+                next: (res: any) => {
+                  this.selectedInvoice = res;
+                  this.loadInvoices();
+                  this.cdr.detectChanges();
+                }
+              });
+            } else {
+              this.loadInvoices();
+            }
+          },
+          error: (err: any) => this.showToastMsg('Failed: ' + (err.error?.message || err.error || err.message || 'error'))
+        });
+      }
+    });
+  }
+
   toggleEditMode() {
     if (this.isEditMode) {
       this.saveInvoice();
