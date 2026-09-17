@@ -9,7 +9,7 @@ import { updateInvoiceDocNos, formatDocNo } from '../utils/invoice-helper';
 })
 export class ApiService {
 
-  // private baseUrl = 'http://localhost:5262';
+  //private baseUrl = 'http://localhost:5262';
   private baseUrl = 'https://td.mobile.pos.xcode.com.my';
 
   constructor(private http: HttpClient) { }

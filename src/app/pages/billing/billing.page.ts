@@ -126,6 +126,8 @@ export class BillingPage implements OnInit {
   showCustomerModal = false;
   customerSearchTerm = '';
   filteredCustomers: any[] = [];
+  customerModalTarget: 'payment' | 'cn' = 'payment';
+  cnProductSearchTerm = '';
 
   getSelectedCustomerDiscount(): number {
     if (!this.cnForm.customerId) return 0;
@@ -183,6 +185,7 @@ export class BillingPage implements OnInit {
     
     // Force UI update
     this.cnForm.items = [...this.cnForm.items];
+    this.cnProductSearchTerm = '';
     this.showToastMsg(`Added ${product.name}`);
     this.cdr.detectChanges();
   }
@@ -235,6 +238,7 @@ export class BillingPage implements OnInit {
     
     // Force UI update
     this.cnForm.items = [...this.cnForm.items];
+    this.cnProductSearchTerm = '';
     this.showToastMsg(`Added ${item.productName} from history`);
     this.cdr.detectChanges();
   }
@@ -421,6 +425,7 @@ export class BillingPage implements OnInit {
     this.cnForm = { customerId: 0, invoiceId: 0, reason: '', items: [] };
     this.cnFilteredInvoices = [...this.invoices];
     this.selectedCNInvoiceDetail = null;
+    this.cnProductSearchTerm = '';
     this.currentView = 'newCN';
   }
 
@@ -613,7 +618,8 @@ export class BillingPage implements OnInit {
     }
   }
 
-  openCustomerModal() {
+  openCustomerModal(target: 'payment' | 'cn' = 'payment') {
+    this.customerModalTarget = target;
     this.customerSearchTerm = '';
     this.filteredCustomers = [...this.customers];
     this.showCustomerModal = true;
@@ -682,11 +688,68 @@ export class BillingPage implements OnInit {
     this.cdr.detectChanges();
   }
 
+  selectCustomerFromModal(customer: any) {
+    if (this.customerModalTarget === 'cn') {
+      this.selectCNCustomer(customer);
+    } else {
+      this.selectPaymentCustomer(customer);
+    }
+  }
+
   selectPaymentCustomer(customer: any) {
     if (!customer) return;
     this.paymentForm.customerId = customer.id;
     this.onCustomerChange();
     this.closeCustomerModal();
+  }
+
+  selectCNCustomer(customer: any) {
+    this.cnForm.customerId = customer ? customer.id : 0;
+    this.onCNCustomerChange();
+    this.closeCustomerModal();
+  }
+
+  getCNSelectedCustomerName(): string {
+    if (!this.cnForm?.customerId || this.cnForm.customerId == 0) {
+      return 'All Customers';
+    }
+    const cust = this.customers.find((c: any) => c.id == this.cnForm.customerId);
+    return cust ? cust.name : 'Customer #' + this.cnForm.customerId;
+  }
+
+  isCustomerModalSelected(c: any): boolean {
+    if (!c) return false;
+    if (this.customerModalTarget === 'cn') {
+      return (this.cnForm?.customerId ?? 0) == c.id;
+    }
+    return (this.paymentForm?.customerId ?? 0) == c.id;
+  }
+
+  get filteredCNItems(): any[] {
+    if (!this.cnForm?.items) return [];
+    if (!this.cnProductSearchTerm || !this.cnProductSearchTerm.trim()) {
+      return this.cnForm.items;
+    }
+    const term = this.cnProductSearchTerm.trim().toLowerCase();
+    return this.cnForm.items.filter((item: any) => {
+      const name = (item.productName || '').toString().toLowerCase();
+      const code = (item.productCode || item.code || item.barcode || '').toString().toLowerCase();
+      return name.includes(term) || code.includes(term);
+    });
+  }
+
+  getCNSelectedReturnCount(): number {
+    if (!this.cnForm?.items) return 0;
+    return this.cnForm.items.filter((i: any) => Number(i.returnQuantity) > 0).length;
+  }
+
+  removeCNItem(item: any) {
+    if (!this.cnForm?.items) return;
+    const idx = this.cnForm.items.indexOf(item);
+    if (idx > -1) {
+      this.cnForm.items.splice(idx, 1);
+      this.cnForm.items = [...this.cnForm.items];
+    }
   }
 
   getSelectedPaymentCustomer(): any {
@@ -728,6 +791,7 @@ export class BillingPage implements OnInit {
     this.cnForm.invoiceId = 0;
     this.cnForm.items = [];
     this.selectedCNInvoiceDetail = null;
+    this.cnProductSearchTerm = '';
     if (this.cnForm.customerId && this.cnForm.customerId != 0) {
       this.cnFilteredInvoices = this.invoices.filter((inv: any) => inv.customerId == this.cnForm.customerId);
       this.loadCustomerProductPrices(Number(this.cnForm.customerId));
@@ -738,6 +802,7 @@ export class BillingPage implements OnInit {
   }
 
   onCNInvoiceChange() {
+    this.cnProductSearchTerm = '';
     if (this.cnForm.invoiceId && this.cnForm.invoiceId != 0) {
       this.api.getInvoiceDetails(Number(this.cnForm.invoiceId)).subscribe({
         next: (res: any) => {
