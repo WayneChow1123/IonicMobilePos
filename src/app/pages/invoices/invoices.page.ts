@@ -1,6 +1,6 @@
 import { AlertService } from '../../services/alert.service';
-import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
-import { NavController, Platform } from '@ionic/angular';
+import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
+import { NavController } from '@ionic/angular';
 import { Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { IonicModule } from '@ionic/angular';
@@ -17,7 +17,7 @@ import { formatDocNo, updateInvoiceDocNos } from '../../utils/invoice-helper';
   templateUrl: './invoices.page.html',
   styleUrls: ['./invoices.page.scss'],
 })
-export class InvoicesPage implements OnInit, OnDestroy {
+export class InvoicesPage implements OnInit {
   invoices: any[] = [];
   filteredInvoices: any[] = [];
   displayedInvoices: any[] = [];
@@ -205,18 +205,7 @@ export class InvoicesPage implements OnInit, OnDestroy {
     { text: 'Delete', role: 'destructive', handler: () => this.deleteInvoice() }
   ];
 
-  private backButtonSub?: any;
-
-  constructor(
-    private router: Router,
-    private route: ActivatedRoute,
-    private navCtrl: NavController,
-    private api: ApiService,
-    private cdr: ChangeDetectorRef,
-    private alertService: AlertService,
-    private btPrint: BluetoothPrintService,
-    private platform: Platform
-  ) { }
+  constructor(private router: Router, private route: ActivatedRoute, private navCtrl: NavController, private api: ApiService, private cdr: ChangeDetectorRef, private alertService: AlertService, private btPrint: BluetoothPrintService) { }
 
   ionViewWillEnter() {
     this.loadPrinterSettings();
@@ -238,23 +227,6 @@ export class InvoicesPage implements OnInit, OnDestroy {
         this.isDirectEntry = false;
       }
     });
-
-    // Handle hardware / gesture back button
-    this.backButtonSub = this.platform.backButton.subscribeWithPriority(10, () => {
-      if (this.showModal && !this.isEditing) {
-        this.handleNewInvoiceBack();
-      } else if (this.showModal && this.isEditing) {
-        this.closeModal();
-      } else if (this.isDirectEntry) {
-        this.goBack();
-      }
-    });
-  }
-
-  ngOnDestroy() {
-    if (this.backButtonSub) {
-      this.backButtonSub.unsubscribe();
-    }
   }
 
   loadInvoices() {
@@ -277,15 +249,6 @@ export class InvoicesPage implements OnInit, OnDestroy {
       next: (res) => {
         this.customers = Array.isArray(res) ? res : [];
         this.filteredCustomers = [...this.customers];
-        // If we are currently in New Invoice mode and have a customer selected (e.g. from draft), sync customer details
-        if (this.showModal && !this.isEditing && this.form?.customerId > 0) {
-          const match = this.customers.find(c => c.id == this.form.customerId);
-          if (match) {
-            this.selectedCustomerDetail = match;
-            this.loadAvailableCredits(Number(this.form.customerId));
-            this.loadCustomerProductPrices(Number(this.form.customerId));
-          }
-        }
       },
       error: () => { }
     });
@@ -550,132 +513,27 @@ export class InvoicesPage implements OnInit, OnDestroy {
     return this.selectedCustomerDetail.creditBalance || 0;
   }
 
-  private readonly DRAFT_STORAGE_KEY = 'new_invoice_draft';
-
-  hasNewInvoiceData(): boolean {
-    if (!this.form) return false;
-    if (this.form.items && this.form.items.length > 0) return true;
-    if (this.form.remark && this.form.remark.trim() !== '') return true;
-    if (this.form.customerId && this.form.customerId > 0) return true;
-    if (this.termType !== 'CASH SALE' || this.paymentMethod !== 'CASH') return true;
-    if (this.selectedCreditNoteId) return true;
-    if (this.amountPaid > 0) return true;
-    if (localStorage.getItem(this.DRAFT_STORAGE_KEY)) return true;
-    return false;
-  }
-
-  saveInvoiceDraft() {
-    try {
-      const draft = {
-        form: this.form,
-        selectedCustomerDetail: this.selectedCustomerDetail,
-        selectedCreditNoteId: this.selectedCreditNoteId,
-        amountPaid: this.amountPaid,
-        paymentMethod: this.paymentMethod,
-        termType: this.termType,
-        showInvoiceRemark: this.showInvoiceRemark,
-        savedAt: new Date().toISOString()
-      };
-      localStorage.setItem(this.DRAFT_STORAGE_KEY, JSON.stringify(draft));
-    } catch (e) {
-      console.error('Failed to save invoice draft to localStorage', e);
-    }
-  }
-
-  clearInvoiceDraft() {
-    try {
-      localStorage.removeItem(this.DRAFT_STORAGE_KEY);
-    } catch (e) {
-      console.error('Failed to clear invoice draft', e);
-    }
-  }
-
-  loadInvoiceDraft(): boolean {
-    try {
-      const saved = localStorage.getItem(this.DRAFT_STORAGE_KEY);
-      if (!saved) return false;
-      const draft = JSON.parse(saved);
-      if (!draft || !draft.form) return false;
-
-      this.form = draft.form;
-      this.selectedCreditNoteId = draft.selectedCreditNoteId || null;
-      this.amountPaid = draft.amountPaid || 0;
-      this.paymentMethod = draft.paymentMethod || 'CASH';
-      this.termType = draft.termType || 'CASH SALE';
-      this.showInvoiceRemark = !!draft.showInvoiceRemark;
-
-      const targetCustomerId = Number(this.form.customerId);
-      if (targetCustomerId > 0) {
-        const match = this.customers.find(c => c.id == targetCustomerId);
-        this.selectedCustomerDetail = match || draft.selectedCustomerDetail || null;
-        this.loadAvailableCredits(targetCustomerId);
-        this.loadCustomerProductPrices(targetCustomerId);
-      } else {
-        this.selectedCustomerDetail = null;
-        this.availableCredits = [];
-        this.customerProductPrices = [];
-      }
-      return true;
-    } catch (e) {
-      console.error('Failed to parse invoice draft', e);
-      return false;
-    }
-  }
-
-  resetNewInvoiceForm() {
+  openAddModal() {
+    this.isEditing = false;
+    this.isEditMode = true;
     this.selectedInvoice = null;
-    this.selectedCustomerDetail = null;
+    this.selectedCustomerDetail = this.customers.length > 0 ? this.customers[0] : null;
     this.selectedCreditNoteId = null;
     this.availableCredits = [];
     this.customerProductPrices = [];
-    this.termType = 'CASH SALE';
-    this.paymentMethod = 'CASH';
-    this.amountPaid = 0;
-    this.showInvoiceRemark = false;
+    const firstCustomerId = this.customers.length > 0 ? Number(this.customers[0].id) : 0;
     this.form = {
-      customerId: 0,
+      customerId: firstCustomerId,
       invoiceDate: this.getMYSDate(),
       remark: '',
       useCreditBalance: false,
       items: []
     };
-  }
-
-  openAddModal() {
-    this.isEditing = false;
-    this.isEditMode = true;
-    this.selectedInvoice = null;
-
-    const restored = this.loadInvoiceDraft();
-    if (restored) {
-      this.alertService.toast('Draft invoice restored', 'info');
-    } else {
-      this.resetNewInvoiceForm();
+    if (this.customers.length > 0) {
+      this.loadAvailableCredits(firstCustomerId);
+      this.loadCustomerProductPrices(firstCustomerId);
     }
     this.showModal = true;
-  }
-
-  async handleNewInvoiceBack() {
-    if (!this.hasNewInvoiceData()) {
-      this.closeModal();
-      return;
-    }
-
-    const action = await this.alertService.confirmDraft(
-      'Save Invoice Draft?',
-      'You have unsaved invoice changes. Do you want to keep the current draft or discard and exit?'
-    );
-
-    if (action === 'keep') {
-      this.saveInvoiceDraft();
-      this.alertService.toast('Invoice draft saved', 'success');
-      this.closeModal();
-    } else if (action === 'discard') {
-      this.clearInvoiceDraft();
-      this.resetNewInvoiceForm();
-      this.closeModal();
-    }
-    // If 'cancel', do nothing and remain in the New Invoice editor
   }
 
   openEditModal(invoice: any) {
@@ -1037,7 +895,6 @@ export class InvoicesPage implements OnInit, OnDestroy {
       this.api.createInvoice(payload).subscribe({
         next: (res: any) => {
           this.showToastMsg('Invoice created!');
-          this.clearInvoiceDraft();
           const createdInvoiceId = res?.invoiceId || res?.id;
           this.loadInvoices();
           this.loadCustomers();
