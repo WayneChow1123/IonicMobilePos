@@ -57,4 +57,32 @@ export class AlertService {
       return result.isConfirmed;
     });
   }
+
+  confirmDraft(
+    title: string = 'Save Invoice Draft?',
+    text: string = 'You have unsaved invoice changes. Do you want to keep the current draft or discard and exit?'
+  ): Promise<'keep' | 'discard' | 'cancel'> {
+    return Swal.fire({
+      title: title,
+      text: text,
+      icon: 'question',
+      showDenyButton: true,
+      showCancelButton: true,
+      confirmButtonText: 'Keep Draft',
+      denyButtonText: 'Discard & Exit',
+      cancelButtonText: 'Cancel',
+      confirmButtonColor: '#2e7d32',
+      denyButtonColor: '#d32f2f',
+      cancelButtonColor: '#757575',
+      reverseButtons: false,
+    }).then((result: any) => {
+      if (result.isConfirmed) {
+        return 'keep';
+      } else if (result.isDenied) {
+        return 'discard';
+      } else {
+        return 'cancel';
+      }
+    });
+  }
 }
