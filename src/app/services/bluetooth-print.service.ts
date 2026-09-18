@@ -37,6 +37,10 @@ export function sanitizePrintText(str: string): string {
   providedIn: 'root'
 })
 export class BluetoothPrintService {
+  private isPrinting = false;
+  private disconnectTimer: any = null;
+  private currentConnectedMac: string | null = null;
+
   constructor(private alertService: AlertService) {}
 
   /** Checks if bluetoothSerial plugin is available on the window */
@@ -130,37 +134,203 @@ export class BluetoothPrintService {
     return '| ' + ' '.repeat(Math.max(0, leftPad)) + safeText + ' '.repeat(Math.max(0, rightPad)) + ' |';
   }
 
+  /** Checks and requests BLUETOOTH_CONNECT permission if applicable on Android 12+ */
+  private checkPermission(onGranted: () => void, onDenied: () => void) {
+    const permissions = (window as any).plugins?.permissions;
+    if (permissions && permissions.BLUETOOTH_CONNECT) {
+      permissions.hasPermission(permissions.BLUETOOTH_CONNECT, (status: any) => {
+        if (status && status.hasPermission) {
+          onGranted();
+        } else {
+          permissions.requestPermission(permissions.BLUETOOTH_CONNECT, (s: any) => {
+            if (s && s.hasPermission) {
+              onGranted();
+            } else {
+              this.alertService.toast('Nearby Devices permission is required to print.', 'error');
+              onDenied();
+            }
+          }, () => onDenied());
+        }
+      }, () => onDenied());
+    } else {
+      onGranted();
+    }
+  }
+
+  /** Ensures Bluetooth RFCOMM connection is active, reusing existing connection if already connected to target MAC */
+  private async ensureConnected(mac: string): Promise<void> {
+    // 1. Cancel any pending disconnect timer immediately
+    if (this.disconnectTimer) {
+      clearTimeout(this.disconnectTimer);
+      this.disconnectTimer = null;
+    }
+
+    // 2. Check if Bluetooth is currently enabled on phone
+    await new Promise<void>((resolve, reject) => {
+      this.bluetoothSerial.isEnabled(
+        () => resolve(),
+        () => reject(new Error('Please turn on Bluetooth first'))
+      );
+    });
+
+    // 3. Check if currently connected
+    const isAlreadyConnected = await new Promise<boolean>((resolve) => {
+      this.bluetoothSerial.isConnected(
+        () => resolve(true),
+        () => resolve(false)
+      );
+    });
+
+    if (isAlreadyConnected && this.currentConnectedMac === mac) {
+      return; // Already connected to this printer!
+    }
+
+    // If connected to different device or stale link, disconnect cleanly first
+    if (isAlreadyConnected) {
+      await new Promise<void>((resolve) => {
+        this.bluetoothSerial.disconnect(
+          () => { this.currentConnectedMac = null; resolve(); },
+          () => { this.currentConnectedMac = null; resolve(); }
+        );
+      });
+    }
+
+    // Connect to printer
+    await new Promise<void>((resolve, reject) => {
+      this.bluetoothSerial.connect(
+        mac,
+        () => {
+          this.currentConnectedMac = mac;
+          resolve();
+        },
+        (err: any) => {
+          this.currentConnectedMac = null;
+          reject(err);
+        }
+      );
+    });
+  }
+
+  /**
+   * Sends data in small chunks (256 bytes) with delay between chunks (35ms).
+   * Prevents printer internal UART / RAM buffer overflow on thermal printers.
+   */
+  private async writeInChunks(buffer: ArrayBuffer, chunkSize = 256, delayMs = 35): Promise<void> {
+    const bytes = new Uint8Array(buffer);
+    const total = bytes.length;
+    let offset = 0;
+
+    while (offset < total) {
+      const end = Math.min(offset + chunkSize, total);
+      const chunk = bytes.slice(offset, end).buffer;
+
+      await new Promise<void>((resolve, reject) => {
+        this.bluetoothSerial.write(
+          chunk,
+          () => resolve(),
+          (err: any) => reject(err)
+        );
+      });
+
+      offset = end;
+      if (offset < total) {
+        await new Promise((r) => setTimeout(r, delayMs));
+      }
+    }
+  }
+
+  /** Safely closes the Bluetooth connection after physical printing completes */
+  private safeDisconnect(immediate = false) {
+    if (this.disconnectTimer) {
+      clearTimeout(this.disconnectTimer);
+      this.disconnectTimer = null;
+    }
+    if (!immediate) return;
+
+    if (this.isAvailable()) {
+      this.bluetoothSerial.isConnected(
+        () => {
+          this.bluetoothSerial.disconnect(
+            () => { this.currentConnectedMac = null; },
+            () => { this.currentConnectedMac = null; }
+          );
+        },
+        () => { this.currentConnectedMac = null; }
+      );
+    }
+  }
+
+  /**
+   * Executes a complete print job:
+   * 1. Connects to printer (or reuses open connection)
+   * 2. Writes data in paced chunks (prevents buffer overflow)
+   * 3. Calculates physical print time and keeps connection alive until printer finishes printing
+   * 4. Schedules graceful background disconnect
+   */
+  private async executePrintJob(mac: string, buffer: ArrayBuffer, jobName: string, settings: any, resolve: (val: boolean) => void) {
+    const { isAdapted } = this.resolvePrintWidth(settings);
+    if (isAdapted) {
+      this.alertService.toast('80mm selected: Auto-adapting to 48mm format for your printer', 'info');
+    } else {
+      this.alertService.toast(`Connecting to printer...`, 'info');
+    }
+
+    this.isPrinting = true;
+
+    try {
+      await this.ensureConnected(mac);
+
+      this.alertService.toast(`Sending ${jobName} data...`, 'info');
+      await this.writeInChunks(buffer, 256, 35);
+
+      // Estimate printing duration: thermal printers print ~15-20 lines/s
+      const lineEstimate = Math.max(20, Math.round(buffer.byteLength / 35));
+      const printTimeMs = Math.round((lineEstimate / 15) * 1000) + 1500;
+      const safeDelay = Math.min(6000, Math.max(3500, printTimeMs));
+
+      // Keep Bluetooth connection open during physical printing, then gracefully disconnect in background
+      this.disconnectTimer = setTimeout(() => {
+        this.safeDisconnect(true);
+      }, safeDelay);
+
+      this.alertService.toast(`${jobName} printed successfully!`, 'success');
+      this.isPrinting = false;
+      resolve(true);
+    } catch (err: any) {
+      this.isPrinting = false;
+      this.safeDisconnect(true);
+      const msg = err?.message || err || 'Unknown error';
+      this.alertService.toast(`Printing failed: ${msg}`, 'error');
+      resolve(false);
+    }
+  }
+
   /** Prints an invoice directly to the configured Bluetooth MAC address */
   printInvoice(inv: any, pd: any, settings: any, customers: any[], products: any[]): Promise<boolean> {
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
       if (!this.isAvailable()) {
         this.alertService.toast('Bluetooth printing is only available on native devices (APK)', 'error');
         return resolve(false);
       }
+      if (this.isPrinting) {
+        this.alertService.toast('Printing in progress, please wait...', 'warning');
+        return resolve(false);
+      }
 
       const mac = settings.macAddress || '02:29:DE:43:D8:2C';
-
-      const permissions = (window as any).plugins?.permissions;
-      if (permissions && permissions.BLUETOOTH_CONNECT) {
-        permissions.hasPermission(permissions.BLUETOOTH_CONNECT, (status: any) => {
-          if (status.hasPermission) {
-            this.connectAndPrint(mac, inv, pd, settings, customers, products, resolve);
-          } else {
-            permissions.requestPermission(permissions.BLUETOOTH_CONNECT, (s: any) => {
-              if (s.hasPermission) {
-                this.connectAndPrint(mac, inv, pd, settings, customers, products, resolve);
-              } else {
-                this.alertService.toast('Nearby Devices permission is required to print.', 'error');
-                resolve(false);
-              }
-            }, () => {
-              resolve(false);
-            });
+      this.checkPermission(
+        () => {
+          try {
+            const buffer = this.buildInvoiceBuffer(inv, pd, settings, customers, products);
+            this.executePrintJob(mac, buffer, 'Invoice', settings, resolve);
+          } catch (e: any) {
+            this.isPrinting = false;
+            this.alertService.toast(`Format error: ${e.message}`, 'error');
+            resolve(false);
           }
-        }, () => resolve(false));
-      } else {
-        this.connectAndPrint(mac, inv, pd, settings, customers, products, resolve);
-      }
+        },
+        () => resolve(false)
+      );
     });
   }
 
@@ -195,52 +365,9 @@ export class BluetoothPrintService {
     return 48; // Standard portable Bluetooth printer is 48mm
   }
 
-  private connectAndPrint(mac: string, inv: any, pd: any, settings: any, customers: any[], products: any[], resolve: any) {
-    const { isAdapted } = this.resolvePrintWidth(settings);
-    if (isAdapted) {
-      this.alertService.toast('80mm selected: Auto-adapting to 48mm format for your printer', 'info');
-    } else {
-      this.alertService.toast(`Connecting to printer...`, 'success');
-    }
-    this.bluetoothSerial.isEnabled(
-      () => {
-        this.bluetoothSerial.connect(
-          mac,
-          () => {
-            try {
-              this.sendPrintData(inv, pd, settings, customers, products)
-                .then(() => {
-                  this.bluetoothSerial.disconnect();
-                  resolve(true);
-                })
-                .catch((err) => {
-                  this.bluetoothSerial.disconnect();
-                  this.alertService.toast(`Printing failed: ${err.message || err}`, 'error');
-                  resolve(false);
-                });
-            } catch (e: any) {
-              this.bluetoothSerial.disconnect();
-              this.alertService.toast(`Format error: ${e.message}`, 'error');
-              resolve(false);
-            }
-          },
-          (err: any) => {
-            this.alertService.toast(`Failed to connect to printer: ${err}`, 'error');
-            resolve(false);
-          }
-        );
-      },
-      () => {
-        this.alertService.toast('Please turn on Bluetooth first', 'warning');
-        resolve(false);
-      }
-    );
-  }
-
-  private sendPrintData(inv: any, pd: any, settings: any, customers: any[], products: any[]): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const { width } = this.resolvePrintWidth(settings);
-      const builder = new BufferBuilder();
+  private buildInvoiceBuffer(inv: any, pd: any, settings: any, customers: any[], products: any[]): ArrayBuffer {
+    const { width } = this.resolvePrintWidth(settings);
+    const builder = new BufferBuilder();
 
       // --- ESC/POS commands ---
       const ESC = 0x1B;
@@ -565,95 +692,40 @@ export class BluetoothPrintService {
       const emptyLines = settings.bottomEmptyLine ?? 5;
       builder.appendText("\n".repeat(emptyLines));
 
-      // Write data to bluetooth
-      const buffer = builder.getBuffer();
-      this.bluetoothSerial.write(
-        buffer,
-        () => resolve(),
-        (err: any) => reject(err)
-      );
-    });
+      return builder.getBuffer();
   }
 
   printPayment(pd: any, settings: any, customers: any[], products: any[]): Promise<boolean> {
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
       if (!this.isAvailable()) {
         this.alertService.toast('Bluetooth printing is only available on native devices (APK)', 'error');
         return resolve(false);
       }
+      if (this.isPrinting) {
+        this.alertService.toast('Printing in progress, please wait...', 'warning');
+        return resolve(false);
+      }
 
       const mac = settings.macAddress || '02:29:DE:43:D8:2C';
-
-      const permissions = (window as any).plugins?.permissions;
-      if (permissions && permissions.BLUETOOTH_CONNECT) {
-        permissions.hasPermission(permissions.BLUETOOTH_CONNECT, (status: any) => {
-          if (status.hasPermission) {
-            this.connectAndPrintPayment(mac, pd, settings, customers, products, resolve);
-          } else {
-            permissions.requestPermission(permissions.BLUETOOTH_CONNECT, (s: any) => {
-              if (s.hasPermission) {
-                this.connectAndPrintPayment(mac, pd, settings, customers, products, resolve);
-              } else {
-                this.alertService.toast('Nearby Devices permission is required to print.', 'error');
-                resolve(false);
-              }
-            }, () => {
-              resolve(false);
-            });
+      this.checkPermission(
+        () => {
+          try {
+            const buffer = this.buildPaymentBuffer(pd, settings, customers, products);
+            this.executePrintJob(mac, buffer, 'Receipt', settings, resolve);
+          } catch (e: any) {
+            this.isPrinting = false;
+            this.alertService.toast(`Format error: ${e.message}`, 'error');
+            resolve(false);
           }
-        }, () => resolve(false));
-      } else {
-        this.connectAndPrintPayment(mac, pd, settings, customers, products, resolve);
-      }
+        },
+        () => resolve(false)
+      );
     });
   }
 
-  private connectAndPrintPayment(mac: string, pd: any, settings: any, customers: any[], products: any[], resolve: any) {
-    const { isAdapted } = this.resolvePrintWidth(settings);
-    if (isAdapted) {
-      this.alertService.toast('80mm selected: Auto-adapting to 48mm format for your printer', 'info');
-    } else {
-      this.alertService.toast(`Connecting to printer...`, 'success');
-    }
-    this.bluetoothSerial.isEnabled(
-      () => {
-        this.bluetoothSerial.connect(
-          mac,
-          () => {
-            try {
-              this.sendPrintPaymentData(pd, settings, customers, products)
-                .then(() => {
-                  this.bluetoothSerial.disconnect();
-                  resolve(true);
-                })
-                .catch((err) => {
-                  this.bluetoothSerial.disconnect();
-                  this.alertService.toast(`Printing failed: ${err.message || err}`, 'error');
-                  resolve(false);
-                });
-            } catch (e: any) {
-              this.bluetoothSerial.disconnect();
-              this.alertService.toast(`Format error: ${e.message}`, 'error');
-              resolve(false);
-            }
-          },
-          (err: any) => {
-            this.alertService.toast(`Failed to connect to printer: ${err}`, 'error');
-            resolve(false);
-          }
-        );
-      },
-      () => {
-        this.alertService.toast('Please turn on Bluetooth first', 'warning');
-        resolve(false);
-      }
-    );
-  }
-
-  private sendPrintPaymentData(pd: any, settings: any, customers: any[], products: any[]): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const { width } = this.resolvePrintWidth(settings);
-      const builder = new BufferBuilder();
+  private buildPaymentBuffer(pd: any, settings: any, customers: any[], products: any[]): ArrayBuffer {
+    const { width } = this.resolvePrintWidth(settings);
+    const builder = new BufferBuilder();
 
       const ESC = 0x1B;
       const GS = 0x1D;
@@ -809,94 +881,40 @@ export class BluetoothPrintService {
         builder.append(CMD_ALIGN_LEFT);
       }
 
-      // Spacing lines
-      const emptyLines = settings.bottomEmptyLine ?? 5;
-      builder.appendText("\n".repeat(emptyLines));
-
-      const buffer = builder.getBuffer();
-      this.bluetoothSerial.write(
-        buffer,
-        () => resolve(),
-        (err: any) => reject(err)
-      );
-    });
+      return builder.getBuffer();
   }
 
   printCreditNote(cn: any, settings: any, customers: any[], products: any[]): Promise<boolean> {
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
       if (!this.isAvailable()) {
         this.alertService.toast('Bluetooth printing is only available on native devices (APK)', 'error');
         return resolve(false);
       }
-      const mac = settings.macAddress || '02:29:DE:43:D8:2C';
-      const permissions = (window as any).plugins?.permissions;
-      if (permissions && permissions.BLUETOOTH_CONNECT) {
-        permissions.hasPermission(permissions.BLUETOOTH_CONNECT, (status: any) => {
-          if (status.hasPermission) {
-            this.connectAndPrintCN(mac, cn, settings, customers, products, resolve);
-          } else {
-            permissions.requestPermission(permissions.BLUETOOTH_CONNECT, (s: any) => {
-              if (s.hasPermission) {
-                this.connectAndPrintCN(mac, cn, settings, customers, products, resolve);
-              } else {
-                this.alertService.toast('Nearby Devices permission is required to print.', 'error');
-                resolve(false);
-              }
-            }, () => resolve(false));
-          }
-        }, () => resolve(false));
-      } else {
-        this.connectAndPrintCN(mac, cn, settings, customers, products, resolve);
+      if (this.isPrinting) {
+        this.alertService.toast('Printing in progress, please wait...', 'warning');
+        return resolve(false);
       }
+
+      const mac = settings.macAddress || '02:29:DE:43:D8:2C';
+      this.checkPermission(
+        () => {
+          try {
+            const buffer = this.buildCNBuffer(cn, settings, customers, products);
+            this.executePrintJob(mac, buffer, 'Credit Note', settings, resolve);
+          } catch (e: any) {
+            this.isPrinting = false;
+            this.alertService.toast(`Format error: ${e.message}`, 'error');
+            resolve(false);
+          }
+        },
+        () => resolve(false)
+      );
     });
   }
 
-  private connectAndPrintCN(mac: string, cn: any, settings: any, customers: any[], products: any[], resolve: any) {
-    const { isAdapted } = this.resolvePrintWidth(settings);
-    if (isAdapted) {
-      this.alertService.toast('80mm selected: Auto-adapting to 48mm format for your printer', 'info');
-    } else {
-      this.alertService.toast(`Connecting to printer...`, 'success');
-    }
-    this.bluetoothSerial.isEnabled(
-      () => {
-        this.bluetoothSerial.connect(
-          mac,
-          () => {
-            try {
-              this.sendPrintCNData(cn, settings, customers, products)
-                .then(() => {
-                  this.bluetoothSerial.disconnect();
-                  resolve(true);
-                })
-                .catch((err) => {
-                  this.bluetoothSerial.disconnect();
-                  this.alertService.toast(`Printing failed: ${err.message || err}`, 'error');
-                  resolve(false);
-                });
-            } catch (e: any) {
-              this.bluetoothSerial.disconnect();
-              this.alertService.toast(`Format error: ${e.message}`, 'error');
-              resolve(false);
-            }
-          },
-          (err: any) => {
-            this.alertService.toast(`Failed to connect to printer: ${err}`, 'error');
-            resolve(false);
-          }
-        );
-      },
-      () => {
-        this.alertService.toast('Please turn on Bluetooth first', 'warning');
-        resolve(false);
-      }
-    );
-  }
-
-  private sendPrintCNData(cn: any, settings: any, customers: any[], products: any[]): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const { width } = this.resolvePrintWidth(settings);
-      const builder = new BufferBuilder();
+  private buildCNBuffer(cn: any, settings: any, customers: any[], products: any[]): ArrayBuffer {
+    const { width } = this.resolvePrintWidth(settings);
+    const builder = new BufferBuilder();
 
       const ESC = 0x1B;
       const GS = 0x1D;
@@ -1036,9 +1054,7 @@ export class BluetoothPrintService {
 
       const emptyLines = settings.bottomEmptyLine ?? 5;
       builder.appendText("\n".repeat(emptyLines));
-      const buffer = builder.getBuffer();
-      this.bluetoothSerial.write(buffer, () => resolve(), (err: any) => reject(err));
-    });
+      return builder.getBuffer();
   }
 }
 
