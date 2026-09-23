@@ -227,7 +227,6 @@ export class InvoicesPage implements OnInit, OnDestroy {
     this.loadInvoices();
     this.loadCustomers();
     this.loadProducts();
-    this.loadAllProducts();
 
     // Check for query parameters to auto-open form
     this.route.queryParams.subscribe(params => {
@@ -294,16 +293,10 @@ export class InvoicesPage implements OnInit, OnDestroy {
   loadProducts() {
     this.api.getProducts().subscribe({
       next: (res) => {
-        const all = Array.isArray(res) ? res : [];
-        this.products = all.filter((p: any) => p.isActive !== false);
+        const all = (Array.isArray(res) ? res : []).filter((p: any) => p.isActive !== false);
+        this.products = all;
+        this.allProducts = all;
       },
-      error: () => { }
-    });
-  }
-
-  loadAllProducts() {
-    this.api.getProducts().subscribe({
-      next: (res) => { this.allProducts = (Array.isArray(res) ? res : []).filter((p: any) => p.isActive !== false); },
       error: () => { }
     });
   }

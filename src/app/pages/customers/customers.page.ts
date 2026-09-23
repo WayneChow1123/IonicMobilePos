@@ -332,10 +332,6 @@ export class CustomersPage implements OnInit {
     }
     const product = this.allProducts.find(p => p.id == this.newPriceForm.productId);
     const originalPrice = product ? product.price : 0;
-    if (Number(this.newPriceForm.specialPrice) > originalPrice) {
-      this.showToastMsg('Special Price cannot exceed Original Price (RM ' + originalPrice.toFixed(2) + ')');
-      return;
-    }
 
     if (!this.isEditing) {
       // Local mode (when creating customer)

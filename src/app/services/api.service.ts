@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable } from 'rxjs';
-import { map } from 'rxjs/operators';
+import { Observable, of } from 'rxjs';
+import { map, tap } from 'rxjs/operators';
 import { updateInvoiceDocNos, formatDocNo } from '../utils/invoice-helper';
 
 @Injectable({
@@ -12,7 +12,23 @@ export class ApiService {
   //private baseUrl = 'http://localhost:5262';
   private baseUrl = 'https://td.mobile.pos.xcode.com.my';
 
+  private cachedCustomers: any[] | null = null;
+  private cachedProducts: any[] | null = null;
+
   constructor(private http: HttpClient) { }
+
+  clearCustomerCache() {
+    this.cachedCustomers = null;
+  }
+
+  clearProductCache() {
+    this.cachedProducts = null;
+  }
+
+  clearAllCache() {
+    this.cachedCustomers = null;
+    this.cachedProducts = null;
+  }
 
   getFullBackup(): Observable<any> { return this.http.get(this.baseUrl + '/api/backup/full'); }
   getIncrementBackup(): Observable<any> { return this.http.get(this.baseUrl + '/api/backup/increment'); }
@@ -23,29 +39,76 @@ export class ApiService {
   editCategory(id: any, data: any): Observable<any> { return this.http.put(this.baseUrl + '/Category/EditCategory/editcategory/' + id, data); }
   deleteCategory(id: any): Observable<any> { return this.http.delete(this.baseUrl + '/Category/DeleteCategory/deletecategory/' + id, { responseType: 'text' }); }
 
-  createCreditNote(invoiceId: any, data: any): Observable<any> { return this.http.post(this.baseUrl + '/Credit/CreateCreditNote/invoices/' + invoiceId + '/credit-notes', data); }
-  createGlobalCreditNote(customerId: any, data: any): Observable<any> { return this.http.post(this.baseUrl + '/Credit/CreateGlobalCreditNote/customers/' + customerId + '/credit-notes-global', data); }
+  createCreditNote(invoiceId: any, data: any): Observable<any> {
+    return this.http.post(this.baseUrl + '/Credit/CreateCreditNote/invoices/' + invoiceId + '/credit-notes', data).pipe(
+      tap(() => this.clearCustomerCache())
+    );
+  }
+  createGlobalCreditNote(customerId: any, data: any): Observable<any> {
+    return this.http.post(this.baseUrl + '/Credit/CreateGlobalCreditNote/customers/' + customerId + '/credit-notes-global', data).pipe(
+      tap(() => this.clearCustomerCache())
+    );
+  }
   getCreditNotesByInvoice(invoiceId: any): Observable<any> { return this.http.get(this.baseUrl + '/Credit/GetCreditNotesByInvoice/invoices/' + invoiceId + '/credit-notes'); }
   getCreditNoteById(invoiceId: any, cnId: any): Observable<any> { return this.http.get(this.baseUrl + '/Credit/GetCreditNoteById/invoices/' + invoiceId + '/credit-notes/' + cnId); }
   getAvailableCredits(customerId: number): Observable<any> { return this.http.get(this.baseUrl + '/Credit/GetAvailableCredits/customers/' + customerId + '/available-credits'); }
 
-  useCreditNote(invoiceId: number, cnId: number): Observable<any> { return this.http.patch(this.baseUrl + '/Credit/UseCreditNote/invoices/' + invoiceId + '/credit-notes/' + cnId + '/use', {}); }
+  useCreditNote(invoiceId: number, cnId: number): Observable<any> {
+    return this.http.patch(this.baseUrl + '/Credit/UseCreditNote/invoices/' + invoiceId + '/credit-notes/' + cnId + '/use', {}).pipe(
+      tap(() => this.clearCustomerCache())
+    );
+  }
 
-  deleteCreditNote(invoiceId: any, cnId: any): Observable<any> { return this.http.delete(this.baseUrl + '/Credit/DeleteCreditNote/invoices/' + invoiceId + '/credit-notes/' + cnId, { responseType: 'text' }); }
+  deleteCreditNote(invoiceId: any, cnId: any): Observable<any> {
+    return this.http.delete(this.baseUrl + '/Credit/DeleteCreditNote/invoices/' + invoiceId + '/credit-notes/' + cnId, { responseType: 'text' }).pipe(
+      tap(() => this.clearCustomerCache())
+    );
+  }
   getAllCreditNotes(): Observable<any> { return this.http.get(this.baseUrl + '/Credit/GetAllCreditNotes/credit-notes/list'); }
 
-  createCustomer(data: any): Observable<any> { return this.http.post(this.baseUrl + '/Customer/CreateCustomers/createcustomers', data); }
-  getAllCustomers(): Observable<any> { return this.http.get(this.baseUrl + '/Customer/GetAllCustomer/getallcustomer'); }
+  createCustomer(data: any): Observable<any> {
+    return this.http.post(this.baseUrl + '/Customer/CreateCustomers/createcustomers', data).pipe(
+      tap(() => this.clearCustomerCache())
+    );
+  }
+  getAllCustomers(forceRefresh = false): Observable<any> {
+    if (!forceRefresh && this.cachedCustomers) {
+      this.http.get(this.baseUrl + '/Customer/GetAllCustomer/getallcustomer').subscribe({
+        next: (res: any) => { if (Array.isArray(res)) this.cachedCustomers = res; },
+        error: () => {}
+      });
+      return of(this.cachedCustomers);
+    }
+    return this.http.get(this.baseUrl + '/Customer/GetAllCustomer/getallcustomer').pipe(
+      tap((res: any) => {
+        if (Array.isArray(res)) {
+          this.cachedCustomers = res;
+        }
+      })
+    );
+  }
   getCustomerById(id: any): Observable<any> { return this.http.get(this.baseUrl + '/Customer/GetCustomerById/getcustomersby/' + id); }
-  editCustomer(id: any, data: any): Observable<any> { return this.http.put(this.baseUrl + '/Customer/EditCustomer/editcustomers/' + id, data); }
-  deleteCustomer(id: any): Observable<any> { return this.http.delete(this.baseUrl + '/Customer/DeleteCustomer/deletecustomer/' + id, { responseType: 'text' }); }
+  editCustomer(id: any, data: any): Observable<any> {
+    return this.http.put(this.baseUrl + '/Customer/EditCustomer/editcustomers/' + id, data).pipe(
+      tap(() => this.clearCustomerCache())
+    );
+  }
+  deleteCustomer(id: any): Observable<any> {
+    return this.http.delete(this.baseUrl + '/Customer/DeleteCustomer/deletecustomer/' + id, { responseType: 'text' }).pipe(
+      tap(() => this.clearCustomerCache())
+    );
+  }
   getCustomerProductPrices(customerId: any): Observable<any> { return this.http.get(this.baseUrl + '/Customer/GetCustomerProductPrices/customers/' + customerId + '/product-prices'); }
   createCustomerProductPrice(customerId: any, data: any): Observable<any> { return this.http.post(this.baseUrl + '/Customer/CreateCustomerProductPrice/customers/' + customerId + '/product-prices', data); }
   updateCustomerProductPrice(customerId: any, productId: any, data: any): Observable<any> { return this.http.patch(this.baseUrl + '/Customer/UpdateCustomerProductPrice/customers/' + customerId + '/product-prices/' + productId, data); }
   deleteCustomerProductPrice(customerId: any, productId: any): Observable<any> { return this.http.delete(this.baseUrl + '/Customer/DeleteCustomerProductPrice/customers/' + customerId + '/product-prices/' + productId, { responseType: 'text' }); }
   getCustomerPurchaseHistory(customerId: any): Observable<any> { return this.http.get(this.baseUrl + '/Customer/GetCustomerPurchaseHistory/customers/' + customerId + '/purchase-history'); }
 
-  createInvoice(data: any): Observable<any> { return this.http.post(this.baseUrl + '/Invoice/CreateInvoice/invoices', data); }
+  createInvoice(data: any): Observable<any> {
+    return this.http.post(this.baseUrl + '/Invoice/CreateInvoice/invoices', data).pipe(
+      tap(() => this.clearCustomerCache())
+    );
+  }
   getStockReadyInvoices(): Observable<any> { return this.http.get(this.baseUrl + '/Invoice/GetStockReadyInvoices/invoices/stock-ready'); }
 
   getInvoices(params?: any): Observable<any> {
@@ -68,8 +131,16 @@ export class ApiService {
       })
     );
   }
-  updateInvoice(id: any, data: any): Observable<any> { return this.http.patch(this.baseUrl + '/Invoice/UpdateInvoice/invoices/' + id, data); }
-  deleteInvoice(id: any): Observable<any> { return this.http.delete(this.baseUrl + '/Invoice/DeleteInvoice/invoices/' + id, { responseType: 'text' }); }
+  updateInvoice(id: any, data: any): Observable<any> {
+    return this.http.patch(this.baseUrl + '/Invoice/UpdateInvoice/invoices/' + id, data).pipe(
+      tap(() => this.clearCustomerCache())
+    );
+  }
+  deleteInvoice(id: any): Observable<any> {
+    return this.http.delete(this.baseUrl + '/Invoice/DeleteInvoice/invoices/' + id, { responseType: 'text' }).pipe(
+      tap(() => this.clearCustomerCache())
+    );
+  }
   previewInvoice(id: any): Observable<any> {
     return this.http.get(this.baseUrl + '/Invoice/PreviewInvoice/invoices/' + id + '/preview').pipe(
       map((res: any) => {
@@ -81,22 +152,73 @@ export class ApiService {
     );
   }
 
-  createPayment(data: any): Observable<any> { return this.http.post(this.baseUrl + '/Payment/CreatePayment/payments', data); }
-  createBulkPayment(data: any): Observable<any> { return this.http.post(this.baseUrl + '/Payment/CreateBulkPayment/bulk-payments', data); }
+  createPayment(data: any): Observable<any> {
+    return this.http.post(this.baseUrl + '/Payment/CreatePayment/payments', data).pipe(
+      tap(() => this.clearCustomerCache())
+    );
+  }
+  createBulkPayment(data: any): Observable<any> {
+    return this.http.post(this.baseUrl + '/Payment/CreateBulkPayment/bulk-payments', data).pipe(
+      tap(() => this.clearCustomerCache())
+    );
+  }
   getPayInfo(customerId: any, invoiceId: any): Observable<any> { return this.http.get(this.baseUrl + '/Payment/GetPayInfo/customers/' + customerId + '/invoices/' + invoiceId + '/pay-info'); }
   getPaymentPreview(id: any): Observable<any> { return this.http.get(this.baseUrl + '/Payment/GetPaymentPreview/payments/' + id + '/preview'); }
   getPayments(): Observable<any> { return this.http.get(this.baseUrl + '/Payment/GetPayments/payments'); }
   getPaymentById(id: any): Observable<any> { return this.http.get(this.baseUrl + '/Payment/GetPaymentById/payments/' + id); }
-  deletePayment(id: any): Observable<any> { return this.http.delete(this.baseUrl + '/Payment/DeletePayment/payments/' + id, { responseType: 'text' }); }
+  deletePayment(id: any): Observable<any> {
+    return this.http.delete(this.baseUrl + '/Payment/DeletePayment/payments/' + id, { responseType: 'text' }).pipe(
+      tap(() => this.clearCustomerCache())
+    );
+  }
 
-  createProduct(data: any): Observable<any> { return this.http.post(this.baseUrl + '/Product/CreateProducts/createproducts', data); }
-  getProducts(): Observable<any> { return this.http.get(this.baseUrl + '/Product/GetProducts/products'); }
+  createProduct(data: any): Observable<any> {
+    return this.http.post(this.baseUrl + '/Product/CreateProducts/createproducts', data).pipe(
+      tap(() => this.clearProductCache())
+    );
+  }
+  getProducts(forceRefresh = false): Observable<any> {
+    if (!forceRefresh && this.cachedProducts) {
+      this.http.get(this.baseUrl + '/Product/GetProducts/products').subscribe({
+        next: (res: any) => { if (Array.isArray(res)) this.cachedProducts = res; },
+        error: () => {}
+      });
+      return of(this.cachedProducts);
+    }
+    return this.http.get(this.baseUrl + '/Product/GetProducts/products').pipe(
+      tap((res: any) => {
+        if (Array.isArray(res)) {
+          this.cachedProducts = res;
+        }
+      })
+    );
+  }
   getProductById(id: any): Observable<any> { return this.http.get(this.baseUrl + '/Product/GetProductById/getproductsby/' + id); }
-  editProduct(id: any, data: any): Observable<any> { return this.http.put(this.baseUrl + '/Product/EditProduct/editproduct/' + id, data); }
-  deleteProduct(id: any): Observable<any> { return this.http.delete(this.baseUrl + '/Product/DeleteProduct/deleteproduct/' + id, { responseType: 'text' }); }
-  activateProduct(id: any): Observable<any> { return this.http.patch(this.baseUrl + '/Product/ActivateProduct/activateproduct/' + id, {}); }
-  deactivateProduct(id: any): Observable<any> { return this.http.patch(this.baseUrl + '/Product/DeactivateProduct/deactivateproduct/' + id, {}); }
-  addStock(id: any, data: any): Observable<any> { return this.http.patch(this.baseUrl + '/Product/AddStock/addstock/' + id, data); }
+  editProduct(id: any, data: any): Observable<any> {
+    return this.http.put(this.baseUrl + '/Product/EditProduct/editproduct/' + id, data).pipe(
+      tap(() => this.clearProductCache())
+    );
+  }
+  deleteProduct(id: any): Observable<any> {
+    return this.http.delete(this.baseUrl + '/Product/DeleteProduct/deleteproduct/' + id, { responseType: 'text' }).pipe(
+      tap(() => this.clearProductCache())
+    );
+  }
+  activateProduct(id: any): Observable<any> {
+    return this.http.patch(this.baseUrl + '/Product/ActivateProduct/activateproduct/' + id, {}).pipe(
+      tap(() => this.clearProductCache())
+    );
+  }
+  deactivateProduct(id: any): Observable<any> {
+    return this.http.patch(this.baseUrl + '/Product/DeactivateProduct/deactivateproduct/' + id, {}).pipe(
+      tap(() => this.clearProductCache())
+    );
+  }
+  addStock(id: any, data: any): Observable<any> {
+    return this.http.patch(this.baseUrl + '/Product/AddStock/addstock/' + id, data).pipe(
+      tap(() => this.clearProductCache())
+    );
+  }
 
   getBillReport(): Observable<any> { return this.http.get(this.baseUrl + '/Report/GetBillReport/reports/bill'); }
   getProductSalesReport(): Observable<any> { return this.http.get(this.baseUrl + '/Report/GetProductSalesReport/reports/product-sales'); }

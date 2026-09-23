@@ -677,7 +677,7 @@
         </div>
 
         <!-- Customer List -->
-        <div class="cust-modal-list" style="flex:1 1 0;min-height:0;max-height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;touch-action:pan-y;padding:8px 20px 30px;box-sizing:border-box;">
+        <div class="cust-modal-list hide-scrollbar" style="flex:1 1 0;min-height:0;max-height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;touch-action:pan-y;scrollbar-width:none;-ms-overflow-style:none;padding:8px 20px 30px;box-sizing:border-box;">
           <!-- All Customers Option (for Credit Note) -->
           <div *ngIf="customerModalTarget === 'cn' && (!customerSearchTerm || 'all customers'.includes(customerSearchTerm.toLowerCase()))"
             (click)="selectCustomerFromModal({ id: 0, name: 'All Customers' })"
@@ -790,59 +790,58 @@
   <ion-modal [isOpen]="showHistoryModal" (didDismiss)="showHistoryModal = false"
     style="--border-radius: 24px; --height: 90vh; --width: 98vw; --max-width: 600px;">
     <ng-template>
-      <div style="height:100%; display:flex; flex-direction:column; background:#fdfdfd;">
+      <div style="height: 90vh; max-height: 90vh; display: flex; flex-direction: column; background: #fdfdfd; overflow: hidden; box-sizing: border-box;">
         <div class="modal-header"
-          style="background:#6c5ce7; padding:20px; display:flex; justify-content:space-between; align-items:center; color:#fff;">
-          <h2 style="margin:0; font-size:22px; font-weight:800; letter-spacing:1px;">Purchase History</h2>
-          <ion-button fill="clear" (click)="showHistoryModal = false" style="--color:#fff; margin:0;">
-            <ion-icon name="close-outline" slot="icon-only" style="font-size:28px;"></ion-icon>
+          style="background: #6c5ce7; padding: 20px; display: flex; justify-content: space-between; align-items: center; color: #fff; flex-shrink: 0;">
+          <h2 style="margin: 0; font-size: 22px; font-weight: 800; letter-spacing: 1px;">Purchase History</h2>
+          <ion-button fill="clear" (click)="showHistoryModal = false" style="--color: #fff; margin: 0;">
+            <ion-icon name="close-outline" slot="icon-only" style="font-size: 28px;"></ion-icon>
           </ion-button>
         </div>
 
-        <div style="padding:24px; flex:1; display:flex; flex-direction:column;">
+        <div style="padding: 16px 20px 0; background: #fdfdfd; flex-shrink: 0;">
           <div class="search-box"
-            style="margin-bottom:24px; background:#f1f2f6; border-radius:16px; padding:6px 16px; display:flex; align-items:center;">
-            <ion-icon name="search-outline" style="color:#a4b0be; font-size:24px;"></ion-icon>
+            style="margin-bottom: 12px; background: #f1f2f6; border-radius: 16px; padding: 4px 16px; display: flex; align-items: center;">
+            <ion-icon name="search-outline" style="color: #a4b0be; font-size: 24px;"></ion-icon>
             <input type="text" [(ngModel)]="historySearchTerm" (input)="filterHistory()" placeholder="Search product..."
-              style="border:none; background:transparent; padding:14px; flex:1; outline:none; font-size:16px; color:#2f3542;" />
+              style="border: none; background: transparent; padding: 12px 10px; flex: 1; outline: none; font-size: 15px; color: #2f3542;" />
+          </div>
+        </div>
+
+        <div class="hide-scrollbar" style="flex: 1 1 0; min-height: 0; max-height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch; touch-action: pan-y; overscroll-behavior-y: contain; scrollbar-width: none; -ms-overflow-style: none; padding: 4px 20px 24px; box-sizing: border-box;">
+          <div *ngFor="let h of filteredHistory; let i = index" (click)="selectHistoryItem(h)"
+            style="background: #fff; border-radius: 20px; padding: 20px; margin-bottom: 16px; border: 1px solid #f1f2f6; transition: all 0.2s ease; cursor: pointer; position: relative;"
+            class="history-item">
+
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
+              <div>
+                <div style="font-size: 16px; font-weight: 800; color: #2f3542; margin-bottom: 2px;">{{ h.productName }}
+                </div>
+                <div style="font-size: 11px; color: #6c5ce7; font-weight: 700;">Latest Inv: {{ h.latestInvoiceNumber }}
+                </div>
+              </div>
+              <div style="text-align: right;">
+                <div style="font-size: 15px; font-weight: 900; color: #2f3542;">RM {{ h.latestUnitPrice | number:'1.2-2' }}</div>
+              </div>
+            </div>
+
+            <div
+              style="display: flex; justify-content: space-between; align-items: center; padding-top: 12px; border-top: 1px dashed #f1f2f6; margin-top: 8px;">
+              <div style="font-size: 11px; font-weight: 600; color: #747d8c;">
+                Bought <span style="color: #2f3542;">{{ h.totalBought }}</span> •
+                Returned <span style="color: #ff7675;">{{ h.totalReturned }}</span> •
+                Remaining <span style="color: #00b894;">{{ h.remaining }}</span>
+              </div>
+              <div style="font-size: 10px; font-weight: 700; color: #a4b0be; letter-spacing: 0.5px;">
+                {{ h.latestInvoiceDate | date:'dd MMM yyyy' }}
+              </div>
+            </div>
           </div>
 
-          <div style="flex:1; overflow-y:auto; padding-right:6px;">
-            <div *ngFor="let h of filteredHistory; let i = index" (click)="selectHistoryItem(h)"
-              style="background:#fff; border-radius:20px; padding:20px; margin-bottom:16px; border:1px solid #f1f2f6; transition:all 0.2s ease; cursor:pointer; position:relative;"
-              class="history-item">
-
-              <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:10px;">
-                <div>
-                  <div style="font-size:16px; font-weight:800; color:#2f3542; margin-bottom:2px;">{{ h.productName }}
-                  </div>
-                  <div style="font-size:11px; color:#6c5ce7; font-weight:700;">Latest Inv: {{ h.latestInvoiceNumber }}
-                  </div>
-                </div>
-                <div style="text-align:right;">
-                  <div style="font-size:15px; font-weight:900; color:#2f3542;">RM {{ h.latestUnitPrice | number:'1.2-2'
-                    }}</div>
-                </div>
-              </div>
-
-              <div
-                style="display:flex; justify-content:space-between; align-items:center; padding-top:12px; border-top:1px dashed #f1f2f6; margin-top:8px;">
-                <div style="font-size:11px; font-weight:600; color:#747d8c;">
-                  Bought <span style="color:#2f3542;">{{ h.totalBought }}</span> •
-                  Returned <span style="color:#ff7675;">{{ h.totalReturned }}</span> •
-                  Remaining <span style="color:#00b894;">{{ h.remaining }}</span>
-                </div>
-                <div style="font-size:10px; font-weight:700; color:#a4b0be; letter-spacing:0.5px;">
-                  {{ h.latestInvoiceDate | date:'dd MMM yyyy' }}
-                </div>
-              </div>
-            </div>
-
-            <div *ngIf="filteredHistory.length === 0" style="text-align:center; color:#a4b0be; padding:40px 20px;">
-              <ion-icon name="receipt-outline"
-                style="font-size:48px; display:block; margin:0 auto 12px; opacity:0.3;"></ion-icon>
-              No purchase history found.
-            </div>
+          <div *ngIf="filteredHistory.length === 0" style="text-align: center; color: #a4b0be; padding: 40px 20px;">
+            <ion-icon name="receipt-outline"
+              style="font-size: 48px; display: block; margin: 0 auto 12px; opacity: 0.3;"></ion-icon>
+            No purchase history found.
           </div>
         </div>
       </div>
@@ -853,71 +852,60 @@
   <ion-modal [isOpen]="showProductModal" (didDismiss)="showProductModal = false"
     style="--border-radius: 24px; --height: 90vh; --width: 98vw; --max-width: 600px;">
     <ng-template>
-      <div style="height:100%; display:flex; flex-direction:column; background:#fdfdfd;">
+      <div style="height: 90vh; max-height: 90vh; display: flex; flex-direction: column; background: #fdfdfd; overflow: hidden; box-sizing: border-box;">
         <div class="modal-header"
-          style="background:#5c85d6; padding:20px; display:flex; justify-content:space-between; align-items:center; color:#fff;">
-          <h2 style="margin:0; font-size:22px; font-weight:800; letter-spacing:1px;">Select Product</h2>
-          <ion-button fill="clear" (click)="showProductModal = false" style="--color:#fff; margin:0;">
-            <ion-icon name="close-outline" slot="icon-only" style="font-size:28px;"></ion-icon>
+          style="background: #5c85d6; padding: 20px; display: flex; justify-content: space-between; align-items: center; color: #fff; flex-shrink: 0;">
+          <h2 style="margin: 0; font-size: 22px; font-weight: 800; letter-spacing: 1px;">Select Product</h2>
+          <ion-button fill="clear" (click)="showProductModal = false" style="--color: #fff; margin: 0;">
+            <ion-icon name="close-outline" slot="icon-only" style="font-size: 28px;"></ion-icon>
           </ion-button>
         </div>
 
-        <div style="padding:24px; flex:1; display:flex; flex-direction:column;">
+        <div style="padding: 16px 20px 0; background: #fdfdfd; flex-shrink: 0;">
           <div class="search-box"
-            style="margin-bottom:24px; background:#f1f2f6; border-radius:16px; padding:6px 16px; display:flex; align-items:center;">
-            <ion-icon name="search-outline" style="color:#a4b0be; font-size:24px;"></ion-icon>
+            style="margin-bottom: 12px; background: #f1f2f6; border-radius: 16px; padding: 4px 16px; display: flex; align-items: center;">
+            <ion-icon name="search-outline" style="color: #a4b0be; font-size: 24px;"></ion-icon>
             <input type="text" [(ngModel)]="productSearchTerm" (input)="filterProductsForSelection()"
               placeholder="Search by name, code or barcode..."
-              style="border:none; background:transparent; padding:14px; flex:1; outline:none; font-size:16px; color:#2f3542;" />
+              style="border: none; background: transparent; padding: 12px 10px; flex: 1; outline: none; font-size: 15px; color: #2f3542;" />
           </div>
+        </div>
 
-          <div style="flex:1; overflow-y:auto; padding-right:6px;">
-            <div *ngFor="let p of filteredProductsSelection" (click)="selectProduct(p)"
-              style="background:#fff; border-radius:20px; padding:20px; margin-bottom:16px; border:1px solid #f1f2f6; transition:all 0.2s ease; cursor:pointer; position:relative;"
-              class="history-item">
+        <div class="hide-scrollbar" style="flex: 1 1 0; min-height: 0; max-height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch; touch-action: pan-y; overscroll-behavior-y: contain; scrollbar-width: none; -ms-overflow-style: none; padding: 4px 20px 24px; box-sizing: border-box;">
+          <div *ngFor="let p of filteredProductsSelection" (click)="selectProduct(p)"
+            style="background: #fff; border-radius: 20px; padding: 20px; margin-bottom: 16px; border: 1px solid #f1f2f6; transition: all 0.2s ease; cursor: pointer; position: relative;"
+            class="history-item">
 
-              <div style="display:flex; justify-content:space-between; align-items:flex-start;">
-                <div>
-                  <div style="font-size:16px; font-weight:800; color:#2f3542; margin-bottom:2px;">{{ p.name }}</div>
-                  <div style="font-size:11px; color:#5c85d6; font-weight:700;">Code: {{ p.productCode || p.code || 'N/A'
-                    }}</div>
-                </div>
-                <div style="text-align:right;">
-                  <ng-container *ngIf="getCustomerSpecialPrice(p.id) != null || getSelectedCustomerDiscount() > 0">
-                    <div style="font-size:11px; color:#a4b0be; text-decoration:line-through;">RM {{ p.price |
-                      number:'1.2-2' }}</div>
-                    <div style="font-size:15px; font-weight:950; color:#5c85d6;">RM {{ (getCustomerSpecialPrice(p.id) !=
-                      null ? getDiscountedPrice(getCustomerSpecialPrice(p.id)!) : getDiscountedPrice(p.price)) |
-                      number:'1.2-2' }}</div>
-                    <div *ngIf="getSelectedCustomerDiscount() > 0"
-                      style="font-size:10px; color:#ff4757; font-weight:800; margin-top:2px;">
-                      ({{ getSelectedCustomerDiscount() }}% OFF)
-                    </div>
-                    <div *ngIf="getCustomerSpecialPrice(p.id) != null"
-                      style="font-size:9px; color:#6c5ce7; font-weight:800; background:#E8EAF6; padding:2px 6px; border-radius:4px; display:inline-block; margin-top:4px;">
-                      CUST PRICE: RM {{ getCustomerSpecialPrice(p.id) | number:'1.2-2' }}</div>
-                  </ng-container>
-                  <ng-container *ngIf="getCustomerSpecialPrice(p.id) == null && getSelectedCustomerDiscount() <= 0">
-                    <div style="font-size:15px; font-weight:900; color:#2f3542;">RM {{ p.price | number:'1.2-2' }}</div>
-                  </ng-container>
-                  <div style="font-size:11px; color:#747d8c; font-weight:600; margin-top:2px;">Stock: {{ p.stock }}
+            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+              <div>
+                <div style="font-size: 16px; font-weight: 800; color: #2f3542; margin-bottom: 2px;">{{ p.name }}</div>
+                <div style="font-size: 11px; color: #5c85d6; font-weight: 700;">Code: {{ p.productCode || p.code || 'N/A' }}</div>
+              </div>
+              <div style="text-align: right;">
+                <ng-container *ngIf="getCustomerSpecialPrice(p.id) != null || getSelectedCustomerDiscount() > 0">
+                  <div style="font-size: 11px; color: #a4b0be; text-decoration: line-through;">RM {{ p.price | number:'1.2-2' }}</div>
+                  <div style="font-size: 15px; font-weight: 950; color: #5c85d6;">RM {{ (getCustomerSpecialPrice(p.id) != null ? getDiscountedPrice(getCustomerSpecialPrice(p.id)!) : getDiscountedPrice(p.price)) | number:'1.2-2' }}</div>
+                  <div *ngIf="getSelectedCustomerDiscount() > 0"
+                    style="font-size: 10px; color: #ff4757; font-weight: 800; margin-top: 2px;">
+                    ({{ getSelectedCustomerDiscount() }}% OFF)
                   </div>
-                </div>
+                  <div *ngIf="getCustomerSpecialPrice(p.id) != null"
+                    style="font-size: 9px; color: #6c5ce7; font-weight: 800; background: #E8EAF6; padding: 2px 6px; border-radius: 4px; display: inline-block; margin-top: 4px;">
+                    CUST PRICE: RM {{ getCustomerSpecialPrice(p.id) | number:'1.2-2' }}</div>
+                </ng-container>
+                <ng-container *ngIf="getCustomerSpecialPrice(p.id) == null && getSelectedCustomerDiscount() <= 0">
+                  <div style="font-size: 15px; font-weight: 900; color: #2f3542;">RM {{ p.price | number:'1.2-2' }}</div>
+                </ng-container>
+                <div style="font-size: 11px; color: #747d8c; font-weight: 600; margin-top: 2px;">Stock: {{ p.stock }}</div>
               </div>
             </div>
+          </div>
 
-            <div *ngIf="filteredProductsSelection.length === 0"
-              style="text-align:center; color:#a4b0be; padding:40px 20px;">
-              <ion-icon name="cube-outline"
-                style="font-size:48px; display:block; margin:0 auto 12px; opacity:0.3;"></ion-icon>
-              No products found.
-            </div>
-            <div *ngIf="filteredProductsSelection.length === 0"
-              style="text-align:center; color:#a4b0be; padding:40px 20px;">
-              <ion-icon name="cube-outline"
-                style="font-size:48px; display:block; margin:0 auto 12px; opacity:0.3;"></ion-icon>
-              No products found.
-            </div>
+          <div *ngIf="filteredProductsSelection.length === 0"
+            style="text-align: center; color: #a4b0be; padding: 40px 20px;">
+            <ion-icon name="cube-outline"
+              style="font-size: 48px; display: block; margin: 0 auto 12px; opacity: 0.3;"></ion-icon>
+            No products found.
           </div>
         </div>
       </div>
