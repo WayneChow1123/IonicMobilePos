@@ -59,6 +59,7 @@ export class ApiService {
     );
   }
 
+  updateCreditNote(cnId: any, data: any): Observable<any> { return this.http.put(this.baseUrl + '/Credit/UpdateCreditNote/credit-notes/' + cnId, data); }
   deleteCreditNote(invoiceId: any, cnId: any): Observable<any> {
     return this.http.delete(this.baseUrl + '/Credit/DeleteCreditNote/invoices/' + invoiceId + '/credit-notes/' + cnId, { responseType: 'text' }).pipe(
       tap(() => this.clearCustomerCache())

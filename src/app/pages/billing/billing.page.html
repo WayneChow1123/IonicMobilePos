@@ -184,19 +184,19 @@
 
       <div class="form-group">
         <label>INVOICE *</label>
-        <div style="display:flex;gap:8px;">
-          <select [(ngModel)]="cnForm.invoiceId" class="form-select" (change)="onCNInvoiceChange()" style="flex:1;">
-            <option [ngValue]="0">Select Invoice</option>
-            <option *ngFor="let inv of cnFilteredInvoices" [ngValue]="inv.id">{{ getDocNo(inv) }} - {{
-              inv.customerName }} (RM {{
-              inv.totalAmount | number:'1.2-2' }}) ({{ inv.status }})</option>
-          </select>
-          <button (click)="loadPurchaseHistory()"
-            style="background:#6c5ce7;color:#fff;border:none;border-radius:8px;padding:0 12px;font-size:12px;font-weight:700;white-space:nowrap;">
+        <div style="display:flex;gap:6px;align-items:center;width:100%;">
+          <div class="invoice-select-box" style="flex:1;min-width:0;" (click)="openCNInvoiceModal()">
+            <div class="inv-select-left" *ngIf="getSelectedCNInvoice() as inv">
+              <span class="inv-doc-no">{{ getDocNo(inv) }}</span>
+              <span class="inv-sub-info">{{ inv.customerName }} • RM {{ (inv.totalAmount || 0) | number:'1.2-2' }} ({{ inv.status }})</span>
+            </div>
+            <span class="inv-placeholder" *ngIf="!getSelectedCNInvoice()">Select Invoice...</span>
+            <ion-icon name="chevron-down-outline" style="color:#666;font-size:16px;margin-left:6px;flex-shrink:0;"></ion-icon>
+          </div>
+          <button (click)="loadPurchaseHistory()" class="cn-capsule-btn history">
             HISTORY
           </button>
-          <button (click)="loadAllProducts()"
-            style="background:#5c85d6;color:#fff;border:none;border-radius:8px;padding:0 12px;font-size:12px;font-weight:700;white-space:nowrap;">
+          <button (click)="loadAllProducts()" class="cn-capsule-btn product">
             PRODUCT
           </button>
         </div>
@@ -437,14 +437,15 @@
     <div *ngIf="!isLoading">
       <div *ngFor="let cn of filteredCreditNotes" class="list-item" (click)="viewCNDetails(cn)" style="cursor:pointer;">
         <div class="item-info">
-          <div class="item-avatar"><ion-icon name="document-outline"></ion-icon></div>
+          <div class="cn-avatar">
+            <ion-icon name="receipt-outline"></ion-icon>
+          </div>
           <div>
-            <div class="item-name">{{ cn.cnNumber || 'CN-' + cn.id }}</div>
-            <div class="item-sub">{{ getDocNo(cn.invoiceNumber || cn) }}</div>
-            <div class="item-sub">{{ cn.customerName }}</div>
-            <div class="item-sub">RM {{ cn.amount | number:'1.2-2' }}</div>
-            <div class="item-sub">{{ cn.reason }}</div>
+            <div class="item-name">{{ cn.customerName || ('Customer #' + (cn.customerId || '?')) }}</div>
+            <div class="item-sub" style="font-weight:700;color:#5c85d6;">{{ cn.cnNumber || 'CN-' + cn.id }}</div>
             <div class="item-sub">{{ cn.createdAt | date:'dd/MM/yyyy HH:mm' }}</div>
+            <div class="item-sub" style="font-weight:700;color:#e67e22;">RM {{ cn.amount | number:'1.2-2' }}</div>
+            <div class="item-sub" *ngIf="cn.reason">{{ cn.reason }}</div>
             <div *ngIf="cn.createdAfterPayment" style="margin-top:6px;">
               <span [style.background]="cn.isUsed ? '#e0e0e0' : '#00bcd4'" [style.color]="cn.isUsed ? '#888' : '#fff'"
                 style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:8px;display:inline-block;">
@@ -468,10 +469,10 @@
   <!-- CN DETAILS (仿 Invoice) -->
   <div *ngIf="currentView==='cnDetails'" class="page-container" style="display:flex;flex-direction:column;height:100%;">
     <div class="top-bar" style="position:sticky;top:0;z-index:10;background:#F0EBE3;padding:calc(max(env(safe-area-inset-top, 0px), 32px) + 12px) 16px 12px;margin:-16px -16px 12px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap:8px;">
-      <ion-button fill="clear" class="back-btn" (click)="closeCNDetails()">
+      <ion-button fill="clear" class="back-btn" (click)="handleCNDetailsBack()">
         <ion-icon name="chevron-back-outline"></ion-icon> Back
       </ion-button>
-      <span class="page-title">Credit Note Details</span>
+      <span class="page-title cn-title-responsive">{{ isEditingCN ? 'Edit Credit Note' : 'Credit Note Details' }}</span>
       <div class="top-bar-actions" style="position:relative;">
         <ion-button fill="clear" class="icon-btn" (click)="showCNActionsDropdown = !showCNActionsDropdown" style="--color:#5c85d6;">
           <ion-icon name="settings-outline"></ion-icon>
@@ -479,6 +480,9 @@
         <div class="actions-dropdown-menu" *ngIf="showCNActionsDropdown" style="position:absolute;right:0;top:40px;background:#fff;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,0.12);padding:8px;min-width:180px;z-index:10;">
           <button class="dropdown-item" (click)="showCNActionsDropdown=false; printCNDetails()" style="color:#5c85d6;display:flex;align-items:center;gap:8px;width:100%;padding:10px;border:none;background:transparent;font-weight:700;">
             <ion-icon name="print-outline"></ion-icon><span>Print CN</span>
+          </button>
+          <button class="dropdown-item" (click)="showCNActionsDropdown=false; startEditCN()" style="color:#6c5ce7;display:flex;align-items:center;gap:8px;width:100%;padding:10px;border:none;background:transparent;font-weight:700;">
+            <ion-icon name="create-outline"></ion-icon><span>Edit CN</span>
           </button>
           <button class="dropdown-item" *ngIf="selectedCNDetail && !selectedCNDetail.isUsed && selectedCNDetail.createdAfterPayment" (click)="showCNActionsDropdown=false; useCreditNote(selectedCNDetail)" style="color:#27ae60;display:flex;align-items:center;gap:8px;width:100%;padding:10px;border:none;background:transparent;font-weight:700;">
             <ion-icon name="wallet-outline"></ion-icon><span>Use Credit</span>
@@ -494,7 +498,8 @@
       <ion-spinner name="crescent"></ion-spinner>
     </div>
 
-    <div *ngIf="!isCNLoading && selectedCNDetail">
+    <!-- NON-EDIT DETAILS VIEW -->
+    <div *ngIf="!isCNLoading && selectedCNDetail && !isEditingCN">
       <!-- CN Main Card -->
       <div class="form-card" style="background:#C5C8E0;border-radius:20px;padding:20px;box-shadow:0 4px 12px rgba(0,0,0,0.05);margin-bottom:16px;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;border-bottom:1px solid rgba(0,0,0,0.05);padding-bottom:12px;">
@@ -546,9 +551,96 @@
         </div>
       </div>
 
+      <div class="cn-detail-actions">
+        <button class="cn-detail-action-btn print-btn" (click)="printCNDetails()">
+          <ion-icon name="print-outline"></ion-icon>
+          <span>PRINT</span>
+        </button>
+        <button class="cn-detail-action-btn edit-btn" (click)="startEditCN()">
+          <ion-icon name="create-outline"></ion-icon>
+          <span>EDIT CN</span>
+        </button>
+        <button class="cn-detail-action-btn delete-btn" (click)="confirmDeleteCN(selectedCNDetail)">
+          <ion-icon name="trash-outline"></ion-icon>
+          <span>DELETE</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- EDIT CN VIEW -->
+    <div *ngIf="!isCNLoading && selectedCNDetail && isEditingCN">
+      <!-- Edit Customer Card -->
+      <div class="form-card" style="background:#fff;border-radius:20px;padding:20px;box-shadow:0 4px 12px rgba(0,0,0,0.02);margin-bottom:16px;border:1px solid #f1f2f6;">
+        <div style="font-size:11px;font-weight:850;letter-spacing:2px;color:#1a1a1a;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;">
+          <span>CUSTOMER *</span>
+          <span class="edit-cn-header-badge">CAN CHANGE</span>
+        </div>
+        <div (click)="openCustomerModal('editCN')" style="background:#F0EBE3;border-radius:14px;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;">
+          <div>
+            <div style="font-size:15px;font-weight:800;color:#1a1a1a;">{{ editCNForm.customerName || 'Select Customer' }}</div>
+            <div style="font-size:11px;color:#888;margin-top:2px;">Tap to change customer</div>
+          </div>
+          <ion-icon name="chevron-forward-outline" style="color:#888;font-size:18px;"></ion-icon>
+        </div>
+      </div>
+
+      <!-- Edit Items Card -->
+      <div style="background:#fff;border-radius:20px;padding:20px;box-shadow:0 4px 12px rgba(0,0,0,0.02);margin-bottom:16px;border:1px solid #f1f2f6;">
+        <div style="font-size:11px;font-weight:850;letter-spacing:2px;color:#1a1a1a;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;">
+          <span>RETURNED ITEMS</span>
+          <button (click)="loadAllProducts()" class="cn-capsule-btn product" style="height:30px;padding:0 12px;font-size:11px;border-radius:15px;display:inline-flex;align-items:center;gap:4px;">
+            <ion-icon name="add-outline" style="font-size:16px;"></ion-icon> ADD PRODUCT
+          </button>
+        </div>
+
+        <div *ngFor="let item of editCNForm.items; let idx = index" class="edit-cn-item-card">
+          <div class="item-locked-header" style="display:flex;justify-content:space-between;align-items:center;">
+            <div style="flex:1;min-width:0;margin-right:8px;">
+              <span class="item-locked-title" style="display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ item.productName }}</span>
+              <span style="font-size:11px;color:#888;font-weight:600;">ID: {{ item.productId }}</span>
+            </div>
+            <ion-button fill="clear" style="--color:#e57373;margin:0;--padding-start:4px;--padding-end:4px;" (click)="removeEditCNItem(idx)">
+              <ion-icon name="trash-outline" style="font-size:20px;"></ion-icon>
+            </ion-button>
+          </div>
+          <div class="edit-cn-inputs-row">
+            <div class="edit-cn-field">
+              <label>QUANTITY</label>
+              <input type="number" [(ngModel)]="item.quantity" min="1" (keydown)="noLeadingZero($event, item.quantity)" placeholder="Qty" />
+            </div>
+            <div class="edit-cn-field">
+              <label>UNIT PRICE (RM)</label>
+              <input type="number" [(ngModel)]="item.unitPrice" step="0.01" min="0" placeholder="0.00" />
+            </div>
+          </div>
+          <div style="display:flex;justify-content:flex-end;margin-top:8px;font-size:12px;font-weight:800;color:#2f3542;">
+            Subtotal: RM {{ ((item.quantity || 0) * (item.unitPrice || 0)) | number:'1.2-2' }}
+          </div>
+        </div>
+
+        <div *ngIf="!editCNForm.items || editCNForm.items.length === 0" style="text-align:center;padding:24px 10px;color:#888;">
+          <ion-icon name="cube-outline" style="font-size:36px;opacity:0.3;display:block;margin:0 auto 8px;"></ion-icon>
+          <div style="font-size:13px;font-weight:700;">No products in this Credit Note</div>
+          <div style="font-size:11px;color:#aaa;margin-top:2px;">Click "+ ADD PRODUCT" above to add returned items</div>
+        </div>
+      </div>
+
+      <!-- Edit Reason Card -->
+      <div class="form-card" style="background:#fff;border-radius:20px;padding:20px;box-shadow:0 4px 12px rgba(0,0,0,0.02);margin-bottom:16px;border:1px solid #f1f2f6;">
+        <div style="font-size:11px;font-weight:850;letter-spacing:2px;color:#1a1a1a;margin-bottom:8px;">REASON</div>
+        <input type="text" class="edit-cn-reason-input" [(ngModel)]="editCNForm.reason" placeholder="Reason for credit note..." />
+      </div>
+
+      <!-- Total Summary -->
+      <div style="background:#fff3cd;border-radius:16px;padding:14px 16px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;">
+        <span style="font-size:13px;font-weight:800;color:#856404;">NEW TOTAL REFUND</span>
+        <span style="font-size:18px;font-weight:900;color:#e67e22;">RM {{ getEditCNTotal() | number:'1.2-2' }}</span>
+      </div>
+
+      <!-- Edit Actions -->
       <div style="display:flex;gap:12px;margin-bottom:16px;">
-        <button class="save-btn" style="background:#5c85d6;flex:1;" (click)="printCNDetails()"><ion-icon name="print-outline" style="margin-right:6px;"></ion-icon> PRINT</button>
-        <button class="save-btn" style="background:#e57373;flex:1;" (click)="confirmDeleteCN(selectedCNDetail)"><ion-icon name="trash-outline" style="margin-right:6px;"></ion-icon> DELETE</button>
+        <button class="save-btn" style="background:#888;flex:1;" (click)="cancelEditCN()">CANCEL</button>
+        <button class="save-btn" style="background:#27ae60;flex:1;" (click)="saveEditCN()">SAVE CHANGES</button>
       </div>
     </div>
   </div>
@@ -637,154 +729,102 @@
 
 
 
-  <!-- Customer Selection Modal with Search -->
-  <ion-modal [isOpen]="showCustomerModal" (didDismiss)="closeCustomerModal()" (didPresent)="focusCustomerSearch()"
-    class="customer-select-modal"
-    style="--border-radius: 24px; --height: 90vh; --width: 98vw; --max-width: 600px;">
-    <ng-template>
-      <div class="cust-modal-container" style="height:90vh;max-height:90vh;display:flex;flex-direction:column;background:#fdfdfd;overflow:hidden;box-sizing:border-box;">
-        <!-- Modal Header -->
-        <div class="cust-modal-header"
-          style="background:linear-gradient(135deg, #6c5ce7 0%, #5344c9 100%);padding:18px 20px;display:flex;justify-content:space-between;align-items:center;color:#fff;flex-shrink:0;">
-          <div>
-            <h2 style="margin:0;font-size:20px;font-weight:800;letter-spacing:0.5px;color:#fff;">Select Customer</h2>
-            <div style="font-size:12px;opacity:0.85;margin-top:2px;font-weight:600;">
-              {{ filteredCustomers.length }} Customer{{ filteredCustomers.length !== 1 ? 's' : '' }} Available
-            </div>
-          </div>
-          <ion-button fill="clear" (click)="closeCustomerModal()" style="--color:#fff;margin:0;">
-            <ion-icon name="close-outline" slot="icon-only" style="font-size:28px;"></ion-icon>
-          </ion-button>
+  <!-- Customer Selector Overlay (Matching Create Invoice) -->
+  <div *ngIf="showCustomerModal" class="billing-overlay">
+    <div class="billing-overlay-header">
+      <ion-button fill="clear" class="close-btn" (click)="closeCustomerModal()">
+        <ion-icon name="close-outline"></ion-icon>
+      </ion-button>
+      <span class="billing-overlay-title">Select Customer</span>
+    </div>
+    <div class="billing-overlay-search">
+      <ion-searchbar [(ngModel)]="customerSearchTerm" (ionInput)="onCustomerSearch($event)" placeholder="Search name or code..."></ion-searchbar>
+    </div>
+    <div class="billing-overlay-content">
+      <!-- All Customers Option (for Credit Note) -->
+      <div *ngIf="customerModalTarget === 'cn' && (!customerSearchTerm || 'all customers'.includes(customerSearchTerm.toLowerCase()))"
+        class="billing-cust-item" [class.selected]="cnForm.customerId == 0"
+        (click)="selectCustomerFromModal({ id: 0, name: 'All Customers' })">
+        <div class="billing-cust-item-icon">
+          <ion-icon name="people-outline"></ion-icon>
         </div>
-
-        <!-- Search Bar Area -->
-        <div style="padding:16px 20px 8px;background:#fdfdfd;flex-shrink:0;">
-          <div class="cust-search-box"
-            style="background:#f1f2f6;border-radius:16px;padding:4px 16px;display:flex;align-items:center;border:1.5px solid #eef2f7;transition:border-color 0.2s;">
-            <ion-icon name="search-outline" style="color:#a4b0be;font-size:22px;flex-shrink:0;"></ion-icon>
-            <input id="customer-modal-search-input" type="text"
-              [(ngModel)]="customerSearchTerm"
-              (ngModelChange)="applyCustomerSearchFilter($event)"
-              (input)="onCustomerSearch($event)"
-              placeholder="Search customer name..."
-              autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false"
-              style="border:none;background:transparent;padding:12px 10px;flex:1;outline:none;font-size:15px;color:#2f3542;min-width:0;" />
-            <ion-button *ngIf="customerSearchTerm" fill="clear" (click)="clearCustomerSearch()"
-              style="--color:#a4b0be;--padding-start:0;--padding-end:0;height:32px;margin:0;">
-              <ion-icon name="close-circle" slot="icon-only" style="font-size:20px;"></ion-icon>
-            </ion-button>
-          </div>
+        <div class="billing-cust-item-info">
+          <div class="billing-cust-item-name">All Customers</div>
+          <div class="billing-cust-item-code">View all invoices across all customers</div>
         </div>
+        <ion-icon name="chevron-forward-outline" class="billing-cust-arrow"></ion-icon>
+      </div>
 
-        <!-- Customer List -->
-        <div class="cust-modal-list hide-scrollbar" style="flex:1 1 0;min-height:0;max-height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;touch-action:pan-y;scrollbar-width:none;-ms-overflow-style:none;padding:8px 20px 30px;box-sizing:border-box;">
-          <!-- All Customers Option (for Credit Note) -->
-          <div *ngIf="customerModalTarget === 'cn' && (!customerSearchTerm || 'all customers'.includes(customerSearchTerm.toLowerCase()))"
-            (click)="selectCustomerFromModal({ id: 0, name: 'All Customers' })"
-            class="cust-card-item"
-            [style.background]="cnForm.customerId == 0 ? '#f7f6ff' : '#fff'"
-            [style.border-color]="cnForm.customerId == 0 ? '#6c5ce7' : '#f1f2f6'"
-            style="border-radius:18px;padding:14px 16px;margin-bottom:12px;border-width:1.5px;border-style:solid;transition:all 0.2s ease;cursor:pointer;display:flex;align-items:center;gap:14px;box-shadow:0 2px 8px rgba(0,0,0,0.02);position:relative;">
-            <div class="cust-card-avatar"
-              [style.background]="cnForm.customerId == 0 ? 'linear-gradient(135deg, #6c5ce7 0%, #8c7ae6 100%)' : '#eef0f8'"
-              [style.color]="cnForm.customerId == 0 ? '#fff' : '#5c6ac4'"
-              style="width:46px;height:46px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:18px;flex-shrink:0;">
-              <ion-icon name="people-outline"></ion-icon>
-            </div>
-            <div style="flex:1;min-width:0;">
-              <div style="font-size:16px;font-weight:800;color:#2f3542;">All Customers</div>
-              <div style="font-size:12px;color:#747d8c;margin-top:2px;">View all invoices across all customers</div>
-            </div>
-            <div style="flex-shrink:0;">
-              <div *ngIf="cnForm.customerId == 0"
-                style="width:28px;height:28px;border-radius:50%;background:#6c5ce7;color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(108,92,231,0.4);">
-                <ion-icon name="checkmark-outline" style="font-size:18px;"></ion-icon>
-              </div>
-              <ion-icon *ngIf="cnForm.customerId != 0" name="chevron-forward-outline"
-                style="color:#cfd8dc;font-size:20px;"></ion-icon>
-            </div>
+      <!-- Customer List (card design) -->
+      <div *ngIf="customerModalTarget === 'cn' && (!customerSearchTerm || 'all customers'.includes(customerSearchTerm.toLowerCase()))"
+        (click)="selectCustomerFromModal({ id: 0, name: 'All Customers' })"
+        class="cust-card-item"
+        [style.background]="cnForm.customerId == 0 ? '#f7f6ff' : '#fff'"
+        [style.border-color]="cnForm.customerId == 0 ? '#6c5ce7' : '#f1f2f6'"
+        style="border-radius:18px;padding:14px 16px;margin-bottom:12px;border-width:1.5px;border-style:solid;transition:all 0.2s ease;cursor:pointer;display:flex;align-items:center;gap:14px;box-shadow:0 2px 8px rgba(0,0,0,0.02);position:relative;">
+        <div class="cust-card-avatar"
+          [style.background]="cnForm.customerId == 0 ? 'linear-gradient(135deg, #6c5ce7 0%, #8c7ae6 100%)' : '#eef0f8'"
+          [style.color]="cnForm.customerId == 0 ? '#fff' : '#5c6ac4'"
+          style="width:46px;height:46px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:18px;flex-shrink:0;">
+          <ion-icon name="people-outline"></ion-icon>
+        </div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:16px;font-weight:800;color:#2f3542;">All Customers</div>
+          <div style="font-size:12px;color:#747d8c;margin-top:2px;">View all invoices across all customers</div>
+        </div>
+        <div style="flex-shrink:0;">
+          <div *ngIf="cnForm.customerId == 0"
+            style="width:28px;height:28px;border-radius:50%;background:#6c5ce7;color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(108,92,231,0.4);">
+            <ion-icon name="checkmark-outline" style="font-size:18px;"></ion-icon>
           </div>
-
-          <div *ngFor="let c of filteredCustomers" (click)="selectCustomerFromModal(c)"
-            class="cust-card-item"
-            [style.background]="isCustomerModalSelected(c) ? '#f7f6ff' : '#fff'"
-            [style.border-color]="isCustomerModalSelected(c) ? '#6c5ce7' : '#f1f2f6'"
-            style="border-radius:18px;padding:16px;margin-bottom:12px;border-width:1.5px;border-style:solid;transition:all 0.2s ease;cursor:pointer;display:flex;align-items:center;gap:14px;box-shadow:0 2px 8px rgba(0,0,0,0.02);position:relative;">
-
-            <!-- Avatar -->
-            <div class="cust-card-avatar"
-              [style.background]="isCustomerModalSelected(c) ? 'linear-gradient(135deg, #6c5ce7 0%, #8c7ae6 100%)' : '#eef0f8'"
-              [style.color]="isCustomerModalSelected(c) ? '#fff' : '#5c6ac4'"
-              style="width:46px;height:46px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px;flex-shrink:0;">
-              {{ getCustomerInitials(c.name) }}
-            </div>
-
-            <!-- Details -->
-            <div style="flex:1;min-width:0;">
-              <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap;">
-                <span style="font-size:16px;font-weight:800;color:#2f3542;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
-                  {{ c.name }}
-                </span>
-                <span *ngIf="c.customerCode || c.code"
-                  style="font-size:10px;font-weight:800;color:#6c5ce7;background:#ede9fe;padding:2px 7px;border-radius:6px;">
-                  {{ c.customerCode || c.code }}
-                </span>
-              </div>
-
-              <!-- Contact Row -->
-              <div style="display:flex;align-items:center;gap:12px;font-size:12px;color:#747d8c;margin-bottom:6px;flex-wrap:wrap;">
-                <span *ngIf="c.phone" style="display:flex;align-items:center;gap:4px;">
-                  <ion-icon name="call-outline" style="font-size:13px;"></ion-icon> {{ c.phone }}
-                </span>
-                <span *ngIf="c.email" style="display:flex;align-items:center;gap:4px;">
-                  <ion-icon name="mail-outline" style="font-size:13px;"></ion-icon> {{ c.email }}
-                </span>
-              </div>
-
-              <!-- Invoice Status Pill -->
-              <div style="display:flex;align-items:center;gap:6px;">
-                <span *ngIf="getCustomerUnpaidInvoicesCount(c.id) > 0"
-                  style="font-size:11px;font-weight:700;color:#d35400;background:#fef5e7;border:1px solid #fdebd0;padding:2px 8px;border-radius:6px;display:inline-flex;align-items:center;gap:4px;">
-                  <ion-icon name="alert-circle-outline" style="font-size:13px;"></ion-icon>
-                  {{ getCustomerUnpaidInvoicesCount(c.id) }} Unpaid · RM {{ getCustomerTotalUnpaidBalance(c.id) | number:'1.2-2' }}
-                </span>
-                <span *ngIf="getCustomerUnpaidInvoicesCount(c.id) === 0"
-                  style="font-size:11px;font-weight:700;color:#27ae60;background:#e8f8f5;border:1px solid #d4efdf;padding:2px 8px;border-radius:6px;display:inline-flex;align-items:center;gap:4px;">
-                  <ion-icon name="checkmark-circle-outline" style="font-size:13px;"></ion-icon>
-                  All Settled
-                </span>
-              </div>
-            </div>
-
-            <!-- Selection Indicator -->
-            <div style="flex-shrink:0;">
-              <div *ngIf="isCustomerModalSelected(c)"
-                style="width:28px;height:28px;border-radius:50%;background:#6c5ce7;color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(108,92,231,0.4);">
-                <ion-icon name="checkmark-outline" style="font-size:18px;"></ion-icon>
-              </div>
-              <ion-icon *ngIf="!isCustomerModalSelected(c)" name="chevron-forward-outline"
-                style="color:#cfd8dc;font-size:20px;"></ion-icon>
-            </div>
-          </div>
-
-          <!-- Empty State -->
-          <div *ngIf="filteredCustomers.length === 0" style="text-align:center;padding:50px 20px;color:#888;">
-            <div style="width:64px;height:64px;border-radius:50%;background:#f1f2f6;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;">
-              <ion-icon name="people-outline" style="font-size:32px;color:#a4b0be;"></ion-icon>
-            </div>
-            <div style="font-size:17px;font-weight:800;color:#2f3542;margin-bottom:6px;">No Customers Found</div>
-            <p *ngIf="customerSearchTerm" style="font-size:13px;color:#a4b0be;margin:0 0 16px;">
-              No match found for "<strong>{{ customerSearchTerm }}</strong>"
-            </p>
-            <button *ngIf="customerSearchTerm" (click)="clearCustomerSearch()"
-              style="background:#6c5ce7;color:#fff;border:none;border-radius:12px;padding:10px 20px;font-size:13px;font-weight:700;cursor:pointer;">
-              Clear Search
-            </button>
-          </div>
+          <ion-icon *ngIf="cnForm.customerId != 0" name="chevron-forward-outline"
+            style="color:#cfd8dc;font-size:20px;"></ion-icon>
         </div>
       </div>
-    </ng-template>
-  </ion-modal>
+
+      <div *ngFor="let c of filteredCustomers" class="billing-cust-item" [class.selected]="isCustomerModalSelected(c)" (click)="selectCustomerFromModal(c)">
+        <div class="billing-cust-item-icon">
+          <ion-icon name="person-outline"></ion-icon>
+        </div>
+        <div class="billing-cust-item-info">
+          <div class="billing-cust-item-name">{{ c.name }}</div>
+          <div class="billing-cust-item-code">{{ c.customerCode || c.code || 'NO CODE' }}</div>
+        </div>
+        <ion-icon name="chevron-forward-outline" class="billing-cust-arrow"></ion-icon>
+      </div>
+      <div *ngIf="filteredCustomers.length === 0" style="text-align:center;padding:50px 20px;color:#888;">
+        <p>No customers found</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Create CN Invoice Selector Overlay -->
+  <div *ngIf="showCNInvoiceModal" class="billing-overlay">
+    <div class="billing-overlay-header">
+      <ion-button fill="clear" class="close-btn" (click)="closeCNInvoiceModal()">
+        <ion-icon name="close-outline"></ion-icon>
+      </ion-button>
+      <span class="billing-overlay-title">Select Invoice</span>
+    </div>
+    <div class="billing-overlay-search">
+      <ion-searchbar [(ngModel)]="cnInvoiceSearchTerm" (ionInput)="filterCNInvoicesForSelect()" placeholder="Search invoice or customer..."></ion-searchbar>
+    </div>
+    <div class="billing-overlay-content">
+      <div *ngFor="let inv of filteredCNInvoicesForSelect" class="billing-inv-card" [class.selected]="cnForm.invoiceId === inv.id" (click)="selectCNInvoice(inv)">
+        <div class="inv-card-top">
+          <span class="inv-card-doc">{{ getDocNo(inv) }}</span>
+          <span class="inv-card-status" [class.paid]="inv.status==='Paid'" [class.partial]="inv.status==='Partial'" [class.unpaid]="inv.status==='Unpaid'||!inv.status">{{ inv.status || 'Unpaid' }}</span>
+        </div>
+        <div class="inv-card-bottom">
+          <span class="inv-card-cust">{{ inv.customerName }} • {{ inv.invoiceDate | date:'dd/MM/yyyy' }}</span>
+          <span class="inv-card-amount">RM {{ (inv.totalAmount || 0) | number:'1.2-2' }}</span>
+        </div>
+      </div>
+      <div *ngIf="filteredCNInvoicesForSelect.length === 0" style="text-align:center;padding:50px 20px;color:#888;">
+        <p>No invoices found</p>
+      </div>
+    </div>
+  </div>
 
   <!-- Purchase History Modal (Standard Ionic Modal) -->
   <ion-modal [isOpen]="showHistoryModal" (didDismiss)="showHistoryModal = false"

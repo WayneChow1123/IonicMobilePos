@@ -21,7 +21,10 @@ import { formatDocNo } from '../../utils/invoice-helper';
 })
 export class BillingPage implements OnInit {
   ionViewWillEnter() {
-    this.currentView = 'home';
+    const action = this.route.snapshot.queryParams['action'];
+    if (!action) {
+      this.currentView = 'home';
+    }
     this.loadCustomers();
     this.loadAllInvoices();
     this.cdr.detectChanges();
@@ -66,6 +69,15 @@ export class BillingPage implements OnInit {
   selectedInvoiceDetail: any = null;
   selectedCNInvoiceDetail: any = null;
   customerProductPrices: any[] = [];
+
+  // Edit CN state
+  isEditingCN = false;
+  editCNForm: any = { id: 0, customerId: 0, customerName: '', reason: '', items: [] };
+
+  // Create CN Invoice Selector Modal
+  showCNInvoiceModal = false;
+  cnInvoiceSearchTerm = '';
+  filteredCNInvoicesForSelect: any[] = [];
 
   loadCustomerProductPrices(customerId: number) {
     if (!customerId) {
@@ -126,8 +138,14 @@ export class BillingPage implements OnInit {
   showCustomerModal = false;
   customerSearchTerm = '';
   filteredCustomers: any[] = [];
-  customerModalTarget: 'payment' | 'cn' = 'payment';
+  customerModalTarget: 'payment' | 'cn' | 'editCN' = 'payment';
   cnProductSearchTerm = '';
+
+  getProductName(productId: any): string {
+    if (!this.allProducts || this.allProducts.length === 0) return 'Product #' + productId;
+    const p = this.allProducts.find((x: any) => x.id == productId);
+    return p ? p.name : 'Product #' + productId;
+  }
 
   getSelectedCustomerDiscount(): number {
     if (!this.cnForm.customerId) return 0;
@@ -166,6 +184,35 @@ export class BillingPage implements OnInit {
 
   selectProduct(product: any) {
     this.showProductModal = false;
+
+    if (this.isEditingCN) {
+      if (!this.editCNForm.items) {
+        this.editCNForm.items = [];
+      }
+      const found = this.editCNForm.items.find((i: any) => i.productId === product.id);
+      if (found) {
+        found.quantity = (Number(found.quantity) || 0) + 1;
+      } else {
+        let price = product.price || 0;
+        const custPrice = this.getCustomerSpecialPrice(product.id);
+        if (custPrice != null) {
+          price = custPrice;
+        }
+        price = this.getDiscountedPrice(price);
+
+        this.editCNForm.items.push({
+          productId: product.id,
+          productName: product.name,
+          quantity: 1,
+          unitPrice: price,
+          returnToStock: true
+        });
+      }
+      this.editCNForm.items = [...this.editCNForm.items];
+      this.showToastMsg(`Added ${product.name}`);
+      this.cdr.detectChanges();
+      return;
+    }
 
     // Check if item already exists in the list
     const found = this.cnForm.items.find((i: any) => i.productId === product.id);
@@ -303,6 +350,64 @@ export class BillingPage implements OnInit {
             this.showToastMsg('Failed to load payments');
           }
         });
+      } else if (params['action'] === 'viewCN') {
+        const cnId = Number(params['cnId']);
+        const invId = Number(params['invoiceId']) || 0;
+        const cnNumber = params['cnNumber'];
+
+        this.isCNLoading = true;
+        this.currentView = 'cnDetails';
+        this.cdr.detectChanges();
+
+        this.api.getAllCreditNotes().subscribe({
+          next: (res) => {
+            const rawList = Array.isArray(res) ? res : [];
+            const groupedMap = new Map<string, any>();
+            for (const item of rawList) {
+              const key = item.cnNumber || ('ID-' + item.id);
+              if (!groupedMap.has(key)) {
+                groupedMap.set(key, {
+                  ...item,
+                  rawIds: [item.id],
+                  items: [...(item.items || item.Items || [])],
+                  Items: [...(item.items || item.Items || [])],
+                  amount: Number(item.amount || 0)
+                });
+              } else {
+                const existing = groupedMap.get(key);
+                existing.rawIds.push(item.id);
+                existing.amount += Number(item.amount || 0);
+                const newItems = item.items || item.Items || [];
+                existing.items.push(...newItems);
+                existing.Items.push(...newItems);
+              }
+            }
+            this.creditNotes = Array.from(groupedMap.values());
+            this.filteredCreditNotes = [...this.creditNotes];
+
+            const foundCN = this.creditNotes.find((c: any) =>
+              (cnId && (c.id === cnId || (c.rawIds && c.rawIds.includes(cnId)))) ||
+              (cnNumber && (c.cnNumber === cnNumber || c.CNNumber === cnNumber))
+            );
+
+            if (foundCN) {
+              this.viewCNDetails(foundCN);
+            } else {
+              this.viewCNDetails({
+                id: cnId,
+                invoiceId: invId,
+                cnNumber: cnNumber || ('CN-' + cnId)
+              });
+            }
+          },
+          error: () => {
+            this.viewCNDetails({
+              id: cnId,
+              invoiceId: invId,
+              cnNumber: cnNumber || ('CN-' + cnId)
+            });
+          }
+        });
       }
     });
   }
@@ -360,7 +465,32 @@ export class BillingPage implements OnInit {
   loadCreditNotes() {
     this.isLoading = true;
     this.api.getAllCreditNotes().subscribe({
-      next: (res) => { this.creditNotes = Array.isArray(res) ? res : []; this.filteredCreditNotes = [...this.creditNotes]; this.isLoading = false; },
+      next: (res) => {
+        const rawList = Array.isArray(res) ? res : [];
+        const groupedMap = new Map<string, any>();
+        for (const item of rawList) {
+          const key = item.cnNumber || ('ID-' + item.id);
+          if (!groupedMap.has(key)) {
+            groupedMap.set(key, {
+              ...item,
+              rawIds: [item.id],
+              items: [...(item.items || item.Items || [])],
+              Items: [...(item.items || item.Items || [])],
+              amount: Number(item.amount || 0)
+            });
+          } else {
+            const existing = groupedMap.get(key);
+            existing.rawIds.push(item.id);
+            existing.amount += Number(item.amount || 0);
+            const newItems = item.items || item.Items || [];
+            existing.items.push(...newItems);
+            existing.Items.push(...newItems);
+          }
+        }
+        this.creditNotes = Array.from(groupedMap.values());
+        this.filteredCreditNotes = [...this.creditNotes];
+        this.isLoading = false;
+      },
       error: () => { this.isLoading = false; }
     });
   }
@@ -618,7 +748,7 @@ export class BillingPage implements OnInit {
     }
   }
 
-  openCustomerModal(target: 'payment' | 'cn' = 'payment') {
+  openCustomerModal(target: 'payment' | 'cn' | 'editCN' = 'payment') {
     this.customerModalTarget = target;
     this.customerSearchTerm = '';
     this.filteredCustomers = [...this.customers];
@@ -664,14 +794,13 @@ export class BillingPage implements OnInit {
     if (!term) {
       this.filteredCustomers = [...this.customers];
     } else {
-      // 严格仅匹配客户名字：排除任何与输入无关的名字
       const matches = this.customers.filter((c: any) => {
         if (!c) return false;
         const name = (c.name || c.Name || c.customerName || c.CustomerName || '').toString().trim().toLowerCase();
-        return name.includes(term);
+        const code = (c.customerCode || c.code || c.CustomerCode || '').toString().trim().toLowerCase();
+        return name.includes(term) || code.includes(term);
       });
 
-      // 排序：以输入字符开头的名字排在最顶部
       matches.sort((a: any, b: any) => {
         const nameA = (a.name || a.Name || a.customerName || a.CustomerName || '').toString().trim().toLowerCase();
         const nameB = (b.name || b.Name || b.customerName || b.CustomerName || '').toString().trim().toLowerCase();
@@ -691,6 +820,8 @@ export class BillingPage implements OnInit {
   selectCustomerFromModal(customer: any) {
     if (this.customerModalTarget === 'cn') {
       this.selectCNCustomer(customer);
+    } else if (this.customerModalTarget === 'editCN') {
+      this.selectEditCNCustomer(customer);
     } else {
       this.selectPaymentCustomer(customer);
     }
@@ -709,6 +840,13 @@ export class BillingPage implements OnInit {
     this.closeCustomerModal();
   }
 
+  selectEditCNCustomer(customer: any) {
+    if (!customer) return;
+    this.editCNForm.customerId = customer.id;
+    this.editCNForm.customerName = customer.name;
+    this.closeCustomerModal();
+  }
+
   getCNSelectedCustomerName(): string {
     if (!this.cnForm?.customerId || this.cnForm.customerId == 0) {
       return 'All Customers';
@@ -722,7 +860,49 @@ export class BillingPage implements OnInit {
     if (this.customerModalTarget === 'cn') {
       return (this.cnForm?.customerId ?? 0) == c.id;
     }
+    if (this.customerModalTarget === 'editCN') {
+      return (this.editCNForm?.customerId ?? 0) == c.id;
+    }
     return (this.paymentForm?.customerId ?? 0) == c.id;
+  }
+
+  // ─── Create CN Invoice Selector Modal ───
+  openCNInvoiceModal() {
+    this.cnInvoiceSearchTerm = '';
+    this.filteredCNInvoicesForSelect = [...this.cnFilteredInvoices];
+    this.showCNInvoiceModal = true;
+    this.cdr.detectChanges();
+  }
+
+  closeCNInvoiceModal() {
+    this.showCNInvoiceModal = false;
+    this.cdr.detectChanges();
+  }
+
+  filterCNInvoicesForSelect() {
+    const term = (this.cnInvoiceSearchTerm || '').trim().toLowerCase();
+    if (!term) {
+      this.filteredCNInvoicesForSelect = [...this.cnFilteredInvoices];
+    } else {
+      this.filteredCNInvoicesForSelect = this.cnFilteredInvoices.filter((inv: any) =>
+        (inv.invoiceNumber || '').toLowerCase().includes(term) ||
+        (inv.docNo || '').toLowerCase().includes(term) ||
+        this.getDocNo(inv).toLowerCase().includes(term) ||
+        (inv.customerName || '').toLowerCase().includes(term)
+      );
+    }
+    this.cdr.detectChanges();
+  }
+
+  selectCNInvoice(inv: any) {
+    this.cnForm.invoiceId = inv ? inv.id : 0;
+    this.closeCNInvoiceModal();
+    this.onCNInvoiceChange();
+  }
+
+  getSelectedCNInvoice(): any {
+    if (!this.cnForm?.invoiceId || this.cnForm.invoiceId === 0) return null;
+    return this.invoices.find((i: any) => i.id == this.cnForm.invoiceId) || this.selectedCNInvoiceDetail;
   }
 
   get filteredCNItems(): any[] {
@@ -1151,6 +1331,7 @@ export class BillingPage implements OnInit {
 
   viewCNDetails(cn: any) {
     this.isCNLoading = true;
+    this.isEditingCN = false;
     this.selectedCNDetail = cn;
     this.currentView = 'cnDetails';
     this.showCNActionsDropdown = false;
@@ -1159,23 +1340,147 @@ export class BillingPage implements OnInit {
     }
     this.api.getCreditNoteById(Number(cn.invoiceId), Number(cn.id)).subscribe({
       next: (res: any) => {
-        const fetchedItems = res.Items || res.items || res.data?.Items || res.data?.items || [];
-        const mergedItems = fetchedItems.length ? fetchedItems : (cn.Items || cn.items || []);
-        const normalized = mergedItems.map((it: any) => ({
+        const fetchedItems = res.Items || res.items || res.data?.Items || res.data?.items;
+        const sourceItems = Array.isArray(fetchedItems) ? fetchedItems : (cn.items || cn.Items || []);
+        const normalized = sourceItems.map((it: any) => ({
           ...it,
-          productName: it.productName || it.ProductName || it.Name || it.name || it.product_name || '',
+          productName: it.productName || it.ProductName || it.Name || it.name || it.product_name || this.getProductName(it.productId ?? it.ProductId) || '',
           productId: it.productId ?? it.ProductId,
           quantity: it.quantity ?? it.Quantity,
-          unitPrice: it.unitPrice ?? it.UnitPrice
+          unitPrice: it.unitPrice ?? it.UnitPrice,
+          returnToStock: !!(it.returnToStock ?? it.ReturnToStock)
         }));
-        this.selectedCNDetail = { ...cn, ...res, Items: normalized, items: normalized };
+        this.selectedCNDetail = { ...cn, ...res, amount: res.amount != null ? res.amount : cn.amount, Items: normalized, items: normalized };
         this.isCNLoading = false;
       },
-      error: () => { this.isCNLoading = false; }
+      error: () => {
+        const sourceItems = cn.Items || cn.items || [];
+        const normalized = sourceItems.map((it: any) => ({
+          ...it,
+          productName: it.productName || it.ProductName || it.Name || it.name || it.product_name || this.getProductName(it.productId ?? it.ProductId) || '',
+          productId: it.productId ?? it.ProductId,
+          quantity: it.quantity ?? it.Quantity,
+          unitPrice: it.unitPrice ?? it.UnitPrice,
+          returnToStock: !!(it.returnToStock ?? it.ReturnToStock)
+        }));
+        this.selectedCNDetail = { ...cn, Items: normalized, items: normalized };
+        this.isCNLoading = false;
+      }
     });
   }
 
-  closeCNDetails() { this.currentView = 'cnList'; this.showCNActionsDropdown = false; this.showCNPreview = false; }
+  handleCNDetailsBack() {
+    if (this.isEditingCN) {
+      this.cancelEditCN();
+    } else {
+      this.closeCNDetails();
+    }
+  }
+
+  closeCNDetails() {
+    this.currentView = 'cnList';
+    this.showCNActionsDropdown = false;
+    this.showCNPreview = false;
+    this.isEditingCN = false;
+    this.router.navigate([], { queryParams: {}, replaceUrl: true });
+  }
+
+  startEditCN() {
+    if (!this.selectedCNDetail) return;
+    const cn = this.selectedCNDetail;
+    const items = (cn.Items || cn.items || []).map((it: any) => ({
+      productId: it.productId ?? it.ProductId,
+      productName: it.productName || it.ProductName || it.name || it.Name || this.getProductName(it.productId ?? it.ProductId),
+      quantity: it.quantity ?? it.Quantity ?? 1,
+      unitPrice: it.unitPrice ?? it.UnitPrice ?? 0,
+      returnToStock: !!(it.returnToStock ?? it.ReturnToStock)
+    }));
+    this.editCNForm = {
+      id: cn.id,
+      customerId: cn.customerId || (cn.customer?.id) || 0,
+      customerName: cn.customerName || (cn.customer?.name) || (this.customers.find(c => c.id == cn.customerId)?.name) || '',
+      reason: cn.reason || '',
+      items: items
+    };
+    this.isEditingCN = true;
+    this.showCNActionsDropdown = false;
+  }
+
+  cancelEditCN() {
+    this.isEditingCN = false;
+  }
+
+  removeEditCNItem(index: number) {
+    if (!this.editCNForm?.items) return;
+    const removed = this.editCNForm.items[index];
+    this.editCNForm.items.splice(index, 1);
+    this.editCNForm.items = [...this.editCNForm.items];
+    if (removed) {
+      this.showToastMsg(`Removed ${removed.productName || 'product'}`);
+    }
+  }
+
+  getEditCNTotal(): number {
+    if (!this.editCNForm?.items) return 0;
+    return this.editCNForm.items.reduce((sum: number, it: any) => sum + ((Number(it.quantity) || 0) * (Number(it.unitPrice) || 0)), 0);
+  }
+
+  saveEditCN() {
+    if (!this.editCNForm || !this.selectedCNDetail) return;
+    if (!this.editCNForm.customerId || this.editCNForm.customerId === 0) {
+      this.showToastMsg('Please select a customer');
+      return;
+    }
+    if (!this.editCNForm.items || this.editCNForm.items.length === 0) {
+      this.showToastMsg('Credit Note must have at least one product');
+      return;
+    }
+    for (const it of this.editCNForm.items) {
+      if (!it.quantity || Number(it.quantity) <= 0) {
+        this.showToastMsg('Quantity must be greater than 0');
+        return;
+      }
+      if (it.unitPrice == null || Number(it.unitPrice) < 0) {
+        this.showToastMsg('Unit price cannot be negative');
+        return;
+      }
+    }
+
+    const payload = {
+      customerId: Number(this.editCNForm.customerId),
+      reason: this.editCNForm.reason,
+      items: this.editCNForm.items.map((it: any) => ({
+        productId: Number(it.productId),
+        quantity: Number(it.quantity),
+        unitPrice: Number(it.unitPrice),
+        returnToStock: it.returnToStock
+      }))
+    };
+
+    this.isCNLoading = true;
+    this.api.updateCreditNote(this.selectedCNDetail.id, payload).subscribe({
+      next: () => {
+        this.showToastMsg('Credit Note updated successfully!');
+        this.isEditingCN = false;
+        this.isCNLoading = false;
+        const updatedCust = this.customers.find(c => c.id == this.editCNForm.customerId);
+        this.selectedCNDetail = {
+          ...this.selectedCNDetail,
+          customerId: this.editCNForm.customerId,
+          customerName: updatedCust ? updatedCust.name : this.editCNForm.customerName,
+          amount: this.getEditCNTotal(),
+          reason: this.editCNForm.reason,
+          Items: [...this.editCNForm.items],
+          items: [...this.editCNForm.items]
+        };
+        this.loadCreditNotes();
+      },
+      error: (err: any) => {
+        this.isCNLoading = false;
+        this.showToastMsg('Failed: ' + (err.error?.message || err.error || err.message || 'error'));
+      }
+    });
+  }
 
   getCNStatusForDetail(): string {
     const cn = this.selectedCNDetail;

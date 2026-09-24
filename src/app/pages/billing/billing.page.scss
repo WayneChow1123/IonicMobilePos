@@ -73,6 +73,19 @@ ion-content {
     font-size: 17px;
     font-weight: 700;
     color: #1a1a1a;
+
+    &.cn-title-responsive {
+        font-size: 15px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        text-align: center;
+        flex: 1;
+
+        @media (max-width: 380px) {
+            font-size: 13.5px;
+        }
+    }
 }
 
 .icon-btn {
@@ -253,6 +266,7 @@ ion-content {
 .item-avatar {
     width: 44px;
     height: 44px;
+    flex-shrink: 0;
     background: #F0EBE3;
     border-radius: 12px;
     display: flex;
@@ -264,6 +278,25 @@ ion-content {
         color: #888;
     }
 }
+
+.cn-avatar {
+    width: 44px;
+    height: 44px;
+    flex-shrink: 0;
+    background: linear-gradient(135deg, #5c85d6 0%, #4a71c5 100%);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 3px 8px rgba(92, 133, 214, 0.28);
+
+    ion-icon {
+        font-size: 22px;
+        color: #ffffff !important;
+        --color: #ffffff !important;
+    }
+}
+
 
 .item-name {
     font-size: 14px;
@@ -469,7 +502,7 @@ ion-content {
   }
 }
 
-/* ─── Receipt Preview Overlay ─── */
+/* --- Receipt Preview Overlay --- */
 .receipt-overlay {
   position: fixed;
   top: 0;
@@ -716,10 +749,10 @@ ion-content {
   padding-bottom: 8px;
 }
 
-// ═════════════════════════════════════════════
-// ═════════════════════════════════════════════
+// =============================================
+// =============================================
 // NEW PAYMENT CUSTOMER PICKER & MODAL STYLES
-// ═════════════════════════════════════════════
+// =============================================
 
 .customer-select-modal {
   --height: 90vh;
@@ -819,5 +852,441 @@ body.dark {
   scrollbar-width: none !important;
   -ms-overflow-style: none !important;
 }
+
+/* =====
+   CUSTOMER / INVOICE SELECTOR OVERLAY (Create Invoice   )
+   ===== */
+.billing-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: #F0EBE3;
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+}
+
+.billing-overlay-header {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 12px 20px;
+  padding-top: calc(max(env(safe-area-inset-top, 0px), 32px) + 12px); 
+  background: #fff;
+  border-bottom: 1px solid #eef2f7;
+  min-height: 52px;
+
+  .close-btn, ion-button {
+    position: absolute;
+    left: 14px;
+    --color: #1a1a1a;
+    font-size: 24px;
+    margin: 0;
+    --padding-start: 4px;
+    --padding-end: 4px;
+  }
+}
+
+.billing-overlay-title {
+  font-size: 16px;
+  font-weight: 800;
+  color: #1a1a1a;
+  text-align: center;
+}
+
+.billing-overlay-search {
+  padding: 12px 20px;
+  background: #fff;
+  border-bottom: 1px solid #eee;
+
+  ion-searchbar {
+    --background: #f5f5f5;
+    --border-radius: 12px;
+    --box-shadow: none;
+    padding: 0;
+  }
+}
+
+.billing-overlay-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 20px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.billing-cust-item {
+  background: #fff;
+  border-radius: 16px;
+  padding: 14px 16px;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  transition: transform 0.1s;
+  border: 1px solid #eef2f7;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+
+  &:active {
+    transform: scale(0.98);
+  }
+
+  &.selected {
+    border-color: #6c5ce7;
+    background: #f8f7ff;
+  }
+}
+
+.billing-cust-item-icon {
+  width: 40px;
+  height: 40px;
+  background: #F0EBE3;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  ion-icon {
+    font-size: 20px;
+    color: #888;
+  }
+}
+
+.billing-cust-item-info {
+  flex: 1;
+}
+
+.billing-cust-item-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: #1a1a1a;
+}
+
+.billing-cust-item-code {
+  font-size: 11px;
+  color: #888;
+  margin-top: 2px;
+  letter-spacing: 0.5px;
+}
+
+.billing-cust-arrow {
+  font-size: 18px;
+  color: #ddd;
+}
+
+/* =====
+   CREATE CN - INVOICE SELECTOR TRIGGER BOX & CARDS
+   ===== */
+.invoice-select-box {
+  background: rgba(255,255,255,0.85);
+  border: 1.5px solid rgba(0,0,0,0.06);
+  border-radius: 12px;
+  padding: 6px 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  min-width: 0;
+  transition: all 0.2s;
+
+  &:hover {
+    background: #fff;
+    border-color: #6c5ce7;
+  }
+
+  .inv-select-left {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    overflow: hidden;
+
+    .inv-doc-no {
+      font-size: 13px;
+      font-weight: 800;
+      color: #1a1a1a;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .inv-sub-info {
+      font-size: 11px;
+      color: #747d8c;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+  }
+
+  .inv-placeholder {
+    font-size: 13px;
+    color: #888;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
+.cn-capsule-btn {
+  height: 34px;
+  padding: 0 10px;
+  border-radius: 17px;
+  border: none;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.08);
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+
+  &:active {
+    transform: scale(0.96);
+  }
+
+  &.history {
+    background: #6c5ce7;
+    color: #fff;
+  }
+
+  &.product {
+    background: #5c85d6;
+    color: #fff;
+  }
+}
+
+
+.billing-inv-card {
+  background: #fff;
+  border-radius: 16px;
+  padding: 14px 16px;
+  margin-bottom: 10px;
+  border: 1px solid #eef2f7;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+  cursor: pointer;
+  transition: transform 0.1s;
+
+  &:active {
+    transform: scale(0.98);
+  }
+
+  &.selected {
+    border-color: #6c5ce7;
+    background: #f8f7ff;
+  }
+
+  .inv-card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+
+    .inv-card-doc {
+      font-size: 14px;
+      font-weight: 800;
+      color: #1a1a1a;
+    }
+
+    .inv-card-status {
+      font-size: 11px;
+      font-weight: 800;
+      padding: 3px 8px;
+      border-radius: 6px;
+      text-transform: uppercase;
+
+      &.paid { background: #e8f8f5; color: #00b894; }
+      &.partial { background: #fef9e7; color: #f39c12; }
+      &.unpaid { background: #fdeaea; color: #e74c3c; }
+    }
+  }
+
+  .inv-card-bottom {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+
+    .inv-card-cust {
+      font-size: 12px;
+      color: #555;
+      font-weight: 600;
+    }
+
+    .inv-card-amount {
+      font-size: 14px;
+      font-weight: 900;
+      color: #2f3542;
+    }
+  }
+}
+
+/* =====
+   EDIT CN MODE STYLES
+   ===== */
+.edit-cn-header-badge {
+  background: #ff7675;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  padding: 2px 8px;
+  border-radius: 6px;
+  letter-spacing: 1px;
+}
+
+.edit-cn-item-card {
+  background: #fdfdfd;
+  border: 1.5px solid #eef2f7;
+  border-radius: 14px;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+
+  .item-locked-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #f1f2f6;
+
+    .item-locked-title {
+      font-size: 14px;
+      font-weight: 800;
+      color: #2f3542;
+    }
+
+    .item-locked-tag {
+      font-size: 10px;
+      font-weight: 700;
+      color: #888;
+      background: #edf2f7;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+  }
+
+  .edit-cn-inputs-row {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+
+    .edit-cn-field {
+      flex: 1;
+
+      label {
+        display: block;
+        font-size: 10px;
+        font-weight: 800;
+        color: #747d8c;
+        margin-bottom: 4px;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+      }
+
+      input {
+        width: 100%;
+        background: #fff;
+        border: 1.5px solid #ddd;
+        border-radius: 8px;
+        padding: 8px 10px;
+        font-size: 14px;
+        font-weight: 700;
+        color: #1a1a1a;
+        outline: none;
+        box-sizing: border-box;
+
+        &:focus {
+          border-color: #6c5ce7;
+        }
+      }
+    }
+  }
+}
+
+.edit-cn-reason-input {
+  width: 100%;
+  background: #ffffff !important;
+  color: #1a1a1a !important;
+  border: 1.5px solid #ddd;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 14px;
+  font-weight: 600;
+  box-sizing: border-box;
+  outline: none;
+
+  &:focus {
+    border-color: #6c5ce7;
+  }
+}
+
+.cn-detail-actions {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  margin-top: 18px;
+  margin-bottom: 24px;
+  width: 100%;
+
+  .cn-detail-action-btn {
+    flex: 1;
+    min-width: 0;
+    display: inline-flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 14px 4px;
+    border: none;
+    border-radius: 14px;
+    font-size: 13px;
+    font-weight: 750;
+    color: #ffffff;
+    cursor: pointer;
+    white-space: nowrap;
+    letter-spacing: 0.3px;
+    font-family: 'DM Sans', sans-serif;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
+    transition: transform 0.15s ease, filter 0.15s ease;
+
+    &:active {
+      transform: scale(0.97);
+      filter: brightness(0.92);
+    }
+
+    ion-icon {
+      font-size: 16px;
+      flex-shrink: 0;
+      margin: 0;
+    }
+
+    span {
+      white-space: nowrap;
+      line-height: 1;
+    }
+
+    &.print-btn {
+      background: #5c85d6;
+    }
+
+    &.edit-btn {
+      background: #6c5ce7;
+    }
+
+    &.delete-btn {
+      background: #e57373;
+    }
+  }
+}
+
 
 

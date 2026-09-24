@@ -408,8 +408,8 @@
 
     <div *ngIf="selectedInvoice?.creditNotes?.length > 0" style="margin-bottom:12px;">
       <div class="section-title cn-section-title"><span>Credit Notes</span></div>
-      <div *ngFor="let cn of selectedInvoice.creditNotes; let i = index" class="list-item cn-item-card" style="background:#fff3cd;">
-        <div class="item-info">
+      <div *ngFor="let cn of selectedInvoice.creditNotes; let i = index" class="list-item cn-item-card" style="background:#fff3cd; cursor:pointer;" (click)="goToCNDetails(cn)">
+        <div class="item-info" style="flex:1;">
           <div class="item-avatar cn-item-avatar" style="background:#fff;"><ion-icon name="document-outline" style="color:#f39c12;"></ion-icon></div>
           <div>
             <div class="item-name cn-item-name">{{ cn.cnNumber || 'CN-' + cn.id }}</div>
@@ -422,9 +422,12 @@
             </div>
           </div>
         </div>
-        <ion-button fill="clear" style="--color:#e57373;margin-left:auto;" (click)="confirmDeleteCNFromInvoice(cn); $event.stopPropagation()">
-          <ion-icon name="trash-outline" style="font-size:18px;"></ion-icon>
-        </ion-button>
+        <div style="display:flex;align-items:center;margin-left:auto;gap:4px;">
+          <ion-button fill="clear" style="--color:#e57373;" (click)="confirmDeleteCNFromInvoice(cn); $event.stopPropagation()">
+            <ion-icon name="trash-outline" style="font-size:18px;"></ion-icon>
+          </ion-button>
+          <ion-icon name="chevron-forward-outline" style="font-size:18px;color:#d4a017;"></ion-icon>
+        </div>
       </div>
       <div class="form-card cn-summary-card" style="background:#fff3cd;margin-top:8px;">
         <div style="display:flex;justify-content:space-between;align-items:center;">

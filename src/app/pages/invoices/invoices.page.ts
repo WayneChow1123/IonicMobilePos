@@ -752,6 +752,23 @@ export class InvoicesPage implements OnInit, OnDestroy {
     });
   }
 
+  goToCNDetails(cn: any) {
+    if (!cn) return;
+    const invId = this.selectedInvoice?.id || cn.invoiceId || 0;
+    const cnId = cn.id || cn.Id;
+    const cnNumber = cn.cnNumber || cn.CNNumber || ('CN-' + cnId);
+    this.showModal = false;
+    this.navCtrl.navigateRoot('pages/billing', {
+      queryParams: {
+        action: 'viewCN',
+        cnId: cnId,
+        invoiceId: invId,
+        cnNumber: cnNumber,
+        _t: new Date().getTime()
+      }
+    });
+  }
+
   goToPaymentDetails() {
     if (!this.selectedInvoice) return;
     if (!(this.selectedInvoice.paidAmount > 0)) {
