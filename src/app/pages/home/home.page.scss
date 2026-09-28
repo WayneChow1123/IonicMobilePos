@@ -126,8 +126,8 @@ ion-content {
     }
 
     .icon-bubble {
-      width: 72px;
-      height: 72px;
+      width: 58px;
+      height: 58px;
       background: #f6f8f2;
     }
   }
@@ -205,12 +205,26 @@ ion-content {
   align-items: center;
   justify-content: center;
   background: #f4f1ea;
-  border-radius: 8px;
+  border-radius: 12px;
   width: 58px;
   height: 58px;
+  min-width: 58px;
+  min-height: 58px;
+  max-width: 58px;
+  max-height: 58px;
+  overflow: hidden;
+  flex-shrink: 0;
 
   &.icon-bubble-center {
     align-self: center;
+  }
+
+  .icon-custom {
+    width: 32px !important;
+    height: 32px !important;
+    max-width: 32px !important;
+    max-height: 32px !important;
+    object-fit: contain;
   }
 }
 

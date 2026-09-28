@@ -1338,6 +1338,9 @@ export class BillingPage implements OnInit {
     if (!this.allProducts || this.allProducts.length === 0) {
       this.api.getProducts().subscribe({ next: (res: any) => { this.allProducts = res || []; } });
     }
+    if (!this.customers || this.customers.length === 0) {
+      this.loadCustomers();
+    }
     this.api.getCreditNoteById(Number(cn.invoiceId), Number(cn.id)).subscribe({
       next: (res: any) => {
         const fetchedItems = res.Items || res.items || res.data?.Items || res.data?.items;
@@ -1498,6 +1501,41 @@ export class BillingPage implements OnInit {
     return p ? p.name : 'Product #' + pid;
   }
 
+  getCustomer(id: any) {
+    if (!this.customers || !Array.isArray(this.customers)) return null;
+    const targetId = id || this.selectedCNDetail?.customerId || this.selectedCNDetail?.CustomerId || this.selectedCNDetail?.customer_id || this.selectedCNDetail?.customer?.id;
+    if (targetId) {
+      const found = this.customers.find((c: any) => c.id == targetId);
+      if (found) return found;
+    }
+    const custName = (this.selectedCNDetail?.customerName || this.selectedCNDetail?.CustomerName || this.selectedCNDetail?.customer?.name || '').trim().toLowerCase();
+    if (custName) {
+      const found = this.customers.find((c: any) => (c.name || '').trim().toLowerCase() === custName);
+      if (found) return found;
+    }
+    return null;
+  }
+
+  getCustomerPhone(customerId: any): string {
+    const c = this.getCustomer(customerId);
+    return this.selectedCNDetail?.customerPhone || c?.phone || this.selectedCNDetail?.customer?.phone || '';
+  }
+
+  getCustomerFullAddress(customerId: any): string {
+    const c = this.getCustomer(customerId);
+    if (c) {
+      const branch = (c.branches && c.branches.length > 0)
+        ? (c.branches.find((b: any) => b.isDefaultBranch) || c.branches[0])
+        : null;
+      if (branch) {
+        const parts = [branch.address1, branch.address2, branch.city, branch.postcode, branch.state].filter(p => !!p);
+        if (parts.length > 0) return parts.join(', ');
+      }
+      if (c.address) return c.address;
+    }
+    return this.selectedCNDetail?.customerAddress || this.selectedCNDetail?.address || this.selectedCNDetail?.customer?.address || '';
+  }
+
   printCNDetails() {
     const cn = this.selectedCNDetail;
     if (!cn) return;
@@ -1509,12 +1547,121 @@ export class BillingPage implements OnInit {
     this.showCNPreview = true;
   }
 
-  printCNFromPreview() {
+  printCNReceipt() {
     const cn = this.selectedCNDetail;
     if (!cn) return;
-    const printWindow = (document.getElementById('cn-print-iframe') as HTMLIFrameElement)?.contentWindow;
+    this.loadPrinterSettings();
+    if (this.printerSettings?.printerInterface === 'Bluetooth' && this.btPrint.isAvailable()) {
+      this.btPrint.printCreditNote(cn, this.printerSettings, this.customers, this.allProducts);
+      return;
+    }
+
+    let iframe = document.getElementById('print-iframe') as HTMLIFrameElement;
+    if (!iframe) {
+      iframe = document.createElement('iframe');
+      iframe.id = 'print-iframe';
+      iframe.style.position = 'fixed';
+      iframe.style.right = '0';
+      iframe.style.bottom = '0';
+      iframe.style.width = '0';
+      iframe.style.height = '0';
+      iframe.style.border = '0';
+      document.body.appendChild(iframe);
+    }
+    const printWindow = iframe.contentWindow || (iframe.contentDocument as any)?.defaultView;
     if (!printWindow) { this.showToastMsg('Failed to initialize print iframe'); return; }
+
+    const isSmall = !this.printerSettings?.paperWidth || 
+      this.printerSettings.paperWidth <= 58 || 
+      (this.printerSettings?.autoAdapt !== false && (!this.printerSettings?.hardwareWidth || this.printerSettings.hardwareWidth <= 58));
+    const width = isSmall ? '360px' : '480px';
+    const styles = `<style>* { margin: 0; padding: 0; box-sizing: border-box; } body { font-family: 'Courier New', monospace; background: #F0EBE3; display: flex; justify-content: center; padding: 40px 20px; } .receipt { background: #fff; border-radius: 24px; padding: 40px 36px; max-width: ${width}; width: 100%; box-shadow: 0 4px 24px rgba(0,0,0,0.08); } .receipt-type { display: block; text-align: center; font-size: 13px; letter-spacing: 6px; color: #888; margin-bottom: 16px; } .divider { height: 1px; background: #1a1a1a; margin: 12px 0; } .divider-thin { height: 1px; background: #ddd; margin: 12px 0; } .company { text-align: center; font-size: 22px; font-weight: 700; margin: 12px 0 4px; } .co-reg { display: block; text-align: center; font-size: 12px; color: #888; margin-bottom: 8px; } .address { display: block; text-align: center; font-size: 11px; color: #666; line-height: 1.6; } .contact { display: block; text-align: center; font-size: 11px; color: #888; margin-top: 6px; } .doc-row { display: flex; gap: 12px; margin: 4px 0; } .doc-label { font-size: 12px; font-weight: 700; min-width: 70px; } .doc-value { font-size: 12px; font-weight: 700; } .to-section { margin: 16px 0; } .to-label { font-size: 12px; font-style: italic; color: #888; } .to-box { border: 1px solid #ddd; border-radius: 8px; padding: 12px; margin-top: 6px; font-size: 12px; line-height: 1.6; } .table-header { display: flex; justify-content: space-between; font-size: 11px; font-weight: 700; font-style: italic; } .item-row { margin: 12px 0; } .item-desc { display: flex; justify-content: space-between; font-size: 12px; font-weight: 700; } .item-calc { font-size: 11px; color: #888; margin-top: 2px; display: flex; justify-content: space-between; } .total-row { display: flex; justify-content: space-between; font-size: 12px; margin: 4px 0; } .net-bar { background: #1a1a1a; color: #fff; border-radius: 8px; padding: 14px 20px; display: flex; justify-content: space-between; align-items: center; margin: 16px 0; } .net-label { font-size: 12px; font-weight: 700; font-style: italic; } .net-value { font-size: 20px; font-weight: 700; } .sig-box { border: 1px solid #ddd; border-radius: 8px; padding: 16px; min-height: 100px; margin: 16px 0; } .sig-label { font-size: 11px; color: #ccc; font-style: italic; } .thanks { text-align: center; font-size: 12px; letter-spacing: 6px; color: #ccc; margin-top: 20px; }</style>`;
+
+    let companyHeaderHtml = '';
+    if (this.isOptionEnabled('Print Company Logo')) {
+      companyHeaderHtml = `
+        <div class="company">B JAYA TRADING</div>
+        <span class="co-reg">(001188861-T)</span>
+        <span class="address">NO. 467, JALAN PALAS 13, TAMAN PELANGI,</span>
+        <span class="address">70400 SEREMBAN N.S, SEREMBAN, N.S, MALAYSIA</span>
+        <span class="contact">TEL: 012-6988080</span>
+      `;
+    }
+
+    let dateHtml = '';
+    const cnDate = cn.createdAt ? new Date(cn.createdAt) : new Date();
+    const dateStr = cnDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    if (this.isOptionEnabled('Print Issue Time')) {
+      dateHtml = `<div class="doc-row"><span class="doc-label">DATE</span><span class="doc-value">: ${dateStr}</span></div>`;
+    }
+
+    let customerBoxHtml = '';
+    if (this.isOptionEnabled('Print Customer Tel') || this.isOptionEnabled('Print Customer Add')) {
+      const c = this.getCustomer(cn.customerId);
+      const custName = cn.customerName || (c ? c.name : 'Customer');
+      const addr = this.getCustomerFullAddress(cn.customerId);
+      const phone = this.getCustomerPhone(cn.customerId);
+      let addrHtml = '';
+      if (this.isOptionEnabled('Print Customer Add') && addr) {
+        addrHtml = `<div style="margin-top: 4px; font-size: 11px; line-height: 1.4; color: #333;">${addr}</div>`;
+      }
+      let telHtml = '';
+      if (this.isOptionEnabled('Print Customer Tel') && phone) {
+        telHtml = `<div style="margin-top: 4px; font-weight:bold;">TEL: ${phone}</div>`;
+      }
+      customerBoxHtml = `
+        <div class="to-section">
+          <span class="to-label">CUSTOMER:</span>
+          <div class="to-box">
+            <strong>${custName}</strong>
+            ${addrHtml}
+            ${telHtml}
+          </div>
+        </div>
+      `;
+    }
+
+    let itemsHtml = '';
+    const items = cn.Items || cn.items || [];
+    items.forEach((item: any, i: number) => {
+      const subtotal = ((item.quantity || 0) * (item.unitPrice || 0)).toFixed(2);
+      let prodName = item.productName || item.Name || this.getCNItemName(item);
+      if (this.isOptionEnabled('Print Item Code')) {
+        const code = item.productCode || this.getProductCode(item.productId);
+        if (code) prodName = `[${code}] ${prodName}`;
+      }
+      const uom = this.isOptionEnabled('Print Item U.O.M.') ? ` (${item.uom || 'UNIT'})` : '';
+      itemsHtml += `<div class="item-row"><div class="item-desc"><span>${i + 1}. ${prodName}${uom}</span></div><div class="item-calc"><span>${item.quantity} x ${(item.unitPrice || 0).toFixed(2)}</span><span>RM ${subtotal}</span></div></div>`;
+    });
+
+    const cnNumber = cn.cnNumber || ('CN-' + cn.id);
+    const invoiceNumber = this.getDocNo(cn.invoiceNumber || cn);
+    const reasonHtml = cn.reason ? `<div style="font-size:11px;font-style:italic;color:#555;margin:8px 0;">Reason: ${cn.reason}</div>` : '';
+    const status = cn.isUsed ? 'CREDIT USED' : cn.createdAfterPayment ? 'CREDIT ACTIVE' : 'DEBT OFFSET';
+
+    let sigBoxHtml = '';
+    if (this.isOptionEnabled('Sign on Credit Note')) {
+      sigBoxHtml = `<div class="sig-box"><span class="sig-label">CREDIT NOTE RECEIVED SIGNATURE</span></div>`;
+    }
+
+    let footerHtml = '';
+    if (this.isOptionEnabled('Footer')) {
+      footerHtml = `<div class="thanks">THANK YOU</div>`;
+    }
+
+    let emptyLinesHtml = '';
+    const linesCount = this.printerSettings?.bottomEmptyLine ?? 5;
+    for (let l = 0; l < linesCount; l++) {
+      emptyLinesHtml += `<div style="height: 20px;"></div>`;
+    }
+
+    printWindow.document.write(`<!DOCTYPE html><html><head><title>Credit Note ${cnNumber}</title>${styles}</head><body><div class="receipt"><span class="receipt-type">CREDIT NOTE</span><div class="divider"></div>${companyHeaderHtml}<div style="margin-top:20px;"><div class="doc-row"><span class="doc-label">CN NO</span><span class="doc-value">: ${cnNumber}</span></div><div class="doc-row"><span class="doc-label">INV NO</span><span class="doc-value">: ${invoiceNumber}</span></div>${dateHtml}</div>${customerBoxHtml}<div class="divider-thin"></div><div class="table-header"><span>DESCRIPTION</span><span>SUBTOTAL</span></div><div class="divider-thin"></div>${itemsHtml}<div class="divider-thin"></div><div class="total-row" style="font-weight:800;font-size:14px;"><span>REFUND AMOUNT</span><span>RM ${(cn.amount || 0).toFixed(2)}</span></div>${reasonHtml}<div class="net-bar"><span class="net-label">STATUS</span><span class="net-value" style="font-size:16px;">${status}</span></div>${sigBoxHtml}${footerHtml}${emptyLinesHtml}</div></body></html>`);
+    printWindow.document.close();
     setTimeout(() => printWindow.print(), 500);
+  }
+
+  printCNFromPreview() {
+    this.printCNReceipt();
   }
 
   noLeadingZero(event: KeyboardEvent, val: any) {
