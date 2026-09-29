@@ -208,7 +208,7 @@
         </div>
       </div>
 
-      <div *ngIf="selectedCNInvoiceDetail" style="margin-bottom:20px;">
+      <div *ngIf="selectedCNInvoiceDetail && showCNInvoiceFinancials" style="margin-bottom:20px;">
         <!-- Financial Summary Card -->
         <div
           style="background:#fff; border-radius:18px; padding:16px; margin-bottom:16px; box-shadow:0 4px 12px rgba(0,0,0,0.05); border-left:6px solid #6c5ce7;">
@@ -678,7 +678,7 @@
         <ion-icon name="chevron-back-outline"></ion-icon> Back
       </ion-button>
       <span class="page-title">CN PREVIEW</span>
-      <ion-button fill="clear" class="icon-btn" (click)="btPrint.printCreditNote(selectedCNDetail, printerSettings, customers, allProducts)">
+      <ion-button fill="clear" class="icon-btn" (click)="printCNReceipt()">
         <ion-icon name="download-outline"></ion-icon>
       </ion-button>
     </div>
@@ -700,7 +700,17 @@
         </div>
         <div class="receipt-to" *ngIf="isOptionEnabled('Print Customer Tel') || isOptionEnabled('Print Customer Add')">
           <span class="to-label">CUSTOMER:</span>
-          <div class="to-box"><strong>{{ selectedCNDetail?.customerName }}</strong></div>
+          <div class="to-box">
+            <strong>{{ selectedCNDetail?.customerName || getCustomer(selectedCNDetail?.customerId)?.name || 'Customer' }}</strong>
+            <div *ngIf="isOptionEnabled('Print Customer Add') && getCustomerFullAddress(selectedCNDetail?.customerId)"
+                 style="margin-top: 4px; font-size: 11px; line-height: 1.4; color: #333;">
+              {{ getCustomerFullAddress(selectedCNDetail?.customerId) }}
+            </div>
+            <div *ngIf="isOptionEnabled('Print Customer Tel') && getCustomerPhone(selectedCNDetail?.customerId)"
+                 style="margin-top: 4px; font-size: 11px; font-weight: 700; color: #1a1a1a;">
+              TEL: {{ getCustomerPhone(selectedCNDetail?.customerId) }}
+            </div>
+          </div>
         </div>
         <div class="receipt-divider-thin"></div>
         <div class="receipt-table-header"><span>DESCRIPTION</span><span>SUBTOTAL</span></div>

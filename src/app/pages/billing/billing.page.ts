@@ -1,4 +1,5 @@
 import { AlertService } from '../../services/alert.service';
+import Swal from 'sweetalert2';
 import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { NavController } from '@ionic/angular';
 import { Subscription } from 'rxjs';
@@ -78,6 +79,7 @@ export class BillingPage implements OnInit, OnDestroy {
   isCNLoading = false;
   selectedInvoiceDetail: any = null;
   selectedCNInvoiceDetail: any = null;
+  showCNInvoiceFinancials = true;
   customerProductPrices: any[] = [];
 
   // Edit CN state
@@ -269,6 +271,7 @@ export class BillingPage implements OnInit, OnDestroy {
     }
     
     // Force UI update
+    this.showCNInvoiceFinancials = true;
     this.cnForm.items = [...this.cnForm.items];
     this.cnProductSearchTerm = '';
     this.showToastMsg(`Added ${product.name}`);
@@ -357,6 +360,7 @@ export class BillingPage implements OnInit, OnDestroy {
     }
     
     // Force UI update
+    this.showCNInvoiceFinancials = true;
     this.cnForm.items = [...this.cnForm.items];
     this.cnProductSearchTerm = '';
     this.showToastMsg(`Added ${item.productName} from history`);
@@ -452,7 +456,12 @@ export class BillingPage implements OnInit, OnDestroy {
           this.cnForm.customerId = custId;
           this.onCNCustomerChange();
           this.cnForm.invoiceId = invId;
-          this.onCNInvoiceChange();
+          if (invId) {
+            this.promptCNInvoiceProducts(invId);
+          } else {
+            this.showCNInvoiceFinancials = false;
+            this.onCNInvoiceChange(false);
+          }
         }, 300);
       } else if (params['action'] === 'viewPayment') {
         const invNum = params['invoiceNumber'];
@@ -488,27 +497,7 @@ export class BillingPage implements OnInit, OnDestroy {
         this.api.getAllCreditNotes().subscribe({
           next: (res) => {
             const rawList = Array.isArray(res) ? res : [];
-            const groupedMap = new Map<string, any>();
-            for (const item of rawList) {
-              const key = item.cnNumber || ('ID-' + item.id);
-              if (!groupedMap.has(key)) {
-                groupedMap.set(key, {
-                  ...item,
-                  rawIds: [item.id],
-                  items: [...(item.items || item.Items || [])],
-                  Items: [...(item.items || item.Items || [])],
-                  amount: Number(item.amount || 0)
-                });
-              } else {
-                const existing = groupedMap.get(key);
-                existing.rawIds.push(item.id);
-                existing.amount += Number(item.amount || 0);
-                const newItems = item.items || item.Items || [];
-                existing.items.push(...newItems);
-                existing.Items.push(...newItems);
-              }
-            }
-            this.creditNotes = Array.from(groupedMap.values());
+            this.creditNotes = this.groupCreditNotes(rawList);
             this.filteredCreditNotes = [...this.creditNotes];
 
             const foundCN = this.creditNotes.find((c: any) =>
@@ -588,13 +577,17 @@ export class BillingPage implements OnInit, OnDestroy {
     });
   }
 
-  renderCreditNotesList(rawList: any[]) {
+  groupCreditNotes(rawList: any[]): any[] {
     const groupedMap = new Map<string, any>();
     for (const item of (rawList || [])) {
       if (!item) continue;
+      const isChange = (item.cnNumber || item.CNNumber || '').startsWith('CN-CHG');
+      const invId = Number(item.invoiceId || item.InvoiceId || 0);
       const id = item.id ?? item.Id;
-      const cnNumber = item.cnNumber || item.CNNumber || (id ? ('CN-' + id) : '');
-      const key = cnNumber || (id ? ('ID-' + id) : ('RAW-' + Math.random()));
+      // 只要在同一个 invoice 的所有 product 造成的 CN 都合并
+      const key = (!isChange && invId > 0)
+        ? ('INV-' + invId)
+        : (item.cnNumber || item.CNNumber || (id ? ('CN-' + id) : ('RAW-' + Math.random())));
       const amount = Number(item.amount ?? item.Amount ?? 0);
       const customerId = item.customerId ?? item.CustomerId ?? 0;
       let customerName = item.customerName || item.CustomerName;
@@ -616,7 +609,8 @@ export class BillingPage implements OnInit, OnDestroy {
         groupedMap.set(key, {
           ...item,
           id: id,
-          cnNumber: cnNumber,
+          cnNumber: item.cnNumber || item.CNNumber,
+          CNNumber: item.CNNumber || item.cnNumber,
           customerId: customerId,
           customerName: customerName,
           amount: amount,
@@ -627,20 +621,35 @@ export class BillingPage implements OnInit, OnDestroy {
           isUsed: !!(item.isUsed ?? item.IsUsed),
           createdAfterPayment: !!(item.createdAfterPayment ?? item.CreatedAfterPayment),
           isOffline: !!item.isOffline,
-          rawIds: [id],
+          rawIds: item.rawIds || item.RawIds || [id],
           items: normalizedItems,
           Items: normalizedItems
         });
       } else {
         const existing = groupedMap.get(key);
-        existing.rawIds.push(id);
+        const rIds = item.rawIds || item.RawIds || [id];
+        for (const rid of rIds) {
+          if (!existing.rawIds.includes(rid)) existing.rawIds.push(rid);
+        }
         existing.amount += amount;
         existing.items.push(...normalizedItems);
         existing.Items.push(...normalizedItems);
         if (item.isOffline) existing.isOffline = true;
+
+        // 保留第一张 CN 单号 (最早创建的那张)
+        if (item.createdAt && existing.createdAt && new Date(item.createdAt) < new Date(existing.createdAt)) {
+          existing.cnNumber = item.cnNumber || item.CNNumber;
+          existing.CNNumber = item.CNNumber || item.cnNumber;
+          existing.createdAt = item.createdAt;
+          existing.id = id;
+        }
       }
     }
-    this.creditNotes = Array.from(groupedMap.values());
+    return Array.from(groupedMap.values());
+  }
+
+  renderCreditNotesList(rawList: any[]) {
+    this.creditNotes = this.groupCreditNotes(rawList);
     this.filterCreditNotes();
     this.cdr.detectChanges();
   }
@@ -798,6 +807,7 @@ export class BillingPage implements OnInit, OnDestroy {
     this.cnForm = { customerId: 0, invoiceId: 0, reason: '', items: [] };
     this.cnFilteredInvoices = [...this.invoices];
     this.selectedCNInvoiceDetail = null;
+    this.showCNInvoiceFinancials = true;
     this.cnProductSearchTerm = '';
     this.currentView = 'newCN';
     this.cdr.detectChanges();
@@ -1141,7 +1151,36 @@ export class BillingPage implements OnInit, OnDestroy {
   selectCNInvoice(inv: any) {
     this.cnForm.invoiceId = inv ? inv.id : 0;
     this.closeCNInvoiceModal();
-    this.onCNInvoiceChange();
+
+    if (!inv || !inv.id) {
+      this.showCNInvoiceFinancials = false;
+      this.onCNInvoiceChange(false);
+      return;
+    }
+
+    this.promptCNInvoiceProducts(inv.id);
+  }
+
+  promptCNInvoiceProducts(invoiceId: number) {
+    Swal.fire({
+      title: 'Display Products?',
+      text: 'Would you like to display all products from this invoice?',
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Yes',
+      cancelButtonText: 'No',
+      confirmButtonColor: '#6c5ce7',
+      cancelButtonColor: '#747d8c',
+      allowOutsideClick: false,
+    }).then((result) => {
+      if (result.isConfirmed) {
+        this.showCNInvoiceFinancials = true;
+        this.onCNInvoiceChange(true);
+      } else {
+        this.showCNInvoiceFinancials = false;
+        this.onCNInvoiceChange(false);
+      }
+    });
   }
 
   getSelectedCNInvoice(): any {
@@ -1225,7 +1264,7 @@ export class BillingPage implements OnInit, OnDestroy {
     }
   }
 
-  onCNInvoiceChange() {
+  onCNInvoiceChange(loadProducts = true) {
     this.cnProductSearchTerm = '';
     if (this.cnForm.invoiceId && this.cnForm.invoiceId != 0) {
       // 优先从已加载的发票列表提取（离线秒开且能查看明细）
@@ -1264,20 +1303,25 @@ export class BillingPage implements OnInit, OnDestroy {
             this.cnForm.customerId = Number(cid); 
             this.loadCustomerProductPrices(Number(cid));
           }
-          const fetchedItems = res.items || res.Items || [];
-          if (fetchedItems.length > 0) {
-            this.cnForm.items = fetchedItems.map((item: any) => {
-              const remainingQty = (Number(item.quantity) || 1) - (Number(item.returnedQuantity) || 0);
-              return {
-                productId: item.productId,
-                productName: item.productName || this.getProductName(item.productId),
-                unitPrice: Number(item.unitPrice || item.price || 0),
-                maxQuantity: Math.max(1, remainingQty),
-                returnedQuantity: item.returnedQuantity || 0,
-                returnQuantity: 0,
-                returnToStock: false
-              };
-            });
+          if (loadProducts) {
+            this.cnForm.items = [];
+            const fetchedItems = res.items || res.Items || [];
+            if (fetchedItems.length > 0) {
+              fetchedItems.forEach((item: any) => {
+                const remainingQty = (Number(item.quantity) || 1) - (Number(item.returnedQuantity) || 0);
+                if (remainingQty > 0) {
+                  this.cnForm.items.push({
+                    productId: item.productId,
+                    productName: item.productName || this.getProductName(item.productId),
+                    unitPrice: Number(item.unitPrice || item.price || 0),
+                    maxQuantity: remainingQty,
+                    returnedQuantity: item.returnedQuantity || 0,
+                    returnQuantity: 0,
+                    returnToStock: false
+                  });
+                }
+              });
+            }
           }
           this.cdr.detectChanges();
         },
@@ -1682,6 +1726,9 @@ export class BillingPage implements OnInit, OnDestroy {
     if (!this.allProducts || this.allProducts.length === 0) {
       this.api.getProducts().subscribe({ next: (res: any) => { this.allProducts = res || []; } });
     }
+    if (!this.customers || this.customers.length === 0) {
+      this.loadCustomers();
+    }
 
     const sourceItems = cn.Items || cn.items || [];
     const normalized = sourceItems.map((it: any) => ({
@@ -1708,7 +1755,8 @@ export class BillingPage implements OnInit, OnDestroy {
       next: (res: any) => {
         if (!res) return;
         const fetchedItems = res.Items || res.items || res.data?.Items || res.data?.items;
-        const sItems = Array.isArray(fetchedItems) ? fetchedItems : normalized;
+        const existingItems = cn.items || cn.Items || [];
+        const sItems = (existingItems.length >= (fetchedItems?.length || 0)) ? existingItems : (Array.isArray(fetchedItems) ? fetchedItems : existingItems);
         const norm = sItems.map((it: any) => ({
           ...it,
           productName: it.productName || it.ProductName || it.Name || it.name || it.product_name || this.getProductName(it.productId ?? it.ProductId) || '',
@@ -1857,6 +1905,41 @@ export class BillingPage implements OnInit, OnDestroy {
     return p ? p.name : 'Product #' + pid;
   }
 
+  getCustomer(id: any) {
+    if (!this.customers || !Array.isArray(this.customers)) return null;
+    const targetId = id || this.selectedCNDetail?.customerId || this.selectedCNDetail?.CustomerId || this.selectedCNDetail?.customer_id || this.selectedCNDetail?.customer?.id;
+    if (targetId) {
+      const found = this.customers.find((c: any) => c.id == targetId);
+      if (found) return found;
+    }
+    const custName = (this.selectedCNDetail?.customerName || this.selectedCNDetail?.CustomerName || this.selectedCNDetail?.customer?.name || '').trim().toLowerCase();
+    if (custName) {
+      const found = this.customers.find((c: any) => (c.name || '').trim().toLowerCase() === custName);
+      if (found) return found;
+    }
+    return null;
+  }
+
+  getCustomerPhone(customerId: any): string {
+    const c = this.getCustomer(customerId);
+    return this.selectedCNDetail?.customerPhone || c?.phone || this.selectedCNDetail?.customer?.phone || '';
+  }
+
+  getCustomerFullAddress(customerId: any): string {
+    const c = this.getCustomer(customerId);
+    if (c) {
+      const branch = (c.branches && c.branches.length > 0)
+        ? (c.branches.find((b: any) => b.isDefaultBranch) || c.branches[0])
+        : null;
+      if (branch) {
+        const parts = [branch.address1, branch.address2, branch.city, branch.postcode, branch.state].filter(p => !!p);
+        if (parts.length > 0) return parts.join(', ');
+      }
+      if (c.address) return c.address;
+    }
+    return this.selectedCNDetail?.customerAddress || this.selectedCNDetail?.address || this.selectedCNDetail?.customer?.address || '';
+  }
+
   printCNDetails() {
     const cn = this.selectedCNDetail;
     if (!cn) return;
@@ -1868,12 +1951,121 @@ export class BillingPage implements OnInit, OnDestroy {
     this.showCNPreview = true;
   }
 
-  printCNFromPreview() {
+  printCNReceipt() {
     const cn = this.selectedCNDetail;
     if (!cn) return;
-    const printWindow = (document.getElementById('cn-print-iframe') as HTMLIFrameElement)?.contentWindow;
+    this.loadPrinterSettings();
+    if (this.printerSettings?.printerInterface === 'Bluetooth' && this.btPrint.isAvailable()) {
+      this.btPrint.printCreditNote(cn, this.printerSettings, this.customers, this.allProducts);
+      return;
+    }
+
+    let iframe = document.getElementById('print-iframe') as HTMLIFrameElement;
+    if (!iframe) {
+      iframe = document.createElement('iframe');
+      iframe.id = 'print-iframe';
+      iframe.style.position = 'fixed';
+      iframe.style.right = '0';
+      iframe.style.bottom = '0';
+      iframe.style.width = '0';
+      iframe.style.height = '0';
+      iframe.style.border = '0';
+      document.body.appendChild(iframe);
+    }
+    const printWindow = iframe.contentWindow || (iframe.contentDocument as any)?.defaultView;
     if (!printWindow) { this.showToastMsg('Failed to initialize print iframe'); return; }
+
+    const isSmall = !this.printerSettings?.paperWidth || 
+      this.printerSettings.paperWidth <= 58 || 
+      (this.printerSettings?.autoAdapt !== false && (!this.printerSettings?.hardwareWidth || this.printerSettings.hardwareWidth <= 58));
+    const width = isSmall ? '360px' : '480px';
+    const styles = `<style>* { margin: 0; padding: 0; box-sizing: border-box; } body { font-family: 'Courier New', monospace; background: #F0EBE3; display: flex; justify-content: center; padding: 40px 20px; } .receipt { background: #fff; border-radius: 24px; padding: 40px 36px; max-width: ${width}; width: 100%; box-shadow: 0 4px 24px rgba(0,0,0,0.08); } .receipt-type { display: block; text-align: center; font-size: 13px; letter-spacing: 6px; color: #888; margin-bottom: 16px; } .divider { height: 1px; background: #1a1a1a; margin: 12px 0; } .divider-thin { height: 1px; background: #ddd; margin: 12px 0; } .company { text-align: center; font-size: 22px; font-weight: 700; margin: 12px 0 4px; } .co-reg { display: block; text-align: center; font-size: 12px; color: #888; margin-bottom: 8px; } .address { display: block; text-align: center; font-size: 11px; color: #666; line-height: 1.6; } .contact { display: block; text-align: center; font-size: 11px; color: #888; margin-top: 6px; } .doc-row { display: flex; gap: 12px; margin: 4px 0; } .doc-label { font-size: 12px; font-weight: 700; min-width: 70px; } .doc-value { font-size: 12px; font-weight: 700; } .to-section { margin: 16px 0; } .to-label { font-size: 12px; font-style: italic; color: #888; } .to-box { border: 1px solid #ddd; border-radius: 8px; padding: 12px; margin-top: 6px; font-size: 12px; line-height: 1.6; } .table-header { display: flex; justify-content: space-between; font-size: 11px; font-weight: 700; font-style: italic; } .item-row { margin: 12px 0; } .item-desc { display: flex; justify-content: space-between; font-size: 12px; font-weight: 700; } .item-calc { font-size: 11px; color: #888; margin-top: 2px; display: flex; justify-content: space-between; } .total-row { display: flex; justify-content: space-between; font-size: 12px; margin: 4px 0; } .net-bar { background: #1a1a1a; color: #fff; border-radius: 8px; padding: 14px 20px; display: flex; justify-content: space-between; align-items: center; margin: 16px 0; } .net-label { font-size: 12px; font-weight: 700; font-style: italic; } .net-value { font-size: 20px; font-weight: 700; } .sig-box { border: 1px solid #ddd; border-radius: 8px; padding: 16px; min-height: 100px; margin: 16px 0; } .sig-label { font-size: 11px; color: #ccc; font-style: italic; } .thanks { text-align: center; font-size: 12px; letter-spacing: 6px; color: #ccc; margin-top: 20px; }</style>`;
+
+    let companyHeaderHtml = '';
+    if (this.isOptionEnabled('Print Company Logo')) {
+      companyHeaderHtml = `
+        <div class="company">B JAYA TRADING</div>
+        <span class="co-reg">(001188861-T)</span>
+        <span class="address">NO. 467, JALAN PALAS 13, TAMAN PELANGI,</span>
+        <span class="address">70400 SEREMBAN N.S, SEREMBAN, N.S, MALAYSIA</span>
+        <span class="contact">TEL: 012-6988080</span>
+      `;
+    }
+
+    let dateHtml = '';
+    const cnDate = cn.createdAt ? new Date(cn.createdAt) : new Date();
+    const dateStr = cnDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    if (this.isOptionEnabled('Print Issue Time')) {
+      dateHtml = `<div class="doc-row"><span class="doc-label">DATE</span><span class="doc-value">: ${dateStr}</span></div>`;
+    }
+
+    let customerBoxHtml = '';
+    if (this.isOptionEnabled('Print Customer Tel') || this.isOptionEnabled('Print Customer Add')) {
+      const c = this.getCustomer(cn.customerId);
+      const custName = cn.customerName || (c ? c.name : 'Customer');
+      const addr = this.getCustomerFullAddress(cn.customerId);
+      const phone = this.getCustomerPhone(cn.customerId);
+      let addrHtml = '';
+      if (this.isOptionEnabled('Print Customer Add') && addr) {
+        addrHtml = `<div style="margin-top: 4px; font-size: 11px; line-height: 1.4; color: #333;">${addr}</div>`;
+      }
+      let telHtml = '';
+      if (this.isOptionEnabled('Print Customer Tel') && phone) {
+        telHtml = `<div style="margin-top: 4px; font-weight:bold;">TEL: ${phone}</div>`;
+      }
+      customerBoxHtml = `
+        <div class="to-section">
+          <span class="to-label">CUSTOMER:</span>
+          <div class="to-box">
+            <strong>${custName}</strong>
+            ${addrHtml}
+            ${telHtml}
+          </div>
+        </div>
+      `;
+    }
+
+    let itemsHtml = '';
+    const items = cn.Items || cn.items || [];
+    items.forEach((item: any, i: number) => {
+      const subtotal = ((item.quantity || 0) * (item.unitPrice || 0)).toFixed(2);
+      let prodName = item.productName || item.Name || this.getCNItemName(item);
+      if (this.isOptionEnabled('Print Item Code')) {
+        const code = item.productCode || this.getProductCode(item.productId);
+        if (code) prodName = `[${code}] ${prodName}`;
+      }
+      const uom = this.isOptionEnabled('Print Item U.O.M.') ? ` (${item.uom || 'UNIT'})` : '';
+      itemsHtml += `<div class="item-row"><div class="item-desc"><span>${i + 1}. ${prodName}${uom}</span></div><div class="item-calc"><span>${item.quantity} x ${(item.unitPrice || 0).toFixed(2)}</span><span>RM ${subtotal}</span></div></div>`;
+    });
+
+    const cnNumber = cn.cnNumber || ('CN-' + cn.id);
+    const invoiceNumber = this.getDocNo(cn.invoiceNumber || cn);
+    const reasonHtml = cn.reason ? `<div style="font-size:11px;font-style:italic;color:#555;margin:8px 0;">Reason: ${cn.reason}</div>` : '';
+    const status = cn.isUsed ? 'CREDIT USED' : cn.createdAfterPayment ? 'CREDIT ACTIVE' : 'DEBT OFFSET';
+
+    let sigBoxHtml = '';
+    if (this.isOptionEnabled('Sign on Credit Note')) {
+      sigBoxHtml = `<div class="sig-box"><span class="sig-label">CREDIT NOTE RECEIVED SIGNATURE</span></div>`;
+    }
+
+    let footerHtml = '';
+    if (this.isOptionEnabled('Footer')) {
+      footerHtml = `<div class="thanks">THANK YOU</div>`;
+    }
+
+    let emptyLinesHtml = '';
+    const linesCount = this.printerSettings?.bottomEmptyLine ?? 5;
+    for (let l = 0; l < linesCount; l++) {
+      emptyLinesHtml += `<div style="height: 20px;"></div>`;
+    }
+
+    printWindow.document.write(`<!DOCTYPE html><html><head><title>Credit Note ${cnNumber}</title>${styles}</head><body><div class="receipt"><span class="receipt-type">CREDIT NOTE</span><div class="divider"></div>${companyHeaderHtml}<div style="margin-top:20px;"><div class="doc-row"><span class="doc-label">CN NO</span><span class="doc-value">: ${cnNumber}</span></div><div class="doc-row"><span class="doc-label">INV NO</span><span class="doc-value">: ${invoiceNumber}</span></div>${dateHtml}</div>${customerBoxHtml}<div class="divider-thin"></div><div class="table-header"><span>DESCRIPTION</span><span>SUBTOTAL</span></div><div class="divider-thin"></div>${itemsHtml}<div class="divider-thin"></div><div class="total-row" style="font-weight:800;font-size:14px;"><span>REFUND AMOUNT</span><span>RM ${(cn.amount || 0).toFixed(2)}</span></div>${reasonHtml}<div class="net-bar"><span class="net-label">STATUS</span><span class="net-value" style="font-size:16px;">${status}</span></div>${sigBoxHtml}${footerHtml}${emptyLinesHtml}</div></body></html>`);
+    printWindow.document.close();
     setTimeout(() => printWindow.print(), 500);
+  }
+
+  printCNFromPreview() {
+    this.printCNReceipt();
   }
 
   noLeadingZero(event: KeyboardEvent, val: any) {

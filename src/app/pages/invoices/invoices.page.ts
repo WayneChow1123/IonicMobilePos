@@ -1,4 +1,5 @@
 import { AlertService } from '../../services/alert.service';
+import Swal from 'sweetalert2';
 import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { NavController, Platform } from '@ionic/angular';
 import { Router } from '@angular/router';
@@ -403,9 +404,88 @@ export class InvoicesPage implements OnInit, OnDestroy {
     });
   }
 
+  mergeInvoiceCreditNotes(rawCNs: any[]): any[] {
+    if (!rawCNs || rawCNs.length === 0) return [];
+    const groupedMap = new Map<string, any>();
+    for (const cn of rawCNs) {
+      const isChange = (cn.cnNumber || cn.CNNumber || '').startsWith('CN-CHG');
+      // Option 3+A: 只要在同一个 invoice 的所有 product 造成的 CN 都合并
+      const key = !isChange ? 'RETURN_CN' : (cn.cnNumber || cn.CNNumber || ('ID-' + (cn.id || cn.Id)));
+
+      if (!groupedMap.has(key)) {
+        groupedMap.set(key, {
+          ...cn,
+          rawIds: cn.rawIds || cn.RawIds || [cn.id || cn.Id],
+          items: [...(cn.items || cn.Items || [])],
+          Items: [...(cn.items || cn.Items || [])],
+          amount: Number(cn.amount || cn.Amount || 0)
+        });
+      } else {
+        const exist = groupedMap.get(key);
+        const rIds = cn.rawIds || cn.RawIds || [cn.id || cn.Id];
+        for (const rid of rIds) {
+          if (!exist.rawIds.includes(rid)) exist.rawIds.push(rid);
+        }
+        exist.amount += Number(cn.amount || cn.Amount || 0);
+        const newItems = cn.items || cn.Items || [];
+        exist.items.push(...newItems);
+        exist.Items.push(...newItems);
+
+        // 选项 A: 保留第一张 CN 单号
+        const cnCreated = cn.createdAt || cn.CreatedAt;
+        const existCreated = exist.createdAt || exist.CreatedAt;
+        if (cnCreated && existCreated && new Date(cnCreated) < new Date(existCreated)) {
+          exist.cnNumber = cn.cnNumber || cn.CNNumber;
+          exist.CNNumber = cn.CNNumber || cn.cnNumber;
+          exist.createdAt = cnCreated;
+          exist.CreatedAt = cnCreated;
+          exist.id = cn.id || cn.Id;
+          exist.Id = cn.Id || cn.id;
+        }
+      }
+    }
+    return Array.from(groupedMap.values());
+  }
+
   loadAvailableCredits(customerId: number) {
     this.api.getAvailableCredits(customerId).subscribe({
-      next: (res: any) => { this.availableCredits = Array.isArray(res) ? res : []; },
+      next: (res: any) => {
+        const raw = Array.isArray(res) ? res : [];
+        const groupedMap = new Map<string, any>();
+        for (const cn of raw) {
+          const isChange = (cn.cnNumber || cn.CNNumber || '').startsWith('CN-CHG');
+          const invKey = (!isChange && (cn.invoiceNumber || cn.InvoiceNumber))
+            ? ('INV-' + (cn.invoiceNumber || cn.InvoiceNumber))
+            : (cn.cnNumber || cn.CNNumber || ('ID-' + cn.id));
+          if (!groupedMap.has(invKey)) {
+            groupedMap.set(invKey, {
+              ...cn,
+              rawIds: cn.rawIds || [cn.id],
+              items: [...(cn.items || cn.Items || [])],
+              amount: Number(cn.amount || 0)
+            });
+          } else {
+            const exist = groupedMap.get(invKey);
+            exist.amount += Number(cn.amount || 0);
+            if (cn.rawIds) {
+              for (const rid of cn.rawIds) { if (!exist.rawIds.includes(rid)) exist.rawIds.push(rid); }
+            } else if (!exist.rawIds.includes(cn.id)) {
+              exist.rawIds.push(cn.id);
+            }
+            if (cn.items || cn.Items) {
+              exist.items.push(...(cn.items || cn.Items));
+            }
+            // 选项 A: 保留第一张 CN 单号
+            if (cn.createdAt && exist.createdAt && new Date(cn.createdAt) < new Date(exist.createdAt)) {
+              exist.cnNumber = cn.cnNumber || cn.CNNumber;
+              exist.CNNumber = cn.CNNumber || cn.cnNumber;
+              exist.createdAt = cn.createdAt;
+              exist.id = cn.id;
+            }
+          }
+        }
+        this.availableCredits = Array.from(groupedMap.values());
+      },
       error: () => { this.availableCredits = []; }
     });
   }
@@ -836,6 +916,9 @@ export class InvoicesPage implements OnInit, OnDestroy {
     this.api.getInvoiceDetails(invoice.id).subscribe({
       next: (res: any) => {
         this.isLoading = false;
+        if (res && res.creditNotes) {
+          res.creditNotes = this.mergeInvoiceCreditNotes(res.creditNotes);
+        }
         const details = res || invoice;
         this.selectedInvoice = { ...details, customerName: details.customerName || invoice.customerName, customerId: details.customerId ?? invoice.customerId };
         const customerId = Number(details.customerId ?? invoice.customerId);
@@ -845,6 +928,7 @@ export class InvoicesPage implements OnInit, OnDestroy {
         this.editForm = {
           invoiceDate: details.invoiceDate || this.getMYSDate(),
           remark: details.remark || '',
+          termType: details.termType || details.TermType || 'CASH SALE',
           items: ((details.items || details.Items) && (details.items || details.Items).length > 0)
             ? (details.items || details.Items).map((i: any) => ({
               productId: i.productId ?? i.ProductId ?? 0,
@@ -903,7 +987,8 @@ export class InvoicesPage implements OnInit, OnDestroy {
       queryParams: {
         action: 'newCN',
         invoiceId: invId,
-        customerId: custId
+        customerId: custId,
+        _t: Date.now()
       }
     });
   }
@@ -1159,86 +1244,41 @@ export class InvoicesPage implements OnInit, OnDestroy {
       }
     }
     if (this.isEditing && this.selectedInvoice) {
-      // 离线单据修改：更新本地数据与同步队列中的待发 payload
-      if (this.selectedInvoice.isOffline) {
-        const calculatedTotal = (this.editForm.items || []).reduce((sum: number, it: any) => sum + ((Number(it.unitPrice) || 0) * (Number(it.quantity) || 1)), 0);
-        this.selectedInvoice.items = this.editForm.items;
-        this.selectedInvoice.remark = this.editForm.remark;
-        this.selectedInvoice.totalAmount = Math.round((calculatedTotal + Number.EPSILON) * 100) / 100;
-        this.selectedInvoice.balance = (this.selectedInvoice.totalAmount || 0) - (this.selectedInvoice.paidAmount || 0);
-
-        this.offlineStorage.getQueueItemById(this.selectedInvoice.id).then(async (queueItem) => {
-          if (queueItem) {
-            queueItem.payload = {
-              ...queueItem.payload,
-              items: this.editForm.items,
-              remark: this.editForm.remark,
-              totalAmount: this.selectedInvoice.totalAmount
-            };
-            await this.offlineStorage.updateQueueItem(queueItem);
-          }
-        });
-
-        this.showToastMsg('Offline invoice updated!');
-        this.isEditMode = false;
-        this.showEditItemModal = false;
-        this.loadInvoices();
-        this.cdr.detectChanges();
-        return;
+      const currentTerm = this.selectedInvoice.termType || this.selectedInvoice.TermType || this.editForm.termType || 'CASH SALE';
+      
+      const termOptions: { [key: string]: string } = {};
+      for (const t of this.termTypes) {
+        termOptions[t] = t;
       }
 
-      const cleanItems = (this.editForm.items || []).map((it: any) => {
-        let price = it.unitPrice != null ? Number(it.unitPrice) : null;
-        if (price !== null && price <= 0) {
-          const prod = this.allProducts.find((p: any) => p.id == it.productId);
-          price = (prod && prod.price > 0) ? prod.price : null;
+      Swal.fire({
+        title: 'Change Term Type?',
+        text: 'Do you want to change invoice Term Type?',
+        input: 'select',
+        inputOptions: termOptions,
+        inputValue: currentTerm,
+        showCancelButton: true,
+        showDenyButton: true,
+        confirmButtonText: 'Yes',
+        denyButtonText: 'No',
+        cancelButtonText: 'Cancel',
+        confirmButtonColor: '#6c5ce7',
+        denyButtonColor: '#2ecc71',
+        cancelButtonColor: '#747d8c',
+        allowOutsideClick: false,
+      }).then((result) => {
+        if (result.isConfirmed) {
+          // Yes: 进行更换 Term Type
+          this.editForm.termType = result.value || currentTerm;
+          this.executeUpdateInvoice();
+        } else if (result.isDenied) {
+          // No: 不进行更换 Term Type
+          this.editForm.termType = currentTerm;
+          this.executeUpdateInvoice();
         }
-        return {
-          productId: Number(it.productId),
-          quantity: Number(it.quantity || 1),
-          unitPrice: price,
-          remark: it.remark || ''
-        };
+        // Cancel / Dismiss: 不提交更新，留在编辑页面
       });
-
-      const updatePayload = {
-        invoiceDate: this.editForm.invoiceDate,
-        remark: this.editForm.remark,
-        termType: this.selectedInvoice.termType || this.termType,
-        items: cleanItems
-      };
-
-      console.log('Update payload', JSON.stringify(updatePayload));
-      this.api.updateInvoice(this.selectedInvoice.id, updatePayload).subscribe({
-        next: (res: any) => {
-          if (res?.isOffline) {
-            this.showToastMsg('Invoice updated offline! (Queued for sync)');
-          } else {
-            this.showToastMsg('Invoice updated!');
-          }
-          this.isEditMode = false;
-          this.showEditItemModal = false;
-
-          const calculatedTotal = (this.editForm.items || []).reduce((sum: number, it: any) => sum + ((Number(it.unitPrice) || 0) * (Number(it.quantity) || 1)), 0);
-          this.selectedInvoice.items = this.editForm.items;
-          this.selectedInvoice.remark = this.editForm.remark;
-          this.selectedInvoice.invoiceDate = this.editForm.invoiceDate;
-          this.selectedInvoice.totalAmount = Math.round((calculatedTotal + Number.EPSILON) * 100) / 100;
-          this.selectedInvoice.balance = (this.selectedInvoice.totalAmount || 0) - (this.selectedInvoice.paidAmount || 0);
-
-          this.loadInvoices();
-          this.loadCustomers();
-          if (!res?.isOffline) {
-            this.api.getInvoiceDetails(this.selectedInvoice.id).subscribe({
-              next: (detailRes: any) => {
-                this.selectedInvoice = detailRes;
-                this.cdr.detectChanges();
-              }
-            });
-          }
-        },
-        error: (err: any) => this.handleInvoiceError(err)
-      });
+      return;
     } else {
       if (!this.form.customerId) { this.showToastMsg('Please select a customer'); return; }
       
@@ -1393,6 +1433,78 @@ export class InvoicesPage implements OnInit, OnDestroy {
     }
   }
 
+  executeUpdateInvoice() {
+    if (!this.selectedInvoice) return;
+
+    if (this.selectedInvoice.isOffline) {
+      const calculatedTotal = (this.editForm.items || []).reduce((sum: number, it: any) => sum + ((Number(it.unitPrice) || 0) * (Number(it.quantity) || 1)), 0);
+      this.selectedInvoice.items = this.editForm.items;
+      this.selectedInvoice.remark = this.editForm.remark;
+      this.selectedInvoice.termType = this.editForm.termType;
+      this.selectedInvoice.totalAmount = Math.round((calculatedTotal + Number.EPSILON) * 100) / 100;
+      this.selectedInvoice.balance = (this.selectedInvoice.totalAmount || 0) - (this.selectedInvoice.paidAmount || 0);
+
+      this.offlineStorage.getQueueItemById(this.selectedInvoice.id).then(async (queueItem) => {
+        if (queueItem) {
+          queueItem.payload = {
+            ...queueItem.payload,
+            items: this.editForm.items,
+            remark: this.editForm.remark,
+            termType: this.editForm.termType,
+            totalAmount: this.selectedInvoice.totalAmount
+          };
+          await this.offlineStorage.updateQueueItem(queueItem);
+        }
+      });
+
+      this.showToastMsg('Offline invoice updated!');
+      this.isEditMode = false;
+      this.showEditItemModal = false;
+      this.loadInvoices();
+      this.cdr.detectChanges();
+      return;
+    }
+
+    console.log('Update payload', JSON.stringify(this.editForm));
+    this.api.updateInvoice(this.selectedInvoice.id, this.editForm).subscribe({
+      next: (res: any) => {
+        if (res?.isOffline) {
+          this.showToastMsg('Invoice updated offline! (Queued for sync)');
+        } else {
+          this.showToastMsg('Invoice updated!');
+        }
+        this.isEditMode = false;
+        this.showEditItemModal = false;
+        this.loadInvoices();
+        this.loadCustomers();
+        if (!res?.isOffline) {
+          this.api.getInvoiceDetails(this.selectedInvoice.id).subscribe({
+            next: (detailRes: any) => {
+              if (detailRes && detailRes.creditNotes) {
+                detailRes.creditNotes = this.mergeInvoiceCreditNotes(detailRes.creditNotes);
+              }
+              this.selectedInvoice = detailRes;
+              this.editForm = {
+                invoiceDate: detailRes.invoiceDate || this.getMYSDate(),
+                remark: detailRes.remark || '',
+                termType: detailRes.termType || detailRes.TermType || 'CASH SALE',
+                items: (detailRes.items || detailRes.Items || []).map((i: any) => ({
+                  productId: i.productId ?? i.ProductId,
+                  quantity: i.quantity ?? i.Quantity,
+                  unitPrice: i.unitPrice ?? i.UnitPrice,
+                  productName: i.productName ?? i.ProductName ?? this.getProductName(i.productId ?? i.ProductId),
+                  remark: i.remark ?? i.Remark ?? ''
+                }))
+              };
+              this.cdr.detectChanges();
+            }
+          });
+        }
+      },
+      error: (err: any) => this.handleInvoiceError(err)
+    });
+  }
+
   handleInvoiceError(err: any) {
     let errBody = err.error;
 
@@ -1464,6 +1576,9 @@ export class InvoicesPage implements OnInit, OnDestroy {
             if (this.selectedInvoice?.id) {
               this.api.getInvoiceDetails(this.selectedInvoice.id).subscribe({
                 next: (res: any) => {
+                  if (res && res.creditNotes) {
+                    res.creditNotes = this.mergeInvoiceCreditNotes(res.creditNotes);
+                  }
                   this.selectedInvoice = res;
                   this.loadInvoices();
                   this.cdr.detectChanges();
