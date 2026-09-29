@@ -1,4 +1,5 @@
 import { AlertService } from '../../services/alert.service';
+import Swal from 'sweetalert2';
 import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
 import { NavController } from '@ionic/angular';
 
@@ -68,6 +69,7 @@ export class BillingPage implements OnInit {
   isCNLoading = false;
   selectedInvoiceDetail: any = null;
   selectedCNInvoiceDetail: any = null;
+  showCNInvoiceFinancials = true;
   customerProductPrices: any[] = [];
 
   // Edit CN state
@@ -231,6 +233,7 @@ export class BillingPage implements OnInit {
     }
     
     // Force UI update
+    this.showCNInvoiceFinancials = true;
     this.cnForm.items = [...this.cnForm.items];
     this.cnProductSearchTerm = '';
     this.showToastMsg(`Added ${product.name}`);
@@ -284,6 +287,7 @@ export class BillingPage implements OnInit {
     }
     
     // Force UI update
+    this.showCNInvoiceFinancials = true;
     this.cnForm.items = [...this.cnForm.items];
     this.cnProductSearchTerm = '';
     this.showToastMsg(`Added ${item.productName} from history`);
@@ -326,7 +330,12 @@ export class BillingPage implements OnInit {
           this.cnForm.customerId = custId;
           this.onCNCustomerChange();
           this.cnForm.invoiceId = invId;
-          this.onCNInvoiceChange();
+          if (invId) {
+            this.promptCNInvoiceProducts(invId);
+          } else {
+            this.showCNInvoiceFinancials = false;
+            this.onCNInvoiceChange(false);
+          }
         }, 300);
       } else if (params['action'] === 'viewPayment') {
         const invNum = params['invoiceNumber'];
@@ -362,27 +371,7 @@ export class BillingPage implements OnInit {
         this.api.getAllCreditNotes().subscribe({
           next: (res) => {
             const rawList = Array.isArray(res) ? res : [];
-            const groupedMap = new Map<string, any>();
-            for (const item of rawList) {
-              const key = item.cnNumber || ('ID-' + item.id);
-              if (!groupedMap.has(key)) {
-                groupedMap.set(key, {
-                  ...item,
-                  rawIds: [item.id],
-                  items: [...(item.items || item.Items || [])],
-                  Items: [...(item.items || item.Items || [])],
-                  amount: Number(item.amount || 0)
-                });
-              } else {
-                const existing = groupedMap.get(key);
-                existing.rawIds.push(item.id);
-                existing.amount += Number(item.amount || 0);
-                const newItems = item.items || item.Items || [];
-                existing.items.push(...newItems);
-                existing.Items.push(...newItems);
-              }
-            }
-            this.creditNotes = Array.from(groupedMap.values());
+            this.creditNotes = this.groupCreditNotes(rawList);
             this.filteredCreditNotes = [...this.creditNotes];
 
             const foundCN = this.creditNotes.find((c: any) =>
@@ -462,32 +451,53 @@ export class BillingPage implements OnInit {
     });
   }
 
+  groupCreditNotes(rawList: any[]): any[] {
+    const groupedMap = new Map<string, any>();
+    for (const item of rawList) {
+      const isChange = (item.cnNumber || item.CNNumber || '').startsWith('CN-CHG');
+      const invId = Number(item.invoiceId || item.InvoiceId || 0);
+      // Option 3+A: 只要在同一个 invoice 的所有 product 造成的 CN 都合并
+      const key = (!isChange && invId > 0)
+        ? ('INV-' + invId)
+        : (item.cnNumber || item.CNNumber || ('ID-' + item.id));
+
+      if (!groupedMap.has(key)) {
+        groupedMap.set(key, {
+          ...item,
+          rawIds: item.rawIds || item.RawIds || [item.id],
+          items: [...(item.items || item.Items || [])],
+          Items: [...(item.items || item.Items || [])],
+          amount: Number(item.amount || item.Amount || 0)
+        });
+      } else {
+        const existing = groupedMap.get(key);
+        const rIds = item.rawIds || item.RawIds || [item.id];
+        for (const rid of rIds) {
+          if (!existing.rawIds.includes(rid)) existing.rawIds.push(rid);
+        }
+        existing.amount += Number(item.amount || item.Amount || 0);
+        const newItems = item.items || item.Items || [];
+        existing.items.push(...newItems);
+        existing.Items.push(...newItems);
+
+        // Option A: 保留第一张 CN 单号 (最早创建的那张)
+        if (item.createdAt && existing.createdAt && new Date(item.createdAt) < new Date(existing.createdAt)) {
+          existing.cnNumber = item.cnNumber || item.CNNumber;
+          existing.CNNumber = item.CNNumber || item.cnNumber;
+          existing.createdAt = item.createdAt;
+          existing.id = item.id;
+        }
+      }
+    }
+    return Array.from(groupedMap.values());
+  }
+
   loadCreditNotes() {
     this.isLoading = true;
     this.api.getAllCreditNotes().subscribe({
       next: (res) => {
         const rawList = Array.isArray(res) ? res : [];
-        const groupedMap = new Map<string, any>();
-        for (const item of rawList) {
-          const key = item.cnNumber || ('ID-' + item.id);
-          if (!groupedMap.has(key)) {
-            groupedMap.set(key, {
-              ...item,
-              rawIds: [item.id],
-              items: [...(item.items || item.Items || [])],
-              Items: [...(item.items || item.Items || [])],
-              amount: Number(item.amount || 0)
-            });
-          } else {
-            const existing = groupedMap.get(key);
-            existing.rawIds.push(item.id);
-            existing.amount += Number(item.amount || 0);
-            const newItems = item.items || item.Items || [];
-            existing.items.push(...newItems);
-            existing.Items.push(...newItems);
-          }
-        }
-        this.creditNotes = Array.from(groupedMap.values());
+        this.creditNotes = this.groupCreditNotes(rawList);
         this.filteredCreditNotes = [...this.creditNotes];
         this.isLoading = false;
       },
@@ -555,6 +565,7 @@ export class BillingPage implements OnInit {
     this.cnForm = { customerId: 0, invoiceId: 0, reason: '', items: [] };
     this.cnFilteredInvoices = [...this.invoices];
     this.selectedCNInvoiceDetail = null;
+    this.showCNInvoiceFinancials = true;
     this.cnProductSearchTerm = '';
     this.currentView = 'newCN';
   }
@@ -897,7 +908,36 @@ export class BillingPage implements OnInit {
   selectCNInvoice(inv: any) {
     this.cnForm.invoiceId = inv ? inv.id : 0;
     this.closeCNInvoiceModal();
-    this.onCNInvoiceChange();
+
+    if (!inv || !inv.id) {
+      this.showCNInvoiceFinancials = false;
+      this.onCNInvoiceChange(false);
+      return;
+    }
+
+    this.promptCNInvoiceProducts(inv.id);
+  }
+
+  promptCNInvoiceProducts(invoiceId: number) {
+    Swal.fire({
+      title: 'Display Products?',
+      text: 'Would you like to display all products from this invoice?',
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Yes',
+      cancelButtonText: 'No',
+      confirmButtonColor: '#6c5ce7',
+      cancelButtonColor: '#747d8c',
+      allowOutsideClick: false,
+    }).then((result) => {
+      if (result.isConfirmed) {
+        this.showCNInvoiceFinancials = true;
+        this.onCNInvoiceChange(true);
+      } else {
+        this.showCNInvoiceFinancials = false;
+        this.onCNInvoiceChange(false);
+      }
+    });
   }
 
   getSelectedCNInvoice(): any {
@@ -981,7 +1021,7 @@ export class BillingPage implements OnInit {
     }
   }
 
-  onCNInvoiceChange() {
+  onCNInvoiceChange(loadProducts = true) {
     this.cnProductSearchTerm = '';
     if (this.cnForm.invoiceId && this.cnForm.invoiceId != 0) {
       this.api.getInvoiceDetails(Number(this.cnForm.invoiceId)).subscribe({
@@ -992,7 +1032,7 @@ export class BillingPage implements OnInit {
           this.cnForm.customerId = Number(cid); 
           this.loadCustomerProductPrices(Number(cid));
           this.cnForm.items = [];
-          if (res.items && res.items.length > 0) {
+          if (loadProducts && res.items && res.items.length > 0) {
             res.items.forEach((item: any) => {
               const remainingQty = item.quantity - (item.returnedQuantity || 0);
               if (remainingQty > 0) {
@@ -1007,6 +1047,7 @@ export class BillingPage implements OnInit {
               }
             });
           }
+          this.cdr.detectChanges();
         },
         error: () => { this.selectedCNInvoiceDetail = null; }
       });
@@ -1344,7 +1385,9 @@ export class BillingPage implements OnInit {
     this.api.getCreditNoteById(Number(cn.invoiceId), Number(cn.id)).subscribe({
       next: (res: any) => {
         const fetchedItems = res.Items || res.items || res.data?.Items || res.data?.items;
-        const sourceItems = Array.isArray(fetchedItems) ? fetchedItems : (cn.items || cn.Items || []);
+        const existingItems = cn.items || cn.Items || [];
+        const sourceItems = (existingItems.length >= (fetchedItems?.length || 0)) ? existingItems : (Array.isArray(fetchedItems) ? fetchedItems : existingItems);
+        this.selectedCNDetail.amount = cn.amount || res.amount || this.selectedCNDetail.amount;
         const normalized = sourceItems.map((it: any) => ({
           ...it,
           productName: it.productName || it.ProductName || it.Name || it.name || it.product_name || this.getProductName(it.productId ?? it.ProductId) || '',

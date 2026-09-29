@@ -301,9 +301,88 @@ export class InvoicesPage implements OnInit, OnDestroy {
     });
   }
 
+  mergeInvoiceCreditNotes(rawCNs: any[]): any[] {
+    if (!rawCNs || rawCNs.length === 0) return [];
+    const groupedMap = new Map<string, any>();
+    for (const cn of rawCNs) {
+      const isChange = (cn.cnNumber || cn.CNNumber || '').startsWith('CN-CHG');
+      // Option 3+A: 只要在同一个 invoice 的所有 product 造成的 CN 都合并
+      const key = !isChange ? 'RETURN_CN' : (cn.cnNumber || cn.CNNumber || ('ID-' + (cn.id || cn.Id)));
+
+      if (!groupedMap.has(key)) {
+        groupedMap.set(key, {
+          ...cn,
+          rawIds: cn.rawIds || cn.RawIds || [cn.id || cn.Id],
+          items: [...(cn.items || cn.Items || [])],
+          Items: [...(cn.items || cn.Items || [])],
+          amount: Number(cn.amount || cn.Amount || 0)
+        });
+      } else {
+        const exist = groupedMap.get(key);
+        const rIds = cn.rawIds || cn.RawIds || [cn.id || cn.Id];
+        for (const rid of rIds) {
+          if (!exist.rawIds.includes(rid)) exist.rawIds.push(rid);
+        }
+        exist.amount += Number(cn.amount || cn.Amount || 0);
+        const newItems = cn.items || cn.Items || [];
+        exist.items.push(...newItems);
+        exist.Items.push(...newItems);
+
+        // 选项 A: 保留第一张 CN 单号
+        const cnCreated = cn.createdAt || cn.CreatedAt;
+        const existCreated = exist.createdAt || exist.CreatedAt;
+        if (cnCreated && existCreated && new Date(cnCreated) < new Date(existCreated)) {
+          exist.cnNumber = cn.cnNumber || cn.CNNumber;
+          exist.CNNumber = cn.CNNumber || cn.cnNumber;
+          exist.createdAt = cnCreated;
+          exist.CreatedAt = cnCreated;
+          exist.id = cn.id || cn.Id;
+          exist.Id = cn.Id || cn.id;
+        }
+      }
+    }
+    return Array.from(groupedMap.values());
+  }
+
   loadAvailableCredits(customerId: number) {
     this.api.getAvailableCredits(customerId).subscribe({
-      next: (res: any) => { this.availableCredits = Array.isArray(res) ? res : []; },
+      next: (res: any) => {
+        const raw = Array.isArray(res) ? res : [];
+        const groupedMap = new Map<string, any>();
+        for (const cn of raw) {
+          const isChange = (cn.cnNumber || cn.CNNumber || '').startsWith('CN-CHG');
+          const invKey = (!isChange && (cn.invoiceNumber || cn.InvoiceNumber))
+            ? ('INV-' + (cn.invoiceNumber || cn.InvoiceNumber))
+            : (cn.cnNumber || cn.CNNumber || ('ID-' + cn.id));
+          if (!groupedMap.has(invKey)) {
+            groupedMap.set(invKey, {
+              ...cn,
+              rawIds: cn.rawIds || [cn.id],
+              items: [...(cn.items || cn.Items || [])],
+              amount: Number(cn.amount || 0)
+            });
+          } else {
+            const exist = groupedMap.get(invKey);
+            exist.amount += Number(cn.amount || 0);
+            if (cn.rawIds) {
+              for (const rid of cn.rawIds) { if (!exist.rawIds.includes(rid)) exist.rawIds.push(rid); }
+            } else if (!exist.rawIds.includes(cn.id)) {
+              exist.rawIds.push(cn.id);
+            }
+            if (cn.items || cn.Items) {
+              exist.items.push(...(cn.items || cn.Items));
+            }
+            // 选项 A: 保留第一张 CN 单号
+            if (cn.createdAt && exist.createdAt && new Date(cn.createdAt) < new Date(exist.createdAt)) {
+              exist.cnNumber = cn.cnNumber || cn.CNNumber;
+              exist.CNNumber = cn.CNNumber || cn.cnNumber;
+              exist.createdAt = cn.createdAt;
+              exist.id = cn.id;
+            }
+          }
+        }
+        this.availableCredits = Array.from(groupedMap.values());
+      },
       error: () => { this.availableCredits = []; }
     });
   }
@@ -682,6 +761,9 @@ export class InvoicesPage implements OnInit, OnDestroy {
     this.api.getInvoiceDetails(invoice.id).subscribe({
       next: (res: any) => {
         this.isLoading = false;
+        if (res && res.creditNotes) {
+          res.creditNotes = this.mergeInvoiceCreditNotes(res.creditNotes);
+        }
         this.selectedInvoice = { ...res, customerName: res.customerName || invoice.customerName, customerId: res.customerId ?? invoice.customerId };
         const customerId = Number(res.customerId ?? invoice.customerId);
         if (customerId) {
@@ -747,7 +829,8 @@ export class InvoicesPage implements OnInit, OnDestroy {
       queryParams: {
         action: 'newCN',
         invoiceId: invId,
-        customerId: custId
+        customerId: custId,
+        _t: Date.now()
       }
     });
   }
@@ -1013,6 +1096,9 @@ export class InvoicesPage implements OnInit, OnDestroy {
           this.loadCustomers();
           this.api.getInvoiceDetails(this.selectedInvoice.id).subscribe({
             next: (res: any) => {
+              if (res && res.creditNotes) {
+                res.creditNotes = this.mergeInvoiceCreditNotes(res.creditNotes);
+              }
               this.selectedInvoice = res;
               this.editForm = {
                 invoiceDate: res.invoiceDate || this.getMYSDate(),
@@ -1151,6 +1237,9 @@ export class InvoicesPage implements OnInit, OnDestroy {
             if (this.selectedInvoice?.id) {
               this.api.getInvoiceDetails(this.selectedInvoice.id).subscribe({
                 next: (res: any) => {
+                  if (res && res.creditNotes) {
+                    res.creditNotes = this.mergeInvoiceCreditNotes(res.creditNotes);
+                  }
                   this.selectedInvoice = res;
                   this.loadInvoices();
                   this.cdr.detectChanges();
