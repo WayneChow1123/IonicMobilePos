@@ -7,9 +7,15 @@
           <ion-icon name="chevron-back-outline"></ion-icon> Back
         </ion-button>
         <span class="page-title">Invoices</span>
-        <ion-button fill="clear" class="icon-btn invoice-add-btn" (click)="openAddModal()">
-          <ion-icon name="add-outline"></ion-icon>
-        </ion-button>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <ion-button *ngIf="pendingOfflineCount > 0" fill="outline" size="small" (click)="manualSync()" [disabled]="isSyncing" style="--border-radius:12px;font-size:11px;font-weight:700;height:30px;--color:#d35400;--border-color:#e67e22;">
+            <ion-icon [name]="isSyncing ? 'sync-outline' : 'cloud-upload-outline'" slot="start" [class.spin-animation]="isSyncing"></ion-icon>
+            {{ isSyncing ? 'Syncing...' : 'Sync (' + pendingOfflineCount + ')' }}
+          </ion-button>
+          <ion-button fill="clear" class="icon-btn invoice-add-btn" (click)="openAddModal()">
+            <ion-icon name="add-outline"></ion-icon>
+          </ion-button>
+        </div>
       </div>
       <div style="display:flex;gap:8px;overflow-x:auto;white-space:nowrap;scrollbar-width:none;-webkit-overflow-scrolling:touch;margin:12px 0 8px;padding-bottom:4px;">
         <div *ngFor="let p of allProducts" class="product-stock-card" style="flex-shrink:0;border-radius:12px;padding:8px 12px;display:flex;align-items:center;gap:8px;min-width:120px;">

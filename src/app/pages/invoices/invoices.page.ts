@@ -9,6 +9,8 @@ import { ApiService } from '../../services/api.service';
 import { ActivatedRoute } from '@angular/router';
 import { BluetoothPrintService } from '../../services/bluetooth-print.service';
 import { formatDocNo, updateInvoiceDocNos } from '../../utils/invoice-helper';
+import { SyncService } from '../../services/sync.service';
+import { OfflineStorageService } from '../../services/offline-storage.service';
 
 @Component({
   standalone: true,
@@ -28,6 +30,11 @@ export class InvoicesPage implements OnInit, OnDestroy {
   products: any[] = [];
   allProducts: any[] = [];
   availableCredits: any[] = [];
+  pendingOfflineCount: number = 0;
+  isSyncing: boolean = false;
+  private syncSub?: any;
+  private queueCountSub?: any;
+  private syncingSub?: any;
   customerProductPrices: any[] = [];
   loadedCustomerId: number = 0;
   selectedCreditNoteId: number | null = null;
@@ -215,7 +222,9 @@ export class InvoicesPage implements OnInit, OnDestroy {
     private cdr: ChangeDetectorRef,
     private alertService: AlertService,
     private btPrint: BluetoothPrintService,
-    private platform: Platform
+    private platform: Platform,
+    private syncService: SyncService,
+    private offlineStorage: OfflineStorageService
   ) { }
 
   ionViewWillEnter() {
@@ -227,6 +236,22 @@ export class InvoicesPage implements OnInit, OnDestroy {
     this.loadInvoices();
     this.loadCustomers();
     this.loadProducts();
+
+    this.queueCountSub = this.offlineStorage.queueCount$.subscribe(count => {
+      this.pendingOfflineCount = count;
+      this.cdr.detectChanges();
+    });
+
+    this.syncingSub = this.syncService.isSyncing$.subscribe(syncing => {
+      this.isSyncing = syncing;
+      this.cdr.detectChanges();
+    });
+
+    this.syncSub = this.syncService.syncCompleted$.subscribe(res => {
+      if (res.successCount > 0) {
+        this.loadInvoices();
+      }
+    });
 
     // Check for query parameters to auto-open form
     this.route.queryParams.subscribe(params => {
@@ -254,21 +279,98 @@ export class InvoicesPage implements OnInit, OnDestroy {
     if (this.backButtonSub) {
       this.backButtonSub.unsubscribe();
     }
+    if (this.queueCountSub) {
+      this.queueCountSub.unsubscribe();
+    }
+    if (this.syncingSub) {
+      this.syncingSub.unsubscribe();
+    }
+    if (this.syncSub) {
+      this.syncSub.unsubscribe();
+    }
   }
 
-  loadInvoices() {
+  async loadInvoices() {
     this.isLoading = true;
+
+    const pendingQueue = await this.offlineStorage.getPendingQueue();
+    const deletedIds = pendingQueue
+      .filter(q => q.type === 'DELETE_INVOICE')
+      .map(q => q.payload?.invoiceId);
+
+    const pendingInvoices = pendingQueue
+      .filter(q => q.type === 'CREATE_INVOICE')
+      .map(q => {
+        const p = q.payload || {};
+        const total = (p.items || []).reduce((sum: number, it: any) => sum + ((Number(it.unitPrice) || 0) * (Number(it.quantity) || 1)), 0);
+        return {
+          id: q.id,
+          invoiceNumber: p.invoiceNumber || ('OFFLINE-' + String(q.id).slice(-6)),
+          docNo: p.invoiceNumber || 'OFFLINE (Pending)',
+          customerName: this.customers.find(c => c.id == p.customerId)?.name || ('Customer #' + p.customerId),
+          customerId: p.customerId,
+          invoiceDate: p.invoiceDate || new Date(q.createdAt).toISOString(),
+          totalAmount: Math.round((total + Number.EPSILON) * 100) / 100,
+          paidAmount: p.paidAmount || 0,
+          balance: (total || 0) - (p.paidAmount || 0),
+          status: 'Offline Pending',
+          termType: p.termType,
+          paymentMethod: p.paymentMethod,
+          remark: p.remark || '',
+          items: p.items || [],
+          isOffline: true
+        };
+      });
+
     this.api.getInvoices().subscribe({
       next: (res) => {
-        this.invoices = Array.isArray(res) ? res : [];
+        const serverInvoices = Array.isArray(res) ? res : [];
+        this.offlineStorage.setCache('invoices_list', serverInvoices);
+        this.invoices = [...pendingInvoices, ...serverInvoices].filter(inv => !deletedIds.includes(inv.id));
         updateInvoiceDocNos(this.invoices);
         this.filteredInvoices = [...this.invoices];
         this.currentPage = 1;
         this.displayedInvoices = this.filteredInvoices.slice(0, this.pageSize);
         this.isLoading = false;
+        this.cdr.detectChanges();
       },
-      error: () => { this.isLoading = false; this.showToastMsg('Failed to load invoices'); }
+      error: async () => {
+        const cached = await this.offlineStorage.getCache<any[]>('invoices_list');
+        this.invoices = [...pendingInvoices, ...(cached || [])].filter(inv => !deletedIds.includes(inv.id));
+        updateInvoiceDocNos(this.invoices);
+        this.filteredInvoices = [...this.invoices];
+        this.currentPage = 1;
+        this.displayedInvoices = this.filteredInvoices.slice(0, this.pageSize);
+        this.isLoading = false;
+        this.cdr.detectChanges();
+      }
     });
+  }
+
+  async manualSync() {
+    if (this.isSyncing) return;
+    this.showToastMsg('Syncing offline invoices...');
+    const res = await this.syncService.syncPendingInvoices(true);
+    if (res.successCount > 0) {
+      this.showToastMsg(`Synced ${res.successCount} item(s) successfully!`);
+      this.loadInvoices();
+    } else if (res.failCount > 0) {
+      this.alertService.confirm(
+        'Sync Issue',
+        `Failed to sync ${res.failCount} task(s) to server. Clear stuck task from offline queue?`
+      ).then(async (clear) => {
+        if (clear) {
+          const pending = await this.offlineStorage.getPendingQueue();
+          for (const t of pending) {
+            await this.offlineStorage.removeQueueItem(t.id);
+          }
+          await this.offlineStorage.refreshQueueCount();
+          this.showToastMsg('Offline queue cleared.');
+        }
+      });
+    } else {
+      this.showToastMsg('All invoices are already synced.');
+    }
   }
 
   loadCustomers() {
@@ -671,27 +773,80 @@ export class InvoicesPage implements OnInit, OnDestroy {
     // If 'cancel', do nothing and remain in the New Invoice editor
   }
 
-  openEditModal(invoice: any) {
+  async openEditModal(invoice: any) {
     this.showActionsDropdown = false;
     this.isEditing = true;
     this.isEditMode = false;
     this.selectedInvoice = null;
-    this.isLoading = true;
     this.selectedCustomerDetail = this.customers.find(c => c.id === invoice.customerId);
 
+    // 1. 如果是离线创建的单据：直接从本地数据源组装详情，无需发起服务端 HTTP 请求
+    if (invoice.isOffline) {
+      this.selectedInvoice = { ...invoice };
+      this.editForm = {
+        invoiceDate: invoice.invoiceDate || this.getMYSDate(),
+        remark: invoice.remark || '',
+        items: ((invoice.items || []) && invoice.items.length > 0)
+          ? invoice.items.map((i: any) => ({
+            productId: i.productId || 0,
+            quantity: i.quantity || 1,
+            unitPrice: i.unitPrice ?? null,
+            productName: i.productName || this.getProductName(i.productId),
+            returnedQuantity: 0,
+            remark: i.remark || ''
+          }))
+          : [{ productId: this.products.length > 0 ? this.products[0].id : 0, quantity: 1, unitPrice: null, productName: '', returnedQuantity: 0 }]
+      };
+      this.showModal = true;
+      this.cdr.detectChanges();
+      return;
+    }
+
+    // 2. 离线降级渲染辅助函数：从本地缓存或列表模型直接显示发票详情，绝不白屏卡住
+    const renderOfflineFallback = async () => {
+      this.isLoading = false;
+      const cached = await this.offlineStorage.getCache<any>('inv_detail_' + invoice.id);
+      const details = cached || invoice;
+      this.selectedInvoice = { ...details, customerName: details.customerName || invoice.customerName, customerId: details.customerId ?? invoice.customerId };
+      this.editForm = {
+        invoiceDate: details.invoiceDate || this.getMYSDate(),
+        remark: details.remark || '',
+        items: ((details.items || details.Items) && (details.items || details.Items).length > 0)
+          ? (details.items || details.Items).map((i: any) => ({
+            productId: i.productId ?? i.ProductId ?? 0,
+            quantity: i.quantity ?? i.Quantity ?? 1,
+            unitPrice: i.unitPrice ?? i.UnitPrice ?? null,
+            productName: i.productName ?? i.ProductName ?? this.getProductName(i.productId ?? i.ProductId),
+            returnedQuantity: 0,
+            remark: i.remark ?? i.Remark ?? ''
+          }))
+          : [{ productId: this.products.length > 0 ? this.products[0].id : 0, quantity: 1, unitPrice: null, productName: '', returnedQuantity: 0 }]
+      };
+      this.showModal = true;
+      this.cdr.detectChanges();
+    };
+
+    // 如果处于断网状态，直接调用离线降级渲染打开页面
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      await renderOfflineFallback();
+      return;
+    }
+
+    this.isLoading = true;
     this.api.getInvoiceDetails(invoice.id).subscribe({
       next: (res: any) => {
         this.isLoading = false;
-        this.selectedInvoice = { ...res, customerName: res.customerName || invoice.customerName, customerId: res.customerId ?? invoice.customerId };
-        const customerId = Number(res.customerId ?? invoice.customerId);
+        const details = res || invoice;
+        this.selectedInvoice = { ...details, customerName: details.customerName || invoice.customerName, customerId: details.customerId ?? invoice.customerId };
+        const customerId = Number(details.customerId ?? invoice.customerId);
         if (customerId) {
           this.loadCustomerProductPrices(customerId);
         }
         this.editForm = {
-          invoiceDate: res.invoiceDate || this.getMYSDate(),
-          remark: res.remark || '',
-          items: ((res.items || res.Items) && (res.items || res.Items).length > 0)
-            ? (res.items || res.Items).map((i: any) => ({
+          invoiceDate: details.invoiceDate || this.getMYSDate(),
+          remark: details.remark || '',
+          items: ((details.items || details.Items) && (details.items || details.Items).length > 0)
+            ? (details.items || details.Items).map((i: any) => ({
               productId: i.productId ?? i.ProductId ?? 0,
               quantity: i.quantity ?? i.Quantity ?? 1,
               unitPrice: i.unitPrice ?? i.UnitPrice ?? null,
@@ -702,10 +857,11 @@ export class InvoicesPage implements OnInit, OnDestroy {
             : [{ productId: this.products.length > 0 ? this.products[0].id : 0, quantity: 1, unitPrice: null, productName: '', returnedQuantity: 0 }]
         };
         this.showModal = true;
+        this.cdr.detectChanges();
       },
-      error: (err) => {
-        this.isLoading = false;
-        console.error(err);
+      error: async (err) => {
+        // 请求失败（服务器不通或半断网），同样执行降级展示
+        await renderOfflineFallback();
       }
     });
   }
@@ -1003,40 +1159,97 @@ export class InvoicesPage implements OnInit, OnDestroy {
       }
     }
     if (this.isEditing && this.selectedInvoice) {
-      console.log('Update payload', JSON.stringify(this.editForm));
-      this.api.updateInvoice(this.selectedInvoice.id, this.editForm).subscribe({
-        next: () => {
-          this.showToastMsg('Invoice updated!');
+      // 离线单据修改：更新本地数据与同步队列中的待发 payload
+      if (this.selectedInvoice.isOffline) {
+        const calculatedTotal = (this.editForm.items || []).reduce((sum: number, it: any) => sum + ((Number(it.unitPrice) || 0) * (Number(it.quantity) || 1)), 0);
+        this.selectedInvoice.items = this.editForm.items;
+        this.selectedInvoice.remark = this.editForm.remark;
+        this.selectedInvoice.totalAmount = Math.round((calculatedTotal + Number.EPSILON) * 100) / 100;
+        this.selectedInvoice.balance = (this.selectedInvoice.totalAmount || 0) - (this.selectedInvoice.paidAmount || 0);
+
+        this.offlineStorage.getQueueItemById(this.selectedInvoice.id).then(async (queueItem) => {
+          if (queueItem) {
+            queueItem.payload = {
+              ...queueItem.payload,
+              items: this.editForm.items,
+              remark: this.editForm.remark,
+              totalAmount: this.selectedInvoice.totalAmount
+            };
+            await this.offlineStorage.updateQueueItem(queueItem);
+          }
+        });
+
+        this.showToastMsg('Offline invoice updated!');
+        this.isEditMode = false;
+        this.showEditItemModal = false;
+        this.loadInvoices();
+        this.cdr.detectChanges();
+        return;
+      }
+
+      const cleanItems = (this.editForm.items || []).map((it: any) => {
+        let price = it.unitPrice != null ? Number(it.unitPrice) : null;
+        if (price !== null && price <= 0) {
+          const prod = this.allProducts.find((p: any) => p.id == it.productId);
+          price = (prod && prod.price > 0) ? prod.price : null;
+        }
+        return {
+          productId: Number(it.productId),
+          quantity: Number(it.quantity || 1),
+          unitPrice: price,
+          remark: it.remark || ''
+        };
+      });
+
+      const updatePayload = {
+        invoiceDate: this.editForm.invoiceDate,
+        remark: this.editForm.remark,
+        termType: this.selectedInvoice.termType || this.termType,
+        items: cleanItems
+      };
+
+      console.log('Update payload', JSON.stringify(updatePayload));
+      this.api.updateInvoice(this.selectedInvoice.id, updatePayload).subscribe({
+        next: (res: any) => {
+          if (res?.isOffline) {
+            this.showToastMsg('Invoice updated offline! (Queued for sync)');
+          } else {
+            this.showToastMsg('Invoice updated!');
+          }
           this.isEditMode = false;
           this.showEditItemModal = false;
+
+          const calculatedTotal = (this.editForm.items || []).reduce((sum: number, it: any) => sum + ((Number(it.unitPrice) || 0) * (Number(it.quantity) || 1)), 0);
+          this.selectedInvoice.items = this.editForm.items;
+          this.selectedInvoice.remark = this.editForm.remark;
+          this.selectedInvoice.invoiceDate = this.editForm.invoiceDate;
+          this.selectedInvoice.totalAmount = Math.round((calculatedTotal + Number.EPSILON) * 100) / 100;
+          this.selectedInvoice.balance = (this.selectedInvoice.totalAmount || 0) - (this.selectedInvoice.paidAmount || 0);
+
           this.loadInvoices();
           this.loadCustomers();
-          this.api.getInvoiceDetails(this.selectedInvoice.id).subscribe({
-            next: (res: any) => {
-              this.selectedInvoice = res;
-              this.editForm = {
-                invoiceDate: res.invoiceDate || this.getMYSDate(),
-                remark: res.remark || '',
-                items: (res.items || res.Items || []).map((i: any) => ({
-                  productId: i.productId ?? i.ProductId,
-                  quantity: i.quantity ?? i.Quantity,
-                  unitPrice: i.unitPrice ?? i.UnitPrice,
-                  productName: i.productName ?? i.ProductName ?? this.getProductName(i.productId ?? i.ProductId),
-                  remark: i.remark ?? i.Remark ?? ''
-                }))
-              };
-              this.cdr.detectChanges();
-            }
-          });
+          if (!res?.isOffline) {
+            this.api.getInvoiceDetails(this.selectedInvoice.id).subscribe({
+              next: (detailRes: any) => {
+                this.selectedInvoice = detailRes;
+                this.cdr.detectChanges();
+              }
+            });
+          }
         },
         error: (err: any) => this.handleInvoiceError(err)
       });
     } else {
       if (!this.form.customerId) { this.showToastMsg('Please select a customer'); return; }
       
+      const offlineDocNo = this.offlineStorage.generateInvoiceNumber();
+      const offlineId = this.offlineStorage.generateId();
+
       const useCredit = !!this.selectedCreditNoteId;
       const payload = {
         ...this.form,
+        invoiceNumber: offlineDocNo,
+        offlineReferenceId: offlineId,
         useCreditBalance: useCredit,
         selectedCreditNoteId: this.selectedCreditNoteId,
         paidAmount: this.amountPaid,
@@ -1046,8 +1259,78 @@ export class InvoicesPage implements OnInit, OnDestroy {
       };
       this.api.createInvoice(payload).subscribe({
         next: (res: any) => {
-          this.showToastMsg('Invoice created!');
           this.clearInvoiceDraft();
+
+          if (res?.isOffline) {
+            this.showToastMsg('Invoice saved offline! (Queued for sync)');
+            this.closeModal();
+
+            // 离线开单：装配完整离线发票与小票预览模型
+            const offlineInv: any = {
+              id: res.invoiceId,
+              invoiceNumber: payload.invoiceNumber,
+              docNo: payload.invoiceNumber,
+              customerName: this.selectedCustomerDetail?.name || ('Customer #' + payload.customerId),
+              customerId: payload.customerId,
+              invoiceDate: payload.invoiceDate || new Date().toISOString(),
+              totalAmount: res.totalAmount || 0,
+              paidAmount: payload.paidAmount || 0,
+              creditUsed: 0,
+              balance: (res.totalAmount || 0) - (payload.paidAmount || 0),
+              status: 'Offline Pending',
+              termType: payload.termType,
+              paymentMethod: payload.paymentMethod,
+              remark: payload.remark || '',
+              items: (payload.items || []).map((it: any) => {
+                const prod = this.allProducts.find((p: any) => p.id == it.productId);
+                return {
+                  productId: it.productId,
+                  productName: prod ? prod.name : ('Product #' + it.productId),
+                  quantity: it.quantity,
+                  unitPrice: it.unitPrice,
+                  remark: it.remark || ''
+                };
+              }),
+              isOffline: true
+            };
+
+            const localPreviewData: any = {
+              id: offlineInv.id,
+              invoiceNumber: offlineInv.invoiceNumber,
+              docNo: offlineInv.docNo,
+              invoiceDate: offlineInv.invoiceDate,
+              customerId: offlineInv.customerId,
+              customerName: offlineInv.customerName,
+              totalAmount: offlineInv.totalAmount,
+              paidAmount: offlineInv.paidAmount,
+              balance: offlineInv.balance,
+              termType: offlineInv.termType,
+              paymentMethod: offlineInv.paymentMethod,
+              remark: offlineInv.remark,
+              items: offlineInv.items,
+              isOffline: true
+            };
+
+            this.selectedInvoice = offlineInv;
+            this.previewData = localPreviewData;
+
+            // 1. 将离线单追加至列表顶部
+            this.invoices.unshift(offlineInv);
+            this.filterInvoices();
+
+            // 2. 检查蓝牙打印设置并立刻触发打印
+            this.loadPrinterSettings();
+            if (this.printerSettings?.printerInterface === 'Bluetooth' && this.btPrint.isAvailable()) {
+              this.btPrint.printInvoice(offlineInv, localPreviewData, this.printerSettings, this.customers, this.allProducts);
+            }
+
+            // 3. 打开小票 Live Preview 弹窗
+            this.showCheckPreview = true;
+            this.cdr.detectChanges();
+            return;
+          }
+
+          this.showToastMsg('Invoice created!');
           const createdInvoiceId = res?.invoiceId || res?.id;
           this.loadInvoices();
           this.loadCustomers();
@@ -1133,11 +1416,41 @@ export class InvoicesPage implements OnInit, OnDestroy {
 
   confirmDelete(invoice: any) { this.selectedInvoice = invoice; this.alertService.confirm('Delete Invoice', 'Delete ' + this.getDocNo(invoice) + '?').then(c => { if (c) this.deleteInvoice(); }); }
 
-  deleteInvoice() {
+  async deleteInvoice() {
     if (!this.selectedInvoice) return;
+
+    // 1. 如果是离线创建的单据：直接从本地同步队列移除
+    if (this.selectedInvoice.isOffline) {
+      await this.offlineStorage.removeQueueItem(this.selectedInvoice.id);
+      this.showToastMsg('Offline invoice cancelled and removed!');
+      this.closeModal();
+      this.loadInvoices();
+      return;
+    }
+
+    // 2. 如果是服务端单据，当前处于离线模式：加入待删除离线队列，并在本地列表中隐藏
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      await this.offlineStorage.enqueue('DELETE_INVOICE', { invoiceId: this.selectedInvoice.id }, 'del_' + this.selectedInvoice.id);
+      this.showToastMsg('Invoice marked for deletion (Will sync when online)');
+      this.closeModal();
+      this.loadInvoices();
+      return;
+    }
+
+    // 3. 在线模式，发起网络删除请求
     this.api.deleteInvoice(this.selectedInvoice.id).subscribe({
       next: () => { this.showToastMsg('Invoice deleted!'); this.closeModal(); this.loadInvoices(); },
-      error: (err: any) => this.showToastMsg('Failed: ' + (err.error?.message || err.message || 'error'))
+      error: async (err: any) => {
+        if (err?.status === 0) {
+          // 断网超时降级：加入离线待删除队列
+          await this.offlineStorage.enqueue('DELETE_INVOICE', { invoiceId: this.selectedInvoice.id }, 'del_' + this.selectedInvoice.id);
+          this.showToastMsg('Offline: deletion queued for sync');
+          this.closeModal();
+          this.loadInvoices();
+        } else {
+          this.showToastMsg('Failed: ' + (err.error?.message || err.message || 'error'));
+        }
+      }
     });
   }
 
@@ -1463,6 +1776,25 @@ export class InvoicesPage implements OnInit, OnDestroy {
 
   downloadReceipt() {
     this.loadPrinterSettings();
+
+    // 针对离线发票，若尚未加载过 previewData，则自动现场生成
+    if (this.selectedInvoice?.isOffline && !this.previewData) {
+      this.previewData = {
+        id: this.selectedInvoice.id,
+        invoiceNumber: this.selectedInvoice.invoiceNumber,
+        docNo: this.selectedInvoice.docNo,
+        invoiceDate: this.selectedInvoice.invoiceDate,
+        customerId: this.selectedInvoice.customerId,
+        customerName: this.selectedInvoice.customerName,
+        totalAmount: this.selectedInvoice.totalAmount,
+        paidAmount: this.selectedInvoice.paidAmount,
+        balance: this.selectedInvoice.balance,
+        termType: this.selectedInvoice.termType,
+        items: this.selectedInvoice.items,
+        isOffline: true
+      };
+    }
+
     if (this.printerSettings?.printerInterface === 'Bluetooth' && this.btPrint.isAvailable()) {
       this.btPrint.printInvoice(this.selectedInvoice, this.previewData, this.printerSettings, this.customers, this.allProducts);
       return;

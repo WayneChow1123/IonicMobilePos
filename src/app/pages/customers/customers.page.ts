@@ -131,17 +131,26 @@ export class CustomersPage implements OnInit {
   }
 
   loadAllRelatedData() {
-    this.api.getInvoices().subscribe(res => {
-      this.allInvoices = Array.isArray(res) ? res : [];
-      if (this.selectedCustomer) this.loadCustomerSpecificData(this.selectedCustomer.id);
+    this.api.getInvoices().subscribe({
+      next: res => {
+        this.allInvoices = Array.isArray(res) ? res : [];
+        if (this.selectedCustomer) this.loadCustomerSpecificData(this.selectedCustomer.id);
+      },
+      error: () => {}
     });
-    this.api.getPayments().subscribe(res => {
-      this.allPayments = Array.isArray(res) ? res : [];
-      if (this.selectedCustomer) this.loadCustomerSpecificData(this.selectedCustomer.id);
+    this.api.getPayments().subscribe({
+      next: res => {
+        this.allPayments = Array.isArray(res) ? res : [];
+        if (this.selectedCustomer) this.loadCustomerSpecificData(this.selectedCustomer.id);
+      },
+      error: () => {}
     });
-    this.api.getAllCreditNotes().subscribe(res => {
-      this.allCNs = Array.isArray(res) ? res : [];
-      if (this.selectedCustomer) this.loadCustomerSpecificData(this.selectedCustomer.id);
+    this.api.getAllCreditNotes().subscribe({
+      next: res => {
+        this.allCNs = Array.isArray(res) ? res : [];
+        if (this.selectedCustomer) this.loadCustomerSpecificData(this.selectedCustomer.id);
+      },
+      error: () => {}
     });
   }
 

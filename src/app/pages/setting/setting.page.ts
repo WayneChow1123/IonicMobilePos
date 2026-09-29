@@ -1,4 +1,4 @@
-import { AlertService } from '../../services/alert.service';
+﻿import { AlertService } from '../../services/alert.service';
 import { Component, ChangeDetectorRef } from '@angular/core';
 import { NavController } from '@ionic/angular';
 import { Router } from '@angular/router';
@@ -16,16 +16,33 @@ import { AuthService } from '../../services/auth.service';
 export class SettingPage {
   deviceAutoBlocking = false;
   trainingMode = false;
+  isDarkMode = false;
 
   constructor(
-    private router: Router, 
-    private navCtrl: NavController, 
-    private cdr: ChangeDetectorRef, 
+    private router: Router,
+    private navCtrl: NavController,
+    private cdr: ChangeDetectorRef,
     private alertService: AlertService,
     private authService: AuthService
   ) {}
 
   ionViewWillEnter() {
+    try {
+      this.isDarkMode = localStorage.getItem('pos-dark-mode') === 'true';
+    } catch (e) {}
+    this.cdr.detectChanges();
+  }
+
+  toggleDarkMode() {
+    this.isDarkMode = !this.isDarkMode;
+    try {
+      localStorage.setItem('pos-dark-mode', this.isDarkMode ? 'true' : 'false');
+    } catch (e) {}
+    if (this.isDarkMode) {
+      document.body.classList.add('dark');
+    } else {
+      document.body.classList.remove('dark');
+    }
     this.cdr.detectChanges();
   }
 
@@ -51,8 +68,3 @@ export class SettingPage {
     this.navCtrl.navigateRoot('login');
   }
 }
-
-
-
-
-

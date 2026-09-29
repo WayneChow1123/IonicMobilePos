@@ -6,9 +6,15 @@
       <ion-button fill="clear" class="back-btn" (click)="goBack()">
         <ion-icon name="chevron-back-outline"></ion-icon> Back
       </ion-button>
-      <ion-button fill="clear" class="more-btn">
-        <ion-icon name="ellipsis-vertical-outline"></ion-icon>
-      </ion-button>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <ion-button *ngIf="pendingOfflineCount > 0" fill="outline" size="small" (click)="manualSync()" [disabled]="isSyncing" style="--border-radius:12px;font-size:11px;font-weight:700;height:30px;--color:#d35400;--border-color:#e67e22;">
+          <ion-icon [name]="isSyncing ? 'sync-outline' : 'cloud-upload-outline'" slot="start" [class.spin-animation]="isSyncing"></ion-icon>
+          {{ isSyncing ? 'Syncing...' : 'Sync (' + pendingOfflineCount + ')' }}
+        </ion-button>
+        <ion-button fill="clear" class="more-btn">
+          <ion-icon name="ellipsis-vertical-outline"></ion-icon>
+        </ion-button>
+      </div>
     </div>
     <div class="app-main-title-box">
       <div class="app-logo-icon">
@@ -423,9 +429,15 @@
           <ion-icon name="chevron-back-outline"></ion-icon> Back
         </ion-button>
         <span class="page-title">C.N. Report</span>
-        <ion-button fill="clear" class="icon-btn" (click)="openNewCN()">
-          <ion-icon name="add-outline"></ion-icon>
-        </ion-button>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <ion-button *ngIf="pendingOfflineCount > 0" fill="outline" size="small" (click)="manualSync()" [disabled]="isSyncing" style="--border-radius:12px;font-size:11px;font-weight:700;height:30px;--color:#d35400;--border-color:#e67e22;">
+            <ion-icon [name]="isSyncing ? 'sync-outline' : 'cloud-upload-outline'" slot="start" [class.spin-animation]="isSyncing"></ion-icon>
+            {{ isSyncing ? 'Syncing...' : 'Sync (' + pendingOfflineCount + ')' }}
+          </ion-button>
+          <ion-button fill="clear" class="icon-btn" (click)="openNewCN()">
+            <ion-icon name="add-outline"></ion-icon>
+          </ion-button>
+        </div>
       </div>
       <ion-searchbar [(ngModel)]="cnSearchTerm" (ionInput)="filterCreditNotes()"
         placeholder="Search CN / invoice / customer..."
@@ -446,6 +458,11 @@
             <div class="item-sub">{{ cn.createdAt | date:'dd/MM/yyyy HH:mm' }}</div>
             <div class="item-sub" style="font-weight:700;color:#e67e22;">RM {{ cn.amount | number:'1.2-2' }}</div>
             <div class="item-sub" *ngIf="cn.reason">{{ cn.reason }}</div>
+            <div *ngIf="cn.isOffline" style="margin-top:6px;">
+              <span style="background:#fff3e0;color:#e67e22;border:1px solid #ffb74d;font-size:11px;font-weight:700;padding:3px 10px;border-radius:8px;display:inline-flex;align-items:center;gap:4px;">
+                <ion-icon name="cloud-offline-outline"></ion-icon> Offline (Pending Sync)
+              </span>
+            </div>
             <div *ngIf="cn.createdAfterPayment" style="margin-top:6px;">
               <span [style.background]="cn.isUsed ? '#e0e0e0' : '#00bcd4'" [style.color]="cn.isUsed ? '#888' : '#fff'"
                 style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:8px;display:inline-block;">
@@ -473,7 +490,11 @@
         <ion-icon name="chevron-back-outline"></ion-icon> Back
       </ion-button>
       <span class="page-title cn-title-responsive">{{ isEditingCN ? 'Edit Credit Note' : 'Credit Note Details' }}</span>
-      <div class="top-bar-actions" style="position:relative;">
+      <div class="top-bar-actions" style="position:relative;display:flex;align-items:center;gap:6px;">
+        <ion-button *ngIf="pendingOfflineCount > 0" fill="outline" size="small" (click)="manualSync()" [disabled]="isSyncing" style="--border-radius:12px;font-size:11px;font-weight:700;height:30px;--color:#d35400;--border-color:#e67e22;">
+          <ion-icon [name]="isSyncing ? 'sync-outline' : 'cloud-upload-outline'" slot="start" [class.spin-animation]="isSyncing"></ion-icon>
+          {{ isSyncing ? 'Syncing...' : 'Sync (' + pendingOfflineCount + ')' }}
+        </ion-button>
         <ion-button fill="clear" class="icon-btn" (click)="showCNActionsDropdown = !showCNActionsDropdown" style="--color:#5c85d6;">
           <ion-icon name="settings-outline"></ion-icon>
         </ion-button>
@@ -513,7 +534,12 @@
           </div>
           <div>
             <div style="font-size:10px;color:#555;font-weight:700;letter-spacing:0.5px;">STATUS</div>
-            <div style="margin-top:4px;"><span [style.background]="selectedCNDetail.isUsed ? '#e0e0e0' : '#00bcd4'" [style.color]="selectedCNDetail.isUsed ? '#888' : '#fff'" style="font-size:11px;font-weight:800;padding:4px 10px;border-radius:8px;">{{ getCNStatusForDetail() }}</span></div>
+            <div style="margin-top:4px;">
+              <span *ngIf="selectedCNDetail.isOffline" style="background:#fff3e0;color:#e67e22;border:1px solid #ffb74d;font-size:11px;font-weight:800;padding:4px 10px;border-radius:8px;display:inline-flex;align-items:center;gap:4px;">
+                <ion-icon name="cloud-offline-outline"></ion-icon> Offline (Pending Sync)
+              </span>
+              <span *ngIf="!selectedCNDetail.isOffline" [style.background]="selectedCNDetail.isUsed ? '#e0e0e0' : '#00bcd4'" [style.color]="selectedCNDetail.isUsed ? '#888' : '#fff'" style="font-size:11px;font-weight:800;padding:4px 10px;border-radius:8px;">{{ getCNStatusForDetail() }}</span>
+            </div>
           </div>
           <div>
             <div style="font-size:10px;color:#555;font-weight:700;letter-spacing:0.5px;">DATE</div>

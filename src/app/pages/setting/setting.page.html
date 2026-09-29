@@ -1,4 +1,4 @@
-<ion-content [fullscreen]="true">
+﻿<ion-content [fullscreen]="true">
   <div class="setting-container">
 
     <!-- Top Bar -->
@@ -53,6 +53,30 @@
           </div>
         </div>
         <ion-icon name="chevron-forward-outline" class="chevron"></ion-icon>
+      </div>
+
+      <!-- Dark Mode / Light Mode Toggle -->
+      <div class="list-item dm-toggle-item" [class.list-item--dark-on]="isDarkMode" (click)="toggleDarkMode()">
+        <div class="list-item-left">
+          <div class="icon-wrap" [class.dm-icon-active]="isDarkMode" [class.dm-icon-inactive]="!isDarkMode">
+            <ion-icon [name]="isDarkMode ? 'moon' : 'sunny-outline'"></ion-icon>
+          </div>
+          <div class="list-item-text">
+            <span class="list-item-title">{{ isDarkMode ? 'Dark Mode' : 'Light Mode' }}</span>
+            <span class="list-item-sub">
+              THEME:
+              <span [class.status-enabled]="isDarkMode" [class.status-disabled]="!isDarkMode">
+                {{ isDarkMode ? 'DARK' : 'LIGHT' }}
+              </span>
+            </span>
+          </div>
+        </div>
+        <!-- Animated Toggle Switch -->
+        <div class="dm-switch-track" [class.dm-switch-on]="isDarkMode">
+          <div class="dm-switch-thumb" [class.dm-thumb-on]="isDarkMode">
+            <ion-icon [name]="isDarkMode ? 'moon' : 'sunny-outline'" class="dm-thumb-icon"></ion-icon>
+          </div>
+        </div>
       </div>
 
       <!-- Printer Setting -->

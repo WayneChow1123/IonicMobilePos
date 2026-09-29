@@ -1,7 +1,7 @@
 import { AlertService } from '../../services/alert.service';
-import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { NavController } from '@ionic/angular';
-
+import { Subscription } from 'rxjs';
 
 import { Router, ActivatedRoute } from '@angular/router';
 import { CommonModule } from '@angular/common';
@@ -11,6 +11,8 @@ import { ApiService } from '../../services/api.service';
 import { AppComponent } from '../../app.component';
 import { BluetoothPrintService } from '../../services/bluetooth-print.service';
 import { formatDocNo } from '../../utils/invoice-helper';
+import { OfflineStorageService } from '../../services/offline-storage.service';
+import { SyncService } from '../../services/sync.service';
 
 @Component({
   standalone: true,
@@ -19,7 +21,13 @@ import { formatDocNo } from '../../utils/invoice-helper';
   templateUrl: './billing.page.html',
   styleUrls: ['./billing.page.scss'],
 })
-export class BillingPage implements OnInit {
+export class BillingPage implements OnInit, OnDestroy {
+  pendingOfflineCount: number = 0;
+  isSyncing: boolean = false;
+  private queueCountSub?: Subscription;
+  private syncingSub?: Subscription;
+  private syncSub?: Subscription;
+
   ionViewWillEnter() {
     const action = this.route.snapshot.queryParams['action'];
     if (!action) {
@@ -27,6 +35,8 @@ export class BillingPage implements OnInit {
     }
     this.loadCustomers();
     this.loadAllInvoices();
+    this.loadCreditNotes();
+    this.offlineStorage.refreshQueueCount();
     this.cdr.detectChanges();
   }
 
@@ -160,16 +170,36 @@ export class BillingPage implements OnInit {
     return Math.round(price * (1 - discount / 100) * 100) / 100;
   }
 
-  loadAllProducts() {
-    this.isLoading = true;
+  async loadAllProducts() {
+    if (!this.allProducts || this.allProducts.length === 0) {
+      const cached = await this.offlineStorage.getCache<any[]>('products') || [];
+      if (cached.length > 0) {
+        this.allProducts = cached;
+      }
+    }
+    if (this.allProducts && this.allProducts.length > 0) {
+      this.filteredProductsSelection = [...this.allProducts];
+      this.showProductModal = true;
+      this.cdr.detectChanges();
+    } else {
+      this.isLoading = true;
+    }
+
     this.api.getProducts().subscribe({
       next: (res: any) => {
-        this.allProducts = res || [];
-        this.filteredProductsSelection = [...this.allProducts];
+        if (Array.isArray(res) && res.length > 0) {
+          this.allProducts = res;
+          this.filteredProductsSelection = [...this.allProducts];
+        }
         this.showProductModal = true;
         this.isLoading = false;
+        this.cdr.detectChanges();
       },
-      error: () => { this.isLoading = false; this.showToastMsg('Failed to load products'); }
+      error: () => {
+        this.isLoading = false;
+        this.showProductModal = true;
+        this.cdr.detectChanges();
+      }
     });
   }
 
@@ -219,12 +249,20 @@ export class BillingPage implements OnInit {
     if (found) {
       found.returnQuantity += 1;
     } else {
+      let price = product.price || 0;
+      const custPrice = this.getCustomerSpecialPrice(product.id);
+      if (custPrice != null) {
+        price = custPrice;
+      }
+      price = this.getDiscountedPrice(price);
+
       this.cnForm.items.push({
         productId: product.id,
         productName: product.name,
-        maxQuantity: 9999, // Allow large return if selected from all products
+        unitPrice: price,
+        maxQuantity: 9999, // Allow return if selected from all products
         returnedQuantity: 0,
-        returnQuantity: 0,
+        returnQuantity: 1,
         returnToStock: false,
         isGlobal: true 
       });
@@ -237,20 +275,55 @@ export class BillingPage implements OnInit {
     this.cdr.detectChanges();
   }
 
-  loadPurchaseHistory() {
+  async loadPurchaseHistory() {
     if (!this.cnForm.customerId || this.cnForm.customerId == 0) {
       this.showToastMsg('Please select a customer first');
       return;
     }
-    this.isLoading = true;
+
+    // 优先从本地已缓存发票快速构建购买历史（支持离线跨单退货）
+    const localHistory: any[] = [];
+    const custInvs = (this.invoices || []).filter((inv: any) => Number(inv.customerId) === Number(this.cnForm.customerId));
+    for (const inv of custInvs) {
+      const items = inv.items || inv.Items || [];
+      for (const it of items) {
+        localHistory.push({
+          invoiceId: inv.id,
+          invoiceNumber: inv.invoiceNumber || inv.docNo || ('INV-' + inv.id),
+          customerId: inv.customerId,
+          productId: it.productId ?? it.ProductId,
+          productName: it.productName || it.ProductName || this.getProductName(it.productId ?? it.ProductId),
+          unitPrice: Number(it.unitPrice || it.UnitPrice || it.price || 0),
+          quantity: Number(it.quantity || it.Quantity || 1),
+          returnedQuantity: Number(it.returnedQuantity || 0)
+        });
+      }
+    }
+
+    if (localHistory.length > 0) {
+      this.purchaseHistory = localHistory;
+      this.filteredHistory = [...this.purchaseHistory];
+      this.showHistoryModal = true;
+      this.cdr.detectChanges();
+    } else {
+      this.isLoading = true;
+    }
+
     this.api.getCustomerPurchaseHistory(this.cnForm.customerId).subscribe({
       next: (res: any) => {
-        this.purchaseHistory = res || [];
-        this.filteredHistory = [...this.purchaseHistory];
+        if (Array.isArray(res) && res.length > 0) {
+          this.purchaseHistory = res;
+          this.filteredHistory = [...this.purchaseHistory];
+        }
         this.showHistoryModal = true;
         this.isLoading = false;
+        this.cdr.detectChanges();
       },
-      error: () => { this.isLoading = false; this.showToastMsg('Failed to load history'); }
+      error: () => {
+        this.isLoading = false;
+        this.showHistoryModal = true;
+        this.cdr.detectChanges();
+      }
     });
   }
 
@@ -298,7 +371,9 @@ export class BillingPage implements OnInit {
     private cdr: ChangeDetectorRef, 
     private alertService: AlertService,
     private appComponent: AppComponent,
-    public btPrint: BluetoothPrintService
+    public btPrint: BluetoothPrintService,
+    private offlineStorage: OfflineStorageService,
+    private syncService: SyncService
   ) {}
 
   getDocNo(inv: any): string {
@@ -308,12 +383,63 @@ export class BillingPage implements OnInit {
   ionViewWillLeave() {
   }
 
+  ngOnDestroy() {
+    this.queueCountSub?.unsubscribe();
+    this.syncingSub?.unsubscribe();
+    this.syncSub?.unsubscribe();
+  }
 
-
+  async manualSync() {
+    if (this.isSyncing) return;
+    this.showToastMsg('Syncing offline data...');
+    const res = await this.syncService.syncPendingInvoices(true);
+    if (res.successCount > 0) {
+      this.showToastMsg(`Synced ${res.successCount} item(s) successfully!`);
+      this.loadCreditNotes();
+      this.loadPayments();
+    } else if (res.failCount > 0) {
+      this.alertService.confirm(
+        'Sync Issue',
+        `Failed to sync ${res.failCount} task(s) to server. Clear stuck task from offline queue?`
+      ).then(async (clear) => {
+        if (clear) {
+          const pending = await this.offlineStorage.getPendingQueue();
+          for (const t of pending) {
+            await this.offlineStorage.removeQueueItem(t.id);
+          }
+          await this.offlineStorage.refreshQueueCount();
+          this.showToastMsg('Offline queue cleared.');
+          this.loadCreditNotes();
+        }
+      });
+    } else {
+      this.showToastMsg('All data is already synced.');
+    }
+  }
 
   ngOnInit() { 
     this.loadCustomers(); 
     this.loadAllInvoices();
+
+    this.queueCountSub = this.offlineStorage.queueCount$.subscribe(count => {
+      this.pendingOfflineCount = count;
+      this.cdr.detectChanges();
+    });
+
+    this.syncingSub = this.syncService.isSyncing$.subscribe(syncing => {
+      this.isSyncing = syncing;
+      this.cdr.detectChanges();
+    });
+
+    this.syncSub = this.syncService.syncCompleted$.subscribe(res => {
+      if (res.successCount > 0) {
+        if (this.currentView === 'cnList') {
+          this.loadCreditNotes();
+        } else if (this.currentView === 'paymentList') {
+          this.loadPayments();
+        }
+      }
+    });
 
     this.route.queryParams.subscribe(params => {
       if (params['action'] === 'newCN') {
@@ -462,36 +588,140 @@ export class BillingPage implements OnInit {
     });
   }
 
-  loadCreditNotes() {
+  renderCreditNotesList(rawList: any[]) {
+    const groupedMap = new Map<string, any>();
+    for (const item of (rawList || [])) {
+      if (!item) continue;
+      const id = item.id ?? item.Id;
+      const cnNumber = item.cnNumber || item.CNNumber || (id ? ('CN-' + id) : '');
+      const key = cnNumber || (id ? ('ID-' + id) : ('RAW-' + Math.random()));
+      const amount = Number(item.amount ?? item.Amount ?? 0);
+      const customerId = item.customerId ?? item.CustomerId ?? 0;
+      let customerName = item.customerName || item.CustomerName;
+      if (!customerName && customerId && this.customers?.length) {
+        const c = this.customers.find((cust: any) => cust.id == customerId);
+        if (c) customerName = c.name;
+      }
+      const rawItems = item.items || item.Items || [];
+      const normalizedItems = rawItems.map((it: any) => ({
+        ...it,
+        productId: it.productId ?? it.ProductId,
+        productName: it.productName || it.ProductName || it.Name || it.name || this.getProductName(it.productId ?? it.ProductId),
+        quantity: Number(it.quantity ?? it.Quantity ?? 0),
+        unitPrice: Number(it.unitPrice ?? it.UnitPrice ?? 0),
+        returnToStock: !!(it.returnToStock ?? it.ReturnToStock)
+      }));
+
+      if (!groupedMap.has(key)) {
+        groupedMap.set(key, {
+          ...item,
+          id: id,
+          cnNumber: cnNumber,
+          customerId: customerId,
+          customerName: customerName,
+          amount: amount,
+          createdAt: item.createdAt || item.CreatedAt || new Date().toISOString(),
+          reason: item.reason ?? item.Reason ?? '',
+          invoiceId: item.invoiceId ?? item.InvoiceId ?? 0,
+          invoiceNumber: item.invoiceNumber || item.InvoiceNumber || '',
+          isUsed: !!(item.isUsed ?? item.IsUsed),
+          createdAfterPayment: !!(item.createdAfterPayment ?? item.CreatedAfterPayment),
+          isOffline: !!item.isOffline,
+          rawIds: [id],
+          items: normalizedItems,
+          Items: normalizedItems
+        });
+      } else {
+        const existing = groupedMap.get(key);
+        existing.rawIds.push(id);
+        existing.amount += amount;
+        existing.items.push(...normalizedItems);
+        existing.Items.push(...normalizedItems);
+        if (item.isOffline) existing.isOffline = true;
+      }
+    }
+    this.creditNotes = Array.from(groupedMap.values());
+    this.filterCreditNotes();
+    this.cdr.detectChanges();
+  }
+
+  async loadCreditNotes() {
     this.isLoading = true;
+
+    // 1. 优先读取本地 IndexedDB 缓存和待同步队列，秒开无延迟展示
+    try {
+      let cached = await this.offlineStorage.getCache<any[]>('credit_notes_list') || [];
+      const queue = await this.offlineStorage.getPendingQueue();
+      const offlineCNs = queue
+        .filter(q => q.type === 'CREATE_CN' || q.type === 'CREATE_GLOBAL_CN')
+        .map(q => {
+          const items = q.payload?.data?.items || [];
+          const totalAmount = items.reduce((sum: number, it: any) => sum + ((Number(it.quantity) || 0) * (Number(it.unitPrice) || 0)), 0);
+          return {
+            id: q.id,
+            cnNumber: q.payload?.cnNumber || ('CN-OFFLINE-' + q.id),
+            invoiceId: q.payload?.invoiceId || 0,
+            customerId: q.payload?.customerId || 0,
+            customerName: q.payload?.customerName || '',
+            amount: totalAmount,
+            createdAt: new Date(q.createdAt).toISOString(),
+            reason: q.payload?.data?.reason || '',
+            items: items,
+            Items: items,
+            isOffline: true
+          };
+        });
+      const deletedCNIds = queue
+        .filter(q => q.type === 'DELETE_CN')
+        .map(q => String(q.payload?.cnId));
+
+      // 如果 credit_notes_list 缓存为空，尝试从 cached invoices_list 中提取已有的 Credit Notes
+      if (cached.length === 0) {
+        const cachedInvoices = await this.offlineStorage.getCache<any[]>('invoices_list') || [];
+        const extractedCNs: any[] = [];
+        for (const inv of cachedInvoices) {
+          if (Array.isArray(inv.creditNotes)) {
+            for (const cn of inv.creditNotes) {
+              extractedCNs.push({
+                ...cn,
+                invoiceId: cn.invoiceId || inv.id,
+                invoiceNumber: cn.invoiceNumber || inv.invoiceNumber,
+                customerId: cn.customerId || inv.customerId,
+                customerName: cn.customerName || inv.customerName
+              });
+            }
+          }
+        }
+        if (extractedCNs.length > 0) {
+          cached = extractedCNs;
+          await this.offlineStorage.setCache('credit_notes_list', cached);
+        }
+      }
+
+      const localList = [...offlineCNs, ...cached].filter(c => !deletedCNIds.includes(String(c.id ?? c.Id)));
+      this.renderCreditNotesList(localList);
+      this.isLoading = false;
+      this.cdr.detectChanges();
+    } catch (e) {
+      console.warn('Error reading local CNs:', e);
+      this.isLoading = false;
+      this.cdr.detectChanges();
+    }
+
+    // 2. 异步请求服务端同步最新列表（如果成功则静默更新）
     this.api.getAllCreditNotes().subscribe({
       next: (res) => {
         const rawList = Array.isArray(res) ? res : [];
-        const groupedMap = new Map<string, any>();
-        for (const item of rawList) {
-          const key = item.cnNumber || ('ID-' + item.id);
-          if (!groupedMap.has(key)) {
-            groupedMap.set(key, {
-              ...item,
-              rawIds: [item.id],
-              items: [...(item.items || item.Items || [])],
-              Items: [...(item.items || item.Items || [])],
-              amount: Number(item.amount || 0)
-            });
-          } else {
-            const existing = groupedMap.get(key);
-            existing.rawIds.push(item.id);
-            existing.amount += Number(item.amount || 0);
-            const newItems = item.items || item.Items || [];
-            existing.items.push(...newItems);
-            existing.Items.push(...newItems);
-          }
+        if (rawList.length > 0 || this.creditNotes.length === 0) {
+          this.renderCreditNotesList(rawList);
         }
-        this.creditNotes = Array.from(groupedMap.values());
-        this.filteredCreditNotes = [...this.creditNotes];
         this.isLoading = false;
+        this.cdr.detectChanges();
       },
-      error: () => { this.isLoading = false; }
+      error: () => {
+        this.isLoading = false;
+        this.cdr.detectChanges();
+      }
     });
   }
 
@@ -550,13 +780,27 @@ export class BillingPage implements OnInit {
     this.cdr.detectChanges();
   }
 
-  openNewCN() {
+  async openNewCN() {
+    if (!this.invoices || this.invoices.length === 0) {
+      const cached = await this.offlineStorage.getCache<any[]>('invoices_list') || [];
+      if (cached.length > 0) {
+        this.invoices = cached;
+      }
+    }
+    if (!this.customers || this.customers.length === 0) {
+      const cachedCust = await this.offlineStorage.getCache<any[]>('customers') || [];
+      if (cachedCust.length > 0) {
+        this.customers = cachedCust;
+        this.filteredCustomers = [...cachedCust];
+      }
+    }
     this.loadAllInvoices();
     this.cnForm = { customerId: 0, invoiceId: 0, reason: '', items: [] };
     this.cnFilteredInvoices = [...this.invoices];
     this.selectedCNInvoiceDetail = null;
     this.cnProductSearchTerm = '';
     this.currentView = 'newCN';
+    this.cdr.detectChanges();
   }
 
   openPaymentList() { this.paymentSearchTerm = ''; this.loadPayments(); this.currentView = 'paymentList'; }
@@ -984,31 +1228,65 @@ export class BillingPage implements OnInit {
   onCNInvoiceChange() {
     this.cnProductSearchTerm = '';
     if (this.cnForm.invoiceId && this.cnForm.invoiceId != 0) {
-      this.api.getInvoiceDetails(Number(this.cnForm.invoiceId)).subscribe({
-        next: (res: any) => {
-          this.selectedCNInvoiceDetail = res;
-          // ✅ 双重保险：优先取顶层 customerId，取不到就取 res.customer.id
-          const cid = res.customerId || (res.customer ? res.customer.id : 0);
-          this.cnForm.customerId = Number(cid); 
+      // 优先从已加载的发票列表提取（离线秒开且能查看明细）
+      const localInv = this.invoices.find((i: any) => String(i.id) === String(this.cnForm.invoiceId));
+      if (localInv) {
+        this.selectedCNInvoiceDetail = localInv;
+        const cid = localInv.customerId || (localInv.customer ? localInv.customer.id : 0);
+        if (cid) {
+          this.cnForm.customerId = Number(cid);
           this.loadCustomerProductPrices(Number(cid));
-          this.cnForm.items = [];
-          if (res.items && res.items.length > 0) {
-            res.items.forEach((item: any) => {
-              const remainingQty = item.quantity - (item.returnedQuantity || 0);
-              if (remainingQty > 0) {
-                this.cnForm.items.push({
-                  productId: item.productId,
-                  productName: item.productName,
-                  maxQuantity: remainingQty,
-                  returnedQuantity: item.returnedQuantity || 0,
-                  returnQuantity: 0,
-                  returnToStock: false
-                });
-              }
+        }
+        const sourceItems = localInv.items || localInv.Items || [];
+        if (sourceItems.length > 0) {
+          this.cnForm.items = sourceItems.map((item: any) => {
+            const remainingQty = (Number(item.quantity) || 1) - (Number(item.returnedQuantity) || 0);
+            return {
+              productId: item.productId,
+              productName: item.productName || this.getProductName(item.productId),
+              unitPrice: Number(item.unitPrice || item.price || 0),
+              maxQuantity: Math.max(1, remainingQty),
+              returnedQuantity: item.returnedQuantity || 0,
+              returnQuantity: 0,
+              returnToStock: false
+            };
+          });
+        }
+        this.cdr.detectChanges();
+      }
+
+      this.api.getInvoiceDetails(this.cnForm.invoiceId).subscribe({
+        next: (res: any) => {
+          if (!res) return;
+          this.selectedCNInvoiceDetail = res;
+          const cid = res.customerId || (res.customer ? res.customer.id : 0);
+          if (cid) {
+            this.cnForm.customerId = Number(cid); 
+            this.loadCustomerProductPrices(Number(cid));
+          }
+          const fetchedItems = res.items || res.Items || [];
+          if (fetchedItems.length > 0) {
+            this.cnForm.items = fetchedItems.map((item: any) => {
+              const remainingQty = (Number(item.quantity) || 1) - (Number(item.returnedQuantity) || 0);
+              return {
+                productId: item.productId,
+                productName: item.productName || this.getProductName(item.productId),
+                unitPrice: Number(item.unitPrice || item.price || 0),
+                maxQuantity: Math.max(1, remainingQty),
+                returnedQuantity: item.returnedQuantity || 0,
+                returnQuantity: 0,
+                returnToStock: false
+              };
             });
           }
+          this.cdr.detectChanges();
         },
-        error: () => { this.selectedCNInvoiceDetail = null; }
+        error: () => {
+          if (!this.selectedCNInvoiceDetail && localInv) {
+            this.selectedCNInvoiceDetail = localInv;
+          }
+          this.cdr.detectChanges();
+        }
       });
     } else {
       this.selectedCNInvoiceDetail = null;
@@ -1273,20 +1551,35 @@ export class BillingPage implements OnInit {
 
     const payloadItems = itemsToReturn.map((i: any) => ({
       productId: i.productId,
+      productName: i.productName || this.getProductName(i.productId),
+      unitPrice: Number(i.unitPrice ?? i.price ?? 0),
       quantity: Number(i.returnQuantity),
-      returnToStock: i.returnToStock
+      returnToStock: !!i.returnToStock
     }));
 
     const payload = { reason: (this.cnForm.reason?.trim() ?? ''), items: payloadItems };
 
-    // ✅ 智能切换：如果列表里有来自“历史记录”的商品，或者根本没选发票，就走全局接口
+    // ✅ 智能切换：如果列表里有来自“历史记录”的商品，或者根本没选发票，或是离线开具的发票，就走全局接口
     const hasGlobalItems = itemsToReturn.some((i: any) => i.isGlobal);
-    const useGlobalMode = !this.cnForm.invoiceId || this.cnForm.invoiceId == 0 || hasGlobalItems;
+    const isOfflineInvoice = this.cnForm.invoiceId && String(this.cnForm.invoiceId).startsWith('inv_');
+    const useGlobalMode = !this.cnForm.invoiceId || this.cnForm.invoiceId == 0 || hasGlobalItems || isOfflineInvoice;
 
-    console.log('[CN DEBUG] payload', payload, 'invoiceId', this.cnForm.invoiceId);
+    const customer = this.customers.find((c: any) => c.id == this.cnForm.customerId);
+    const customerName = customer ? customer.name : (this.cnForm.customerName || '');
+    const extraInfo = { customerName, customerId: this.cnForm.customerId };
+
+    console.log('[CN DEBUG] payload', payload, 'invoiceId', this.cnForm.invoiceId, 'useGlobalMode', useGlobalMode);
     if (!useGlobalMode) {
-      this.api.createCreditNote(Number(this.cnForm.invoiceId), payload).subscribe({
-        next: () => { this.showToastMsg('Credit Note created!'); this.openCNList(); },
+      const invId = this.cnForm.invoiceId;
+      this.api.createCreditNote(invId, payload, extraInfo).subscribe({
+        next: (res: any) => {
+          if (res?.isOffline) {
+            this.showToastMsg('Credit Note saved offline! (Queued for sync)');
+          } else {
+            this.showToastMsg('Credit Note created!');
+          }
+          this.openCNList();
+        },
         error: (err: any) => { console.error('[CN ERROR]', err); const detail = typeof err.error === 'string' ? err.error : JSON.stringify(err.error); this.showToastMsg('Failed: ' + (err.error?.message || detail || err.message || 'error')); }
       });
     } else {
@@ -1295,13 +1588,20 @@ export class BillingPage implements OnInit {
         reason: (this.cnForm.reason?.trim() ?? ''), 
         items: payloadItems, 
         isManual: true,
-        preferredInvoiceId: this.cnForm.invoiceId && this.cnForm.invoiceId != 0 ? Number(this.cnForm.invoiceId) : null
+        preferredInvoiceId: (this.cnForm.invoiceId && !isOfflineInvoice && this.cnForm.invoiceId != 0 && !isNaN(Number(this.cnForm.invoiceId))) ? Number(this.cnForm.invoiceId) : null
       };
       const cid = this.cnForm.customerId || (this.selectedCNInvoiceDetail?.customerId) || 0;
       if (!cid || cid == 0) { this.showToastMsg('Customer ID is required for global return'); return; }
 
-      this.api.createGlobalCreditNote(Number(cid), payloadGlobal).subscribe({
-        next: () => { this.showToastMsg('Global Credit Note created successfully!'); this.openCNList(); },
+      this.api.createGlobalCreditNote(Number(cid), payloadGlobal, extraInfo).subscribe({
+        next: (res: any) => {
+          if (res?.isOffline) {
+            this.showToastMsg('Global Credit Note saved offline! (Queued for sync)');
+          } else {
+            this.showToastMsg('Global Credit Note created successfully!');
+          }
+          this.openCNList();
+        },
         error: (err: any) => this.showToastMsg('Failed: ' + (err.error?.message || err.error || err.message || 'error'))
       });
     }
@@ -1320,29 +1620,96 @@ export class BillingPage implements OnInit {
     this.selectedCN = cn;
     this.alertService.confirm('Delete Credit Note', 'Are you sure you want to delete ' + (cn.cnNumber || 'CN-' + cn.id) + '?').then(c => { if(c) this.deleteCreditNote(); });
   }
-  deleteCreditNote() {
+
+  async deleteCreditNote() {
     const target = this.selectedCNDetail || this.selectedCN;
     if (!target) return;
-    this.api.deleteCreditNote(Number(target.invoiceId), Number(target.id)).subscribe({
-      next: () => { this.showToastMsg('Credit Note deleted!'); this.showCNActionsDropdown = false; if (this.currentView === 'cnDetails') this.openCNList(); else this.loadCreditNotes(); },
-      error: (err: any) => this.showToastMsg('Failed: ' + (err.error || err.message || 'error'))
+
+    const isOfflineCN = target.isOffline || String(target.id).startsWith('cn_');
+
+    if (isOfflineCN) {
+      await this.offlineStorage.removeQueueItem(String(target.id));
+      await this.offlineStorage.removeQueueItem('upd_cn_' + target.id);
+      await this.offlineStorage.removeQueueItem('del_cn_' + target.id);
+      await this.offlineStorage.refreshQueueCount();
+
+      this.creditNotes = this.creditNotes.filter(c => String(c.id) !== String(target.id));
+      this.filteredCreditNotes = this.filteredCreditNotes.filter(c => String(c.id) !== String(target.id));
+
+      const cached = await this.offlineStorage.getCache<any[]>('credit_notes_list') || [];
+      const updatedCache = cached.filter(c => String(c.id) !== String(target.id));
+      await this.offlineStorage.setCache('credit_notes_list', updatedCache);
+
+      this.showToastMsg('Offline Credit Note deleted!');
+      this.showCNActionsDropdown = false;
+      if (this.currentView === 'cnDetails') {
+        this.openCNList();
+      } else {
+        this.loadCreditNotes();
+      }
+      this.cdr.detectChanges();
+      return;
+    }
+
+    const invId = target.invoiceId != null && !isNaN(Number(target.invoiceId)) ? Number(target.invoiceId) : 0;
+    const cnId = target.id;
+
+    this.api.deleteCreditNote(invId, cnId).subscribe({
+      next: async (res: any) => {
+        if (res?.isOffline) {
+          this.showToastMsg('Credit Note marked for deletion (Queued for sync)!');
+        } else {
+          this.showToastMsg('Credit Note deleted!');
+        }
+        this.creditNotes = this.creditNotes.filter(c => String(c.id) !== String(target.id));
+        this.filteredCreditNotes = this.filteredCreditNotes.filter(c => String(c.id) !== String(target.id));
+        this.showCNActionsDropdown = false;
+        if (this.currentView === 'cnDetails') {
+          this.openCNList();
+        } else {
+          this.loadCreditNotes();
+        }
+        this.cdr.detectChanges();
+      },
+      error: (err: any) => this.showToastMsg('Failed: ' + (err.error?.message || err.error || err.message || 'error'))
     });
   }
 
   viewCNDetails(cn: any) {
-    this.isCNLoading = true;
     this.isEditingCN = false;
-    this.selectedCNDetail = cn;
     this.currentView = 'cnDetails';
     this.showCNActionsDropdown = false;
     if (!this.allProducts || this.allProducts.length === 0) {
       this.api.getProducts().subscribe({ next: (res: any) => { this.allProducts = res || []; } });
     }
-    this.api.getCreditNoteById(Number(cn.invoiceId), Number(cn.id)).subscribe({
+
+    const sourceItems = cn.Items || cn.items || [];
+    const normalized = sourceItems.map((it: any) => ({
+      ...it,
+      productName: it.productName || it.ProductName || it.Name || it.name || it.product_name || this.getProductName(it.productId ?? it.ProductId) || '',
+      productId: it.productId ?? it.ProductId,
+      quantity: it.quantity ?? it.Quantity,
+      unitPrice: it.unitPrice ?? it.UnitPrice,
+      returnToStock: !!(it.returnToStock ?? it.ReturnToStock)
+    }));
+    this.selectedCNDetail = { ...cn, Items: normalized, items: normalized };
+    this.isCNLoading = false;
+    this.cdr.detectChanges();
+
+    const isOfflineCN = cn.isOffline || String(cn.id).startsWith('cn_');
+    const invId = cn.invoiceId != null && !isNaN(Number(cn.invoiceId)) ? Number(cn.invoiceId) : 0;
+    const cid = cn.id != null && !isNaN(Number(cn.id)) ? Number(cn.id) : 0;
+
+    if (isOfflineCN || !cid || (typeof navigator !== 'undefined' && !navigator.onLine)) {
+      return;
+    }
+
+    this.api.getCreditNoteById(invId, cid).subscribe({
       next: (res: any) => {
+        if (!res) return;
         const fetchedItems = res.Items || res.items || res.data?.Items || res.data?.items;
-        const sourceItems = Array.isArray(fetchedItems) ? fetchedItems : (cn.items || cn.Items || []);
-        const normalized = sourceItems.map((it: any) => ({
+        const sItems = Array.isArray(fetchedItems) ? fetchedItems : normalized;
+        const norm = sItems.map((it: any) => ({
           ...it,
           productName: it.productName || it.ProductName || it.Name || it.name || it.product_name || this.getProductName(it.productId ?? it.ProductId) || '',
           productId: it.productId ?? it.ProductId,
@@ -1350,22 +1717,10 @@ export class BillingPage implements OnInit {
           unitPrice: it.unitPrice ?? it.UnitPrice,
           returnToStock: !!(it.returnToStock ?? it.ReturnToStock)
         }));
-        this.selectedCNDetail = { ...cn, ...res, amount: res.amount != null ? res.amount : cn.amount, Items: normalized, items: normalized };
-        this.isCNLoading = false;
+        this.selectedCNDetail = { ...this.selectedCNDetail, ...res, amount: res.amount != null ? res.amount : this.selectedCNDetail.amount, Items: norm, items: norm };
+        this.cdr.detectChanges();
       },
-      error: () => {
-        const sourceItems = cn.Items || cn.items || [];
-        const normalized = sourceItems.map((it: any) => ({
-          ...it,
-          productName: it.productName || it.ProductName || it.Name || it.name || it.product_name || this.getProductName(it.productId ?? it.ProductId) || '',
-          productId: it.productId ?? it.ProductId,
-          quantity: it.quantity ?? it.Quantity,
-          unitPrice: it.unitPrice ?? it.UnitPrice,
-          returnToStock: !!(it.returnToStock ?? it.ReturnToStock)
-        }));
-        this.selectedCNDetail = { ...cn, Items: normalized, items: normalized };
-        this.isCNLoading = false;
-      }
+      error: () => {}
     });
   }
 
@@ -1459,8 +1814,12 @@ export class BillingPage implements OnInit {
 
     this.isCNLoading = true;
     this.api.updateCreditNote(this.selectedCNDetail.id, payload).subscribe({
-      next: () => {
-        this.showToastMsg('Credit Note updated successfully!');
+      next: (res: any) => {
+        if (res?.isOffline) {
+          this.showToastMsg('Credit Note updated offline! (Queued for sync)');
+        } else {
+          this.showToastMsg('Credit Note updated successfully!');
+        }
         this.isEditingCN = false;
         this.isCNLoading = false;
         const updatedCust = this.customers.find(c => c.id == this.editCNForm.customerId);
