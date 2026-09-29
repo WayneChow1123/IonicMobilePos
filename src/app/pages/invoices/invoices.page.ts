@@ -1,4 +1,5 @@
 import { AlertService } from '../../services/alert.service';
+import Swal from 'sweetalert2';
 import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { NavController, Platform } from '@ionic/angular';
 import { Router } from '@angular/router';
@@ -772,6 +773,7 @@ export class InvoicesPage implements OnInit, OnDestroy {
         this.editForm = {
           invoiceDate: res.invoiceDate || this.getMYSDate(),
           remark: res.remark || '',
+          termType: res.termType || res.TermType || 'CASH SALE',
           items: ((res.items || res.Items) && (res.items || res.Items).length > 0)
             ? (res.items || res.Items).map((i: any) => ({
               productId: i.productId ?? i.ProductId ?? 0,
@@ -1086,37 +1088,41 @@ export class InvoicesPage implements OnInit, OnDestroy {
       }
     }
     if (this.isEditing && this.selectedInvoice) {
-      console.log('Update payload', JSON.stringify(this.editForm));
-      this.api.updateInvoice(this.selectedInvoice.id, this.editForm).subscribe({
-        next: () => {
-          this.showToastMsg('Invoice updated!');
-          this.isEditMode = false;
-          this.showEditItemModal = false;
-          this.loadInvoices();
-          this.loadCustomers();
-          this.api.getInvoiceDetails(this.selectedInvoice.id).subscribe({
-            next: (res: any) => {
-              if (res && res.creditNotes) {
-                res.creditNotes = this.mergeInvoiceCreditNotes(res.creditNotes);
-              }
-              this.selectedInvoice = res;
-              this.editForm = {
-                invoiceDate: res.invoiceDate || this.getMYSDate(),
-                remark: res.remark || '',
-                items: (res.items || res.Items || []).map((i: any) => ({
-                  productId: i.productId ?? i.ProductId,
-                  quantity: i.quantity ?? i.Quantity,
-                  unitPrice: i.unitPrice ?? i.UnitPrice,
-                  productName: i.productName ?? i.ProductName ?? this.getProductName(i.productId ?? i.ProductId),
-                  remark: i.remark ?? i.Remark ?? ''
-                }))
-              };
-              this.cdr.detectChanges();
-            }
-          });
-        },
-        error: (err: any) => this.handleInvoiceError(err)
+      const currentTerm = this.selectedInvoice.termType || this.selectedInvoice.TermType || this.editForm.termType || 'CASH SALE';
+      
+      const termOptions: { [key: string]: string } = {};
+      for (const t of this.termTypes) {
+        termOptions[t] = t;
+      }
+
+      Swal.fire({
+        title: 'Change Term Type?',
+        text: 'Do you want to change invoice Term Type?',
+        input: 'select',
+        inputOptions: termOptions,
+        inputValue: currentTerm,
+        showCancelButton: true,
+        showDenyButton: true,
+        confirmButtonText: 'Yes',
+        denyButtonText: 'No',
+        cancelButtonText: 'Cancel',
+        confirmButtonColor: '#6c5ce7',
+        denyButtonColor: '#2ecc71',
+        cancelButtonColor: '#747d8c',
+        allowOutsideClick: false,
+      }).then((result) => {
+        if (result.isConfirmed) {
+          // Yes: 进行更换 Term Type
+          this.editForm.termType = result.value || currentTerm;
+          this.executeUpdateInvoice();
+        } else if (result.isDenied) {
+          // No: 不进行更换 Term Type
+          this.editForm.termType = currentTerm;
+          this.executeUpdateInvoice();
+        }
+        // Cancel / Dismiss: 不提交更新，留在编辑页面
       });
+      return;
     } else {
       if (!this.form.customerId) { this.showToastMsg('Please select a customer'); return; }
       
@@ -1194,6 +1200,42 @@ export class InvoicesPage implements OnInit, OnDestroy {
         error: (err: any) => this.handleInvoiceError(err)
       });
     }
+  }
+
+  executeUpdateInvoice() {
+    if (!this.selectedInvoice) return;
+    console.log('Update payload', JSON.stringify(this.editForm));
+    this.api.updateInvoice(this.selectedInvoice.id, this.editForm).subscribe({
+      next: () => {
+        this.showToastMsg('Invoice updated!');
+        this.isEditMode = false;
+        this.showEditItemModal = false;
+        this.loadInvoices();
+        this.loadCustomers();
+        this.api.getInvoiceDetails(this.selectedInvoice.id).subscribe({
+          next: (res: any) => {
+            if (res && res.creditNotes) {
+              res.creditNotes = this.mergeInvoiceCreditNotes(res.creditNotes);
+            }
+            this.selectedInvoice = res;
+            this.editForm = {
+              invoiceDate: res.invoiceDate || this.getMYSDate(),
+              remark: res.remark || '',
+              termType: res.termType || res.TermType || 'CASH SALE',
+              items: (res.items || res.Items || []).map((i: any) => ({
+                productId: i.productId ?? i.ProductId,
+                quantity: i.quantity ?? i.Quantity,
+                unitPrice: i.unitPrice ?? i.UnitPrice,
+                productName: i.productName ?? i.ProductName ?? this.getProductName(i.productId ?? i.ProductId),
+                remark: i.remark ?? i.Remark ?? ''
+              }))
+            };
+            this.cdr.detectChanges();
+          }
+        });
+      },
+      error: (err: any) => this.handleInvoiceError(err)
+    });
   }
 
   handleInvoiceError(err: any) {
