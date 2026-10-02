@@ -52,7 +52,7 @@ export class SyncService {
   private initTriggers(): void {
     // 监听网络连接变化
     try {
-      Network.addListener('networkStatusChange', status => {
+      Network.addListener('networkStatusChange', (status: any) => {
         if (status.connected) {
           console.log('[SyncService] Network restored (Capacitor), triggering sync...');
           this.syncPendingOrders().catch(e => console.error('[SyncService] Network trigger error:', e));
@@ -300,7 +300,9 @@ export class SyncService {
                 remark: it.remark || ''
               };
             });
-            const cleanData = {
+            const cleanData: any = {
+              customerId: rawData.customerId,
+              customerName: rawData.customerName,
               invoiceDate: rawData.invoiceDate,
               remark: rawData.remark,
               termType: rawData.termType,

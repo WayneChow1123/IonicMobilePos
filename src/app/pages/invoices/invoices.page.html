@@ -73,7 +73,7 @@
             <div class="info-left">
               <div class="item-name-row">
                 <span *ngIf="invoice.hasCreditNote || invoice.HasCreditNote" class="cn-badge">CN</span>
-                <span class="item-name">{{ invoice.customerName || invoice.CustomerName || getCustomerName(invoice.customerId) }}</span>
+                <span class="item-name">{{ getInvoiceCustomerName(invoice) }}</span>
               </div>
               <div class="item-sub">{{ getCustomerCode(invoice) }}</div>
               <div class="item-sub"># {{ getDocNo(invoice) }}</div>
@@ -495,11 +495,30 @@
     <div *ngIf="selectedInvoice" class="form-card" style="background:#fff; border-radius:16px; padding:20px; box-shadow:0 4px 20px rgba(0,0,0,0.03); margin-top:12px; border: 1px solid #f0f0f0;">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
         <span style="font-size:11px; font-weight:800; letter-spacing:2px; color:#1a1a1a;" class="detail-customer-label">CUSTOMER</span>
-        <div style="width:24px; height:2px; background:#1a1a1a;" class="detail-customer-line"></div>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <button *ngIf="isEditMode" type="button" (click)="openCustomerSelector()" style="display:flex; align-items:center; gap:6px; background:#eef2ff; color:#5c85d6; border:none; border-radius:8px; padding:6px 12px; font-size:11px; font-weight:700; cursor:pointer; transition:all 0.2s;">
+            <ion-icon name="swap-horizontal-outline" style="font-size:15px;"></ion-icon>
+            <span>Change Customer</span>
+          </button>
+          <div *ngIf="!isEditMode" style="width:24px; height:2px; background:#1a1a1a;" class="detail-customer-line"></div>
+        </div>
       </div>
       <div style="margin-bottom:16px;">
         <div style="font-size:10px; font-weight:700; color:#aaa; letter-spacing:1px; margin-bottom:4px;">ACCOUNT NAME</div>
-        <div style="font-size:16px; font-weight:800; color:#1a1a1a; margin-bottom:8px; line-height:1.2;" class="detail-customer-name">{{ selectedCustomerDetail?.name || selectedInvoice.customerName || 'Walk-in Cash' }}</div>
+        
+        <!-- Customer Name Display: In edit mode, clicking it also opens Customer Selector -->
+        <div [style.cursor]="isEditMode ? 'pointer' : 'default'"
+             (click)="isEditMode ? openCustomerSelector() : null"
+             style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+          <div style="font-size:16px; font-weight:800; color:#1a1a1a; line-height:1.2;" class="detail-customer-name">
+            {{ selectedCustomerDetail?.name || editForm.customerName || selectedInvoice.customerName || 'Walk-in Cash' }}
+          </div>
+          <button *ngIf="isEditMode" type="button" (click)="openCustomerSelector(); $event.stopPropagation()" style="background:#f1f5f9; color:#5c85d6; border:1px solid #cbd5e1; border-radius:8px; padding:4px 10px; font-size:11px; font-weight:700; display:flex; align-items:center; gap:4px; cursor:pointer;">
+            <ion-icon name="search-outline"></ion-icon>
+            <span>Select</span>
+          </button>
+        </div>
+
         <div style="display:inline-block; background:#1a1a1a; color:#fff; font-size:10px; font-weight:700; letter-spacing:1px; padding:4px 10px; border-radius:20px;" class="detail-customer-code-badge">
           {{ getCustomerCodeForDetails() }}
         </div>

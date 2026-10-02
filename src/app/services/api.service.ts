@@ -11,7 +11,7 @@ import { LocalDbService, SyncStatus } from './local-db.service';
 })
 export class ApiService {
 
-  //private baseUrl = 'http://localhost:5262';
+  // private baseUrl = 'http://localhost:5262';
   private baseUrl = 'https://td.mobile.pos.xcode.com.my';
 
   private cachedCustomers: any[] | null = null;
@@ -579,6 +579,12 @@ export class ApiService {
           detail.remark = data.remark ?? detail.remark;
           detail.invoiceDate = data.invoiceDate ?? detail.invoiceDate;
           detail.termType = data.termType ?? detail.termType;
+          if (data.customerId !== undefined) {
+            detail.customerId = data.customerId;
+          }
+          if (data.customerName !== undefined) {
+            detail.customerName = data.customerName;
+          }
           this.offlineStorage.setCache('inv_detail_' + id, detail);
         }
       });

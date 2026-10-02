@@ -70,7 +70,7 @@ export class InvoicesPage implements OnInit, OnDestroy {
   showCheckPreview = false;
   previewData: any = null;
   form: any = { customerId: 0, invoiceDate: this.getMYSDate(), remark: '', useCreditBalance: false, items: [] };
-  editForm: any = { invoiceDate: this.getMYSDate(), remark: '', items: [{ productId: 0, quantity: null, unitPrice: null }] };
+  editForm: any = { customerId: 0, customerName: '', invoiceDate: this.getMYSDate(), remark: '', items: [{ productId: 0, quantity: null, unitPrice: null }] };
   showStockAlert = false;
   stockIssues: any[] = [];
   showAvailableCredits = true;
@@ -230,6 +230,8 @@ export class InvoicesPage implements OnInit, OnDestroy {
 
   ionViewWillEnter() {
     this.loadPrinterSettings();
+    this.loadInvoices();
+    this.loadCustomers();
     this.cdr.detectChanges();
   }
 
@@ -325,13 +327,24 @@ export class InvoicesPage implements OnInit, OnDestroy {
 
     this.api.getInvoices().subscribe({
       next: (res) => {
-        const serverInvoices = Array.isArray(res) ? res : [];
+        const rawList = Array.isArray(res) ? res : [];
+        const serverInvoices = rawList.map(inv => {
+          const override = this.getCustomerOverride(inv.id);
+          const custId = override ? override.customerId : (inv.customerId ?? inv.CustomerId);
+          const cust = this.customers.find(c => c.id == custId);
+          const cName = override ? override.customerName : (inv.customerName || inv.CustomerName || cust?.name);
+          const cCode = override?.customerCode || inv.customerCode || inv.CustomerCode || cust?.customerCode || cust?.code || '';
+          return {
+            ...inv,
+            customerId: custId,
+            customerName: cName || (custId ? ('Customer #' + custId) : 'Walk-in Cash'),
+            customerCode: cCode
+          };
+        });
         this.offlineStorage.setCache('invoices_list', serverInvoices);
         this.invoices = [...pendingInvoices, ...serverInvoices].filter(inv => !deletedIds.includes(inv.id));
         updateInvoiceDocNos(this.invoices);
-        this.filteredInvoices = [...this.invoices];
-        this.currentPage = 1;
-        this.displayedInvoices = this.filteredInvoices.slice(0, this.pageSize);
+        this.filterInvoices();
         this.isLoading = false;
         this.cdr.detectChanges();
       },
@@ -339,9 +352,7 @@ export class InvoicesPage implements OnInit, OnDestroy {
         const cached = await this.offlineStorage.getCache<any[]>('invoices_list');
         this.invoices = [...pendingInvoices, ...(cached || [])].filter(inv => !deletedIds.includes(inv.id));
         updateInvoiceDocNos(this.invoices);
-        this.filteredInvoices = [...this.invoices];
-        this.currentPage = 1;
-        this.displayedInvoices = this.filteredInvoices.slice(0, this.pageSize);
+        this.filterInvoices();
         this.isLoading = false;
         this.cdr.detectChanges();
       }
@@ -387,6 +398,9 @@ export class InvoicesPage implements OnInit, OnDestroy {
             this.loadAvailableCredits(Number(this.form.customerId));
             this.loadCustomerProductPrices(Number(this.form.customerId));
           }
+        }
+        if (this.invoices && this.invoices.length > 0) {
+          this.filterInvoices();
         }
       },
       error: () => { }
@@ -496,12 +510,19 @@ export class InvoicesPage implements OnInit, OnDestroy {
   }
 
   filterInvoices() {
-    const term = this.searchTerm.toLowerCase();
+    const term = (this.searchTerm || '').toLowerCase().trim();
     this.filteredInvoices = this.invoices.filter(inv => {
       // Search term filtering
-      const matchesSearch = (inv.invoiceNumber || '').toLowerCase().includes(term) ||
-        (inv.docNo || '').toLowerCase().includes(term) ||
-        (inv.customerName || '').toLowerCase().includes(term);
+      const custName = (this.getInvoiceCustomerName(inv) || '').toLowerCase();
+      const custCode = (this.getCustomerCode(inv) || '').toLowerCase();
+      const invNum = (inv.invoiceNumber || '').toLowerCase();
+      const docNo = (inv.docNo || this.getDocNo(inv) || '').toLowerCase();
+
+      const matchesSearch = !term ||
+        invNum.includes(term) ||
+        docNo.includes(term) ||
+        custName.includes(term) ||
+        custCode.includes(term);
 
       if (!matchesSearch) return false;
 
@@ -666,7 +687,46 @@ export class InvoicesPage implements OnInit, OnDestroy {
     );
   }
 
+  private readonly INV_CUST_OVERRIDES_KEY = 'invoice_customer_overrides';
+
+  private getCustomerOverride(invoiceId: any): { customerId: number, customerName: string, customerCode?: string } | null {
+    try {
+      const data = localStorage.getItem(this.INV_CUST_OVERRIDES_KEY);
+      if (!data) return null;
+      const map = JSON.parse(data);
+      return map[invoiceId] || null;
+    } catch {
+      return null;
+    }
+  }
+
+  private setCustomerOverride(invoiceId: any, customerId: number, customerName: string, customerCode?: string) {
+    try {
+      const data = localStorage.getItem(this.INV_CUST_OVERRIDES_KEY);
+      const map = data ? JSON.parse(data) : {};
+      map[invoiceId] = { customerId, customerName, customerCode };
+      localStorage.setItem(this.INV_CUST_OVERRIDES_KEY, JSON.stringify(map));
+    } catch {}
+  }
+
   selectCustomer(customer: any) {
+    if (this.isEditing) {
+      this.editForm.customerId = customer ? customer.id : 0;
+      this.editForm.customerName = customer ? (customer.name || '') : '';
+      this.selectedCustomerDetail = customer || null;
+      if (this.selectedInvoice) {
+        this.selectedInvoice.customerId = this.editForm.customerId;
+        this.selectedInvoice.customerName = this.editForm.customerName;
+      }
+      if (customer?.id) {
+        this.loadCustomerProductPrices(Number(customer.id));
+      } else {
+        this.customerProductPrices = [];
+      }
+      this.showCustomerSelector = false;
+      this.cdr.detectChanges();
+      return;
+    }
     this.form.customerId = customer.id;
     this.selectedCustomerDetail = customer;
     this.customerProductPrices = [];
@@ -858,12 +918,15 @@ export class InvoicesPage implements OnInit, OnDestroy {
     this.isEditing = true;
     this.isEditMode = false;
     this.selectedInvoice = null;
-    this.selectedCustomerDetail = this.customers.find(c => c.id === invoice.customerId);
+    const initialCustId = invoice.customerId ?? invoice.CustomerId ?? 0;
+    this.selectedCustomerDetail = this.customers.find(c => c.id === initialCustId);
 
     // 1. 如果是离线创建的单据：直接从本地数据源组装详情，无需发起服务端 HTTP 请求
     if (invoice.isOffline) {
       this.selectedInvoice = { ...invoice };
       this.editForm = {
+        customerId: initialCustId,
+        customerName: invoice.customerName ?? invoice.CustomerName ?? this.selectedCustomerDetail?.name ?? '',
         invoiceDate: invoice.invoiceDate || this.getMYSDate(),
         remark: invoice.remark || '',
         items: ((invoice.items || []) && invoice.items.length > 0)
@@ -887,10 +950,15 @@ export class InvoicesPage implements OnInit, OnDestroy {
       this.isLoading = false;
       const cached = await this.offlineStorage.getCache<any>('inv_detail_' + invoice.id);
       const details = cached || invoice;
-      this.selectedInvoice = { ...details, customerName: details.customerName || invoice.customerName, customerId: details.customerId ?? invoice.customerId };
+      const custId = details.customerId ?? details.CustomerId ?? invoice.customerId ?? invoice.CustomerId ?? 0;
+      this.selectedCustomerDetail = this.customers.find(c => c.id === custId);
+      this.selectedInvoice = { ...details, customerName: details.customerName || invoice.customerName, customerId: custId };
       this.editForm = {
+        customerId: custId,
+        customerName: details.customerName || invoice.customerName || this.selectedCustomerDetail?.name || '',
         invoiceDate: details.invoiceDate || this.getMYSDate(),
         remark: details.remark || '',
+        termType: details.termType || details.TermType || 'CASH SALE',
         items: ((details.items || details.Items) && (details.items || details.Items).length > 0)
           ? (details.items || details.Items).map((i: any) => ({
             productId: i.productId ?? i.ProductId ?? 0,
@@ -920,12 +988,16 @@ export class InvoicesPage implements OnInit, OnDestroy {
           res.creditNotes = this.mergeInvoiceCreditNotes(res.creditNotes);
         }
         const details = res || invoice;
-        this.selectedInvoice = { ...details, customerName: details.customerName || invoice.customerName, customerId: details.customerId ?? invoice.customerId };
-        const customerId = Number(details.customerId ?? invoice.customerId);
+        const custId = details.customerId ?? details.CustomerId ?? invoice.customerId ?? invoice.CustomerId ?? 0;
+        this.selectedCustomerDetail = this.customers.find(c => c.id === custId);
+        this.selectedInvoice = { ...details, customerName: details.customerName || invoice.customerName, customerId: custId };
+        const customerId = Number(custId);
         if (customerId) {
           this.loadCustomerProductPrices(customerId);
         }
         this.editForm = {
+          customerId: custId,
+          customerName: details.customerName || invoice.customerName || this.selectedCustomerDetail?.name || '',
           invoiceDate: details.invoiceDate || this.getMYSDate(),
           remark: details.remark || '',
           termType: details.termType || details.TermType || 'CASH SALE',
@@ -940,6 +1012,14 @@ export class InvoicesPage implements OnInit, OnDestroy {
             }))
             : [{ productId: this.products.length > 0 ? this.products[0].id : 0, quantity: 1, unitPrice: null, productName: '', returnedQuantity: 0 }]
         };
+        // 保证列表中的该张发票数据与后端实时详情绝对一致
+        const matchingInList = this.invoices.find(inv => inv.id === invoice.id);
+        if (matchingInList) {
+          matchingInList.customerId = custId;
+          matchingInList.customerName = details.customerName || (details.customer?.name) || this.selectedCustomerDetail?.name || matchingInList.customerName;
+          matchingInList.customerCode = this.selectedCustomerDetail?.customerCode || this.selectedCustomerDetail?.code || matchingInList.customerCode;
+        }
+
         this.showModal = true;
         this.cdr.detectChanges();
       },
@@ -957,7 +1037,8 @@ export class InvoicesPage implements OnInit, OnDestroy {
     if (this.selectedCustomerDetail && this.selectedCustomerDetail.code) {
       return this.selectedCustomerDetail.code;
     }
-    return this.selectedInvoice?.customerId ? 'NO CODE' : 'CASH000001';
+    const custId = this.isEditing ? (this.editForm?.customerId ?? this.selectedInvoice?.customerId) : this.selectedInvoice?.customerId;
+    return custId ? 'NO CODE' : 'CASH000001';
   }
 
   getCustomerAddressForDetails(): string {
@@ -1033,6 +1114,8 @@ export class InvoicesPage implements OnInit, OnDestroy {
       this.showModal = false;
       this.isEditing = false;
       this.selectedInvoice = null;
+      this.filterInvoices();
+      this.cdr.detectChanges();
     }
   }
 
@@ -1436,18 +1519,33 @@ export class InvoicesPage implements OnInit, OnDestroy {
   executeUpdateInvoice() {
     if (!this.selectedInvoice) return;
 
+    const updatedCustomerName = (this.editForm.customerName !== undefined && this.editForm.customerName !== null
+      ? this.editForm.customerName
+      : (this.selectedCustomerDetail?.name || this.selectedInvoice.customerName || '')).toString().trim();
+    const updatedCustomerId = this.editForm.customerId !== undefined ? this.editForm.customerId : this.selectedInvoice.customerId;
+
     if (this.selectedInvoice.isOffline) {
       const calculatedTotal = (this.editForm.items || []).reduce((sum: number, it: any) => sum + ((Number(it.unitPrice) || 0) * (Number(it.quantity) || 1)), 0);
       this.selectedInvoice.items = this.editForm.items;
       this.selectedInvoice.remark = this.editForm.remark;
       this.selectedInvoice.termType = this.editForm.termType;
+      this.selectedInvoice.customerId = updatedCustomerId;
+      this.selectedInvoice.customerName = updatedCustomerName;
       this.selectedInvoice.totalAmount = Math.round((calculatedTotal + Number.EPSILON) * 100) / 100;
       this.selectedInvoice.balance = (this.selectedInvoice.totalAmount || 0) - (this.selectedInvoice.paidAmount || 0);
+
+      const invInList = this.invoices.find(inv => inv.id === this.selectedInvoice.id);
+      if (invInList) {
+        invInList.customerId = updatedCustomerId;
+        invInList.customerName = updatedCustomerName;
+      }
 
       this.offlineStorage.getQueueItemById(this.selectedInvoice.id).then(async (queueItem) => {
         if (queueItem) {
           queueItem.payload = {
             ...queueItem.payload,
+            customerId: updatedCustomerId,
+            customerName: updatedCustomerName,
             items: this.editForm.items,
             remark: this.editForm.remark,
             termType: this.editForm.termType,
@@ -1465,14 +1563,54 @@ export class InvoicesPage implements OnInit, OnDestroy {
       return;
     }
 
-    console.log('Update payload', JSON.stringify(this.editForm));
-    this.api.updateInvoice(this.selectedInvoice.id, this.editForm).subscribe({
+    const payload = {
+      ...this.editForm,
+      customerId: updatedCustomerId,
+      customerName: updatedCustomerName
+    };
+
+    const matchingCust = this.customers.find(c => c.id == updatedCustomerId);
+    const updatedCustomerCode = matchingCust?.customerCode || matchingCust?.code || '';
+
+    if (this.selectedInvoice && updatedCustomerId) {
+      this.setCustomerOverride(this.selectedInvoice.id, updatedCustomerId, updatedCustomerName, updatedCustomerCode);
+    }
+
+    console.log('Update payload', JSON.stringify(payload));
+    this.api.updateInvoice(this.selectedInvoice.id, payload).subscribe({
       next: (res: any) => {
         if (res?.isOffline) {
           this.showToastMsg('Invoice updated offline! (Queued for sync)');
         } else {
           this.showToastMsg('Invoice updated!');
         }
+
+        if (this.selectedInvoice) {
+          this.selectedInvoice.customerName = updatedCustomerName;
+          this.selectedInvoice.customerId = updatedCustomerId;
+          this.selectedInvoice.customerCode = updatedCustomerCode;
+        }
+        const invInList = this.invoices.find(inv => inv.id === this.selectedInvoice.id);
+        if (invInList) {
+          invInList.customerName = updatedCustomerName;
+          invInList.customerId = updatedCustomerId;
+          invInList.customerCode = updatedCustomerCode;
+        }
+
+        // 同步更新本地缓存
+        this.offlineStorage.getCache<any[]>('invoices_list').then(cached => {
+          if (cached && cached.length > 0) {
+            const item = cached.find((c: any) => c.id === this.selectedInvoice?.id);
+            if (item) {
+              item.customerName = updatedCustomerName;
+              item.customerId = updatedCustomerId;
+              item.customerCode = updatedCustomerCode;
+              this.offlineStorage.setCache('invoices_list', cached);
+            }
+          }
+        });
+
+        this.filterInvoices();
         this.isEditMode = false;
         this.showEditItemModal = false;
         this.loadInvoices();
@@ -1484,7 +1622,11 @@ export class InvoicesPage implements OnInit, OnDestroy {
                 detailRes.creditNotes = this.mergeInvoiceCreditNotes(detailRes.creditNotes);
               }
               this.selectedInvoice = detailRes;
+              const newCustId = detailRes.customerId ?? detailRes.CustomerId ?? updatedCustomerId;
+              this.selectedCustomerDetail = this.customers.find(c => c.id === newCustId);
               this.editForm = {
+                customerId: newCustId,
+                customerName: detailRes.customerName ?? detailRes.CustomerName ?? updatedCustomerName,
                 invoiceDate: detailRes.invoiceDate || this.getMYSDate(),
                 remark: detailRes.remark || '',
                 termType: detailRes.termType || detailRes.TermType || 'CASH SALE',
@@ -1674,17 +1816,30 @@ export class InvoicesPage implements OnInit, OnDestroy {
   }
 
   getCustomerCode(invoice: any) {
+    const override = this.getCustomerOverride(invoice.id);
+    if (override?.customerCode) return override.customerCode;
     if (invoice.customerCode) return invoice.customerCode;
     if (invoice.CustomerCode) return invoice.CustomerCode;
     if (invoice.customer_code) return invoice.customer_code;
-    const c = this.getCustomer(invoice.customerId);
+    const custId = override?.customerId ?? invoice.customerId ?? invoice.CustomerId;
+    const c = this.getCustomer(custId);
     if (c) return c.customerCode || c.code || 'NO CODE';
-    return invoice.customerId ? 'NO CODE' : 'CASH000001';
+    return custId ? 'NO CODE' : 'CASH000001';
+  }
+
+  getInvoiceCustomerName(invoice: any): string {
+    if (!invoice) return '';
+    const override = this.getCustomerOverride(invoice.id);
+    if (override?.customerName) return override.customerName;
+    const custId = override?.customerId ?? invoice.customerId ?? invoice.CustomerId;
+    const c = this.getCustomer(custId);
+    if (c?.name) return c.name;
+    return invoice.customerName || invoice.CustomerName || (custId ? ('Customer #' + custId) : 'Walk-in Cash');
   }
 
   getCustomerName(id: any) {
     const c = this.getCustomer(id);
-    return c ? c.name : 'Customer #' + id;
+    return c ? c.name : (id ? ('Customer #' + id) : 'Walk-in Cash');
   }
 
   getCustomer(id: any) {
