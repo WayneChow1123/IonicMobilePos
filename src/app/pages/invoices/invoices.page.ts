@@ -924,21 +924,20 @@ export class InvoicesPage implements OnInit, OnDestroy {
     // 1. 如果是离线创建的单据：直接从本地数据源组装详情，无需发起服务端 HTTP 请求
     if (invoice.isOffline) {
       this.selectedInvoice = { ...invoice };
+      const rawOfflineItems = (invoice.items && Array.isArray(invoice.items) && invoice.items.length > 0) ? invoice.items : [];
       this.editForm = {
         customerId: initialCustId,
         customerName: invoice.customerName ?? invoice.CustomerName ?? this.selectedCustomerDetail?.name ?? '',
         invoiceDate: invoice.invoiceDate || this.getMYSDate(),
         remark: invoice.remark || '',
-        items: ((invoice.items || []) && invoice.items.length > 0)
-          ? invoice.items.map((i: any) => ({
-            productId: i.productId || 0,
-            quantity: i.quantity || 1,
-            unitPrice: i.unitPrice ?? null,
-            productName: i.productName || this.getProductName(i.productId),
-            returnedQuantity: 0,
-            remark: i.remark || ''
-          }))
-          : [{ productId: this.products.length > 0 ? this.products[0].id : 0, quantity: 1, unitPrice: null, productName: '', returnedQuantity: 0 }]
+        items: rawOfflineItems.map((i: any) => ({
+          productId: i.productId || 0,
+          quantity: i.quantity || 1,
+          unitPrice: i.unitPrice ?? null,
+          productName: i.productName || this.getProductName(i.productId),
+          returnedQuantity: 0,
+          remark: i.remark || ''
+        }))
       };
       this.showModal = true;
       this.cdr.detectChanges();
@@ -953,14 +952,16 @@ export class InvoicesPage implements OnInit, OnDestroy {
       const custId = details.customerId ?? details.CustomerId ?? invoice.customerId ?? invoice.CustomerId ?? 0;
       this.selectedCustomerDetail = this.customers.find(c => c.id === custId);
       this.selectedInvoice = { ...details, customerName: details.customerName || invoice.customerName, customerId: custId };
+      const rawFallbackItems = (details.items || details.Items);
+      const hasValidItems = Array.isArray(rawFallbackItems) && rawFallbackItems.length > 0;
       this.editForm = {
         customerId: custId,
         customerName: details.customerName || invoice.customerName || this.selectedCustomerDetail?.name || '',
         invoiceDate: details.invoiceDate || this.getMYSDate(),
         remark: details.remark || '',
         termType: details.termType || details.TermType || 'CASH SALE',
-        items: ((details.items || details.Items) && (details.items || details.Items).length > 0)
-          ? (details.items || details.Items).map((i: any) => ({
+        items: hasValidItems
+          ? rawFallbackItems.map((i: any) => ({
             productId: i.productId ?? i.ProductId ?? 0,
             quantity: i.quantity ?? i.Quantity ?? 1,
             unitPrice: i.unitPrice ?? i.UnitPrice ?? null,
@@ -968,7 +969,7 @@ export class InvoicesPage implements OnInit, OnDestroy {
             returnedQuantity: 0,
             remark: i.remark ?? i.Remark ?? ''
           }))
-          : [{ productId: this.products.length > 0 ? this.products[0].id : 0, quantity: 1, unitPrice: null, productName: '', returnedQuantity: 0 }]
+          : []
       };
       this.showModal = true;
       this.cdr.detectChanges();
@@ -995,22 +996,24 @@ export class InvoicesPage implements OnInit, OnDestroy {
         if (customerId) {
           this.loadCustomerProductPrices(customerId);
         }
+        const rawSuccessItems = (details.items || details.Items);
+        const hasSuccessItems = Array.isArray(rawSuccessItems) && rawSuccessItems.length > 0;
         this.editForm = {
           customerId: custId,
           customerName: details.customerName || invoice.customerName || this.selectedCustomerDetail?.name || '',
           invoiceDate: details.invoiceDate || this.getMYSDate(),
           remark: details.remark || '',
           termType: details.termType || details.TermType || 'CASH SALE',
-          items: ((details.items || details.Items) && (details.items || details.Items).length > 0)
-            ? (details.items || details.Items).map((i: any) => ({
+          items: hasSuccessItems
+            ? rawSuccessItems.map((i: any) => ({
               productId: i.productId ?? i.ProductId ?? 0,
               quantity: i.quantity ?? i.Quantity ?? 1,
               unitPrice: i.unitPrice ?? i.UnitPrice ?? null,
-              productName: i.productName ?? i.ProductName ?? '',
+              productName: i.productName ?? i.ProductName ?? this.getProductName(i.productId ?? i.ProductId),
               returnedQuantity: i.returnedQuantity ?? i.ReturnedQuantity ?? 0,
               remark: i.remark ?? i.Remark ?? ''
             }))
-            : [{ productId: this.products.length > 0 ? this.products[0].id : 0, quantity: 1, unitPrice: null, productName: '', returnedQuantity: 0 }]
+            : []
         };
         // 保证列表中的该张发票数据与后端实时详情绝对一致
         const matchingInList = this.invoices.find(inv => inv.id === invoice.id);
@@ -1019,6 +1022,9 @@ export class InvoicesPage implements OnInit, OnDestroy {
           matchingInList.customerName = details.customerName || (details.customer?.name) || this.selectedCustomerDetail?.name || matchingInList.customerName;
           matchingInList.customerCode = this.selectedCustomerDetail?.customerCode || this.selectedCustomerDetail?.code || matchingInList.customerCode;
         }
+
+        // 保存至本地离线缓存
+        this.offlineStorage.setCache('inv_detail_' + invoice.id, details);
 
         this.showModal = true;
         this.cdr.detectChanges();
@@ -1473,20 +1479,22 @@ export class InvoicesPage implements OnInit, OnDestroy {
                 if (customerId) {
                   this.loadCustomerProductPrices(customerId);
                 }
-                this.editForm = {
-                  invoiceDate: invRes.invoiceDate || this.getMYSDate(),
-                  remark: invRes.remark || '',
-                  items: ((invRes.items || invRes.Items) && (invRes.items || invRes.Items).length > 0)
-                    ? (invRes.items || invRes.Items).map((i: any) => ({
-                      productId: i.productId ?? i.ProductId ?? 0,
-                      quantity: i.quantity ?? i.Quantity ?? 1,
-                      unitPrice: i.unitPrice ?? i.UnitPrice ?? null,
-                      productName: i.productName ?? i.ProductName ?? '',
-                      returnedQuantity: i.returnedQuantity ?? i.ReturnedQuantity ?? 0,
-                      remark: i.remark ?? i.Remark ?? ''
-                    }))
-                    : [{ productId: this.products.length > 0 ? this.products[0].id : 0, quantity: 1, unitPrice: null, productName: '', returnedQuantity: 0 }]
-                };
+                  const rawCreatedItems = (invRes.items || invRes.Items);
+                  const hasCreatedItems = Array.isArray(rawCreatedItems) && rawCreatedItems.length > 0;
+                  this.editForm = {
+                    invoiceDate: invRes.invoiceDate || this.getMYSDate(),
+                    remark: invRes.remark || '',
+                    items: hasCreatedItems
+                      ? rawCreatedItems.map((i: any) => ({
+                        productId: i.productId ?? i.ProductId ?? 0,
+                        quantity: i.quantity ?? i.Quantity ?? 1,
+                        unitPrice: i.unitPrice ?? i.UnitPrice ?? null,
+                        productName: i.productName ?? i.ProductName ?? this.getProductName(i.productId ?? i.ProductId),
+                        returnedQuantity: i.returnedQuantity ?? i.ReturnedQuantity ?? 0,
+                        remark: i.remark ?? i.Remark ?? ''
+                      }))
+                      : []
+                  };
                 this.showModal = true;
 
                 this.api.previewInvoice(createdInvoiceId).subscribe({
@@ -1540,6 +1548,8 @@ export class InvoicesPage implements OnInit, OnDestroy {
         invInList.customerName = updatedCustomerName;
       }
 
+      this.offlineStorage.setCache('inv_detail_' + this.selectedInvoice.id, this.selectedInvoice);
+
       this.offlineStorage.getQueueItemById(this.selectedInvoice.id).then(async (queueItem) => {
         if (queueItem) {
           queueItem.payload = {
@@ -1589,6 +1599,12 @@ export class InvoicesPage implements OnInit, OnDestroy {
           this.selectedInvoice.customerName = updatedCustomerName;
           this.selectedInvoice.customerId = updatedCustomerId;
           this.selectedInvoice.customerCode = updatedCustomerCode;
+          this.selectedInvoice.items = payload.items;
+          this.selectedInvoice.remark = payload.remark;
+          this.selectedInvoice.termType = payload.termType;
+          const calculatedTotal = (payload.items || []).reduce((sum: number, it: any) => sum + ((Number(it.unitPrice) || 0) * (Number(it.quantity) || 1)), 0);
+          this.selectedInvoice.totalAmount = Math.round((calculatedTotal + Number.EPSILON) * 100) / 100;
+          this.offlineStorage.setCache('inv_detail_' + this.selectedInvoice.id, this.selectedInvoice);
         }
         const invInList = this.invoices.find(inv => inv.id === this.selectedInvoice.id);
         if (invInList) {
@@ -1902,9 +1918,11 @@ export class InvoicesPage implements OnInit, OnDestroy {
   }
 
   getEditFormTotal(): number {
-    if (!this.editForm.items || this.editForm.items.length === 0) return 0;
+    if (!this.editForm.items || this.editForm.items.length === 0) {
+      return Number(this.selectedInvoice?.totalAmount || this.selectedInvoice?.TotalAmount || 0);
+    }
     const total = this.editForm.items.reduce((sum: number, item: any) => {
-      return sum + ((item.unitPrice || 0) * (item.quantity || 0));
+      return sum + ((Number(item.unitPrice) || 0) * (Number(item.quantity) || 0));
     }, 0);
     return Math.round((total + Number.EPSILON) * 100) / 100;
   }

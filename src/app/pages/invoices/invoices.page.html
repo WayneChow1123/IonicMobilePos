@@ -534,6 +534,16 @@
       <button *ngIf="isEditMode" class="add-item-btn" (click)="addItem()">+ Add Item</button>
     </div>
 
+    <!-- Empty Items / Offline Cache Notice -->
+    <div *ngIf="!editForm.items || editForm.items.length === 0" class="form-card" style="text-align:center;padding:24px 16px;background:#fff;border-radius:14px;margin-bottom:12px;border:1px dashed #d1d5db;">
+      <ion-icon name="cloud-offline-outline" style="font-size:36px;color:#9ca3af;margin-bottom:8px;"></ion-icon>
+      <div style="font-size:14px;font-weight:700;color:#374151;">No Items Cached Offline</div>
+      <div style="font-size:11px;color:#6b7280;margin-top:4px;line-height:1.4;">The total invoice balance is preserved. Connect to WiFi to automatically sync full item details.</div>
+      <div *ngIf="isEditMode" style="margin-top:12px;">
+        <button class="add-item-btn" (click)="addItem()">+ Add Item Now</button>
+      </div>
+    </div>
+
     <div *ngFor="let item of editForm.items; let i = index" class="form-card" 
       [style.background]="(item.returnedQuantity || 0) > 0 && (item.returnedQuantity || 0) >= item.quantity ? '#f1f1f1' : '#C5C8E0'"
       [style.opacity]="(item.returnedQuantity || 0) > 0 && (item.returnedQuantity || 0) >= item.quantity ? '0.6' : '1'">

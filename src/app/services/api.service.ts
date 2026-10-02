@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
-import { Observable, of, from, throwError } from 'rxjs';
+import { Observable, of, from, throwError, firstValueFrom } from 'rxjs';
 import { map, tap, catchError, switchMap, timeout } from 'rxjs/operators';
 import { updateInvoiceDocNos, formatDocNo } from '../utils/invoice-helper';
 import { OfflineStorageService } from './offline-storage.service';
@@ -457,10 +457,26 @@ export class ApiService {
         paymentDate: new Date().toISOString()
       } : undefined;
 
+      const offlineDetail = {
+        ...orderData,
+        id: data.offlineReferenceId,
+        invoiceNumber: orderData.orderNumber,
+        docNo: orderData.orderNumber,
+        items: (data.items || []).map((it: any) => ({
+          productId: it.productId,
+          productName: it.productName,
+          quantity: it.quantity,
+          unitPrice: it.unitPrice,
+          remark: it.remark || ''
+        })),
+        isOffline: true
+      };
+
       return from(
         Promise.all([
           this.localDb.insertOrderTransaction(orderData, itemsData, paymentData),
-          this.offlineStorage.enqueue('CREATE_INVOICE', data, data.offlineReferenceId)
+          this.offlineStorage.enqueue('CREATE_INVOICE', data, data.offlineReferenceId),
+          this.offlineStorage.setCache('inv_detail_' + data.offlineReferenceId, offlineDetail)
         ]).then(() => ({
           message: 'Invoice created offline (Saved to local DB & sync queue)',
           invoiceId: data.offlineReferenceId,
@@ -477,7 +493,21 @@ export class ApiService {
     }
 
     return this.http.post(this.baseUrl + '/Invoice/CreateInvoice/invoices', data).pipe(
-      tap(() => this.clearCustomerCache()),
+      tap((res: any) => {
+        this.clearCustomerCache();
+        const serverId = res?.invoiceId || res?.id;
+        if (serverId) {
+          const detail = {
+            ...data,
+            id: serverId,
+            totalAmount: res?.totalAmount || data.totalAmount,
+            invoiceNumber: res?.invoiceNumber || data.invoiceNumber,
+            docNo: formatDocNo(res || data),
+            items: data.items || []
+          };
+          this.offlineStorage.setCache('inv_detail_' + serverId, detail);
+        }
+      }),
       catchError((err: any) => {
         if (err instanceof HttpErrorResponse && err.status === 0) {
           console.warn('[Offline Fallback] Network unreachable, enqueuing invoice locally:', err);
@@ -494,6 +524,48 @@ export class ApiService {
     );
   }
   getStockReadyInvoices(): Observable<any> { return this.http.get(this.baseUrl + '/Invoice/GetStockReadyInvoices/invoices/stock-ready'); }
+
+  private isPrefetchingInvoices = false;
+
+  /**
+   * 连网时自动在后台静默预拉取并缓存发票明细，确保离线脱机时点击发票能看到真实的商品、数量和价格
+   */
+  public async prefetchInvoiceDetails(invoices: any[]): Promise<void> {
+    if (!invoices || !Array.isArray(invoices) || this.isPrefetchingInvoices) return;
+    if (typeof navigator !== 'undefined' && !navigator.onLine) return;
+
+    this.isPrefetchingInvoices = true;
+    try {
+      // 预先缓存最近的 60 张发票明细
+      const targetInvoices = invoices.slice(0, 60);
+      for (const inv of targetInvoices) {
+        if (!inv || !inv.id) continue;
+        if (typeof navigator !== 'undefined' && !navigator.onLine) break;
+
+        const cached = await this.offlineStorage.getCache<any>('inv_detail_' + inv.id);
+        const hasCachedItems = (cached?.items || cached?.Items) && (cached?.items || cached?.Items).length > 0;
+        if (hasCachedItems) {
+          continue;
+        }
+
+        try {
+          const detail: any = await firstValueFrom(
+            this.http.get(this.baseUrl + '/Invoice/GetInvoiceDetails/invoices/' + inv.id).pipe(timeout(3500))
+          );
+          if (detail) {
+            detail.docNo = formatDocNo(detail);
+            await this.offlineStorage.setCache('inv_detail_' + inv.id, detail);
+          }
+        } catch {
+          // 静默忽略单个发票在后台预抓取时的网络波动
+        }
+        // 微小停顿，避免给前端线程和移动网络带来并发压力
+        await new Promise(r => setTimeout(r, 100));
+      }
+    } finally {
+      this.isPrefetchingInvoices = false;
+    }
+  }
 
   getInvoices(params?: any): Observable<any> {
     const fetchOfflineInvoices = async () => {
@@ -536,6 +608,8 @@ export class ApiService {
       tap((res: any) => {
         if (Array.isArray(res) && !params?.customerId) {
           this.offlineStorage.setCache('invoices_list', res);
+          // 在后台静默预抓取发票明细到本地缓存
+          this.prefetchInvoiceDetails(res).catch(() => {});
         }
       }),
       map((res: any) => {
@@ -551,6 +625,29 @@ export class ApiService {
     const fetchOfflineDetail = async () => {
       const cached = await this.offlineStorage.getCache<any>('inv_detail_' + id);
       if (cached) return cached;
+
+      // 检查 localDb 待同步订单
+      try {
+        const pendingOrders = await this.localDb.getPendingOrders();
+        const localMatch = pendingOrders.find(o => String(o.clientId) === String(id) || String(o.serverId) === String(id));
+        if (localMatch) {
+          return {
+            id: localMatch.clientId,
+            invoiceNumber: localMatch.orderNumber,
+            docNo: localMatch.orderNumber,
+            customerId: localMatch.customerId,
+            customerName: localMatch.customerName,
+            orderDate: localMatch.orderDate,
+            invoiceDate: localMatch.orderDate,
+            totalAmount: localMatch.totalAmount,
+            paidAmount: localMatch.paidAmount,
+            balance: localMatch.balance,
+            items: localMatch.items || [],
+            isOffline: true
+          };
+        }
+      } catch {}
+
       const cachedInvoices = await this.offlineStorage.getCache<any[]>('invoices_list') || [];
       return cachedInvoices.find((i: any) => String(i.id) === String(id)) || null;
     };
@@ -585,7 +682,24 @@ export class ApiService {
           if (data.customerName !== undefined) {
             detail.customerName = data.customerName;
           }
+          const calculatedTotal = (detail.items || []).reduce((sum: number, it: any) => sum + ((Number(it.unitPrice) || 0) * (Number(it.quantity) || 1)), 0);
+          detail.totalAmount = Math.round((calculatedTotal + Number.EPSILON) * 100) / 100;
           this.offlineStorage.setCache('inv_detail_' + id, detail);
+        }
+      });
+      this.offlineStorage.getCache<any[]>('invoices_list').then(cached => {
+        if (cached && cached.length > 0) {
+          const item = cached.find((c: any) => String(c.id) === String(id));
+          if (item) {
+            if (data.customerId !== undefined) item.customerId = data.customerId;
+            if (data.customerName !== undefined) item.customerName = data.customerName;
+            if (data.items) {
+              const calculatedTotal = (data.items || []).reduce((sum: number, it: any) => sum + ((Number(it.unitPrice) || 0) * (Number(it.quantity) || 1)), 0);
+              item.totalAmount = Math.round((calculatedTotal + Number.EPSILON) * 100) / 100;
+              item.items = data.items;
+            }
+            this.offlineStorage.setCache('invoices_list', cached);
+          }
         }
       });
       return from(
