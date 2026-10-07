@@ -1,4 +1,5 @@
 import { AlertService } from '../../services/alert.service';
+import { BluetoothPrintService } from '../../services/bluetooth-print.service';
 import Swal from 'sweetalert2';
 import { Component, ChangeDetectorRef, OnDestroy } from '@angular/core';
 import { NavController, AlertController } from '@ionic/angular';
@@ -32,9 +33,9 @@ export class PrinterSettingPage implements OnDestroy {
 
   /** Per-format toggle presets */
   private formatPresets: Record<string, boolean[]> = {
-    'FORMAT 1': [true, true, false, true, false, true, true, true, true, true, true, true, false],
-    'FORMAT 2': [true, false, true, false, true, true, false, true, false, true, false, true, false],
-    'FORMAT 3': [false, true, true, true, false, false, true, false, true, false, true, true, false],
+    'FORMAT 1': [true, true, false, true, false, true, true, true, true, true, true, true, false, true],
+    'FORMAT 2': [true, false, true, false, true, true, false, true, false, true, false, true, false, true],
+    'FORMAT 3': [false, true, true, true, false, false, true, false, true, false, true, true, false, true],
   };
 
   private optionNames = [
@@ -51,15 +52,24 @@ export class PrinterSettingPage implements OnDestroy {
     'Sign on Payment',
     'Footer',
     'Print Product Barcode',
+    'Product Item Spacing',
   ];
 
   contentOptions = this.buildOptions('FORMAT 1');
 
+  isTestingPrint = false;
   private scanSessionId = 0;
   private isScanning = false;
   private activeAlert: HTMLIonAlertElement | null = null;
 
-  constructor(private router: Router, private navCtrl: NavController, private cdr: ChangeDetectorRef, private alertService: AlertService, private alertCtrl: AlertController) {}
+  constructor(
+    private router: Router,
+    private navCtrl: NavController,
+    private cdr: ChangeDetectorRef,
+    private alertService: AlertService,
+    private alertCtrl: AlertController,
+    private btPrint: BluetoothPrintService
+  ) {}
 
   ionViewWillEnter() {
     this.loadSettings();
@@ -131,6 +141,12 @@ export class PrinterSettingPage implements OnDestroy {
         this.selectedFormat = config.selectedFormat ?? 'FORMAT 1';
         if (config.contentOptions) {
           this.contentOptions = config.contentOptions;
+          // Ensure new options like 'Product Item Spacing' exist if upgrading from older settings
+          this.optionNames.forEach(optName => {
+            if (!this.contentOptions.some((o: any) => o.name === optName)) {
+              this.contentOptions.push({ name: optName, enabled: true });
+            }
+          });
         } else {
           this.contentOptions = this.buildOptions(this.selectedFormat);
         }
@@ -201,34 +217,30 @@ export class PrinterSettingPage implements OnDestroy {
 
   private checkBluetoothPermissions(bt: any) {
     const permissions = (window as any).plugins?.permissions;
-    if (!permissions) {
+    if (!permissions || !permissions.BLUETOOTH_CONNECT) {
       this.quickListPairedDevices(bt);
       return;
     }
 
-    const requiredPerms: string[] = [];
-    if (permissions.BLUETOOTH_CONNECT) requiredPerms.push(permissions.BLUETOOTH_CONNECT);
-    if (permissions.BLUETOOTH_SCAN) requiredPerms.push(permissions.BLUETOOTH_SCAN);
-    if (permissions.ACCESS_FINE_LOCATION) requiredPerms.push(permissions.ACCESS_FINE_LOCATION);
-
-    if (requiredPerms.length === 0) {
-      this.quickListPairedDevices(bt);
-      return;
-    }
-
-    permissions.requestPermissions(
-      requiredPerms,
-      (status: any) => {
-        if (status && status.hasPermission) {
-          this.quickListPairedDevices(bt);
-        } else {
-          this.alertService.toast('Bluetooth/Nearby Devices permission required to scan', 'error');
-        }
-      },
-      () => {
+    // On Android 12+, listing paired devices only requires BLUETOOTH_CONNECT
+    permissions.hasPermission(permissions.BLUETOOTH_CONNECT, (status: any) => {
+      if (status && status.hasPermission) {
         this.quickListPairedDevices(bt);
+      } else {
+        permissions.requestPermission(permissions.BLUETOOTH_CONNECT, (s: any) => {
+          if (s && s.hasPermission) {
+            this.quickListPairedDevices(bt);
+          } else {
+            this.alertService.toast('Nearby Devices permission required to access printer', 'warning');
+            this.quickListPairedDevices(bt);
+          }
+        }, () => {
+          this.quickListPairedDevices(bt);
+        });
       }
-    );
+    }, () => {
+      this.quickListPairedDevices(bt);
+    });
   }
 
   private quickListPairedDevices(bt: any) {
@@ -429,7 +441,7 @@ export class PrinterSettingPage implements OnDestroy {
               if (dev && dev.name) {
                 this.deviceName = dev.name;
                 const upper = dev.name.toUpperCase();
-                if (upper.includes('80') || upper.includes('300') || upper.includes('800') || upper.includes('83')) {
+                if (upper.includes('80') || upper.includes('300') || upper.includes('800') || upper.includes('83') || upper.includes('MTP-3') || upper.includes('MTP3') || upper.includes('PT-3')) {
                   this.hardwareWidth = 80;
                 } else {
                   this.hardwareWidth = 48;
@@ -460,6 +472,29 @@ export class PrinterSettingPage implements OnDestroy {
   private buildOptions(format: string) {
     const flags = this.formatPresets[format] || this.formatPresets['FORMAT 1'];
     return this.optionNames.map((name, i) => ({ name, enabled: flags[i] }));
+  }
+
+  async testPrint() {
+    if (!this.macAddress || (this.macAddress === '02:29:DE:43:D8:2C' && !this.deviceName)) {
+      this.alertService.toast('Please tap the sync icon and select your printer first!', 'warning');
+      return;
+    }
+    this.isTestingPrint = true;
+    const config = {
+      paperWidth: Number(this.paperWidth) || 48,
+      hardwareWidth: Number(this.hardwareWidth) || 48,
+      deviceName: this.deviceName,
+      autoAdapt: this.autoAdapt,
+      bottomEmptyLine: this.bottomEmptyLine,
+      printerInterface: this.printerInterface,
+      macAddress: this.macAddress,
+    };
+    try {
+      await this.btPrint.testPrint(config);
+    } finally {
+      this.isTestingPrint = false;
+      this.cdr.detectChanges();
+    }
   }
 
   saveSettings() {

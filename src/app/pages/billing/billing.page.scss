@@ -1297,3 +1297,106 @@ body.dark {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
+
+/* Fullscreen Blocking Loading Overlay */
+.fullscreen-loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 999999;
+  pointer-events: all;
+  touch-action: none;
+  user-select: none;
+  animation: fadeInOverlay 0.2s ease-out;
+
+  .loading-modal-card {
+    background: #ffffff;
+    border-radius: 24px;
+    padding: 32px 28px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    max-width: 320px;
+    width: 85%;
+    box-shadow: 0 24px 48px rgba(0, 0, 0, 0.28);
+    border: 1px solid rgba(255, 255, 255, 0.9);
+    animation: popInCard 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+
+    .spinner-wrapper {
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      background: #eff6ff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 18px;
+
+      ion-spinner {
+        width: 38px;
+        height: 38px;
+        color: #3b82f6;
+      }
+    }
+
+    .loading-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: #0f172a;
+      margin-bottom: 8px;
+      letter-spacing: -0.2px;
+    }
+
+    .loading-subtitle {
+      font-size: 13px;
+      color: #64748b;
+      line-height: 1.5;
+      font-weight: 500;
+      margin-bottom: 16px;
+    }
+
+    .loading-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      background: #f1f5f9;
+      border-radius: 20px;
+      font-size: 11.5px;
+      font-weight: 600;
+      color: #475569;
+
+      ion-icon {
+        font-size: 15px;
+        color: #10b981;
+      }
+    }
+  }
+}
+
+@keyframes fadeInOverlay {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes popInCard {
+  from {
+    opacity: 0;
+    transform: scale(0.9) translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}

@@ -13,7 +13,7 @@ import Swal from 'sweetalert2';
 })
 export class AppComponent implements OnInit {
   showBottomNav = false;
-  activeIndex = 0;
+  activeIndex = 1;
   permissionBlocked = false;
 
   private navPages = [
@@ -73,6 +73,7 @@ export class AppComponent implements OnInit {
   ngOnInit() {
     this.platform.ready().then(() => {
       this.checkAndRequestMandatoryPermissions();
+      this.setupHardwareBackButton();
       
       // When user returns from system Settings to the app, check permissions again
       App.addListener('appStateChange', (state) => {
@@ -80,6 +81,56 @@ export class AppComponent implements OnInit {
           this.checkAndRequestMandatoryPermissions(false);
         }
       });
+    });
+  }
+
+  setupHardwareBackButton() {
+    this.platform.backButton.subscribeWithPriority(0, () => {
+      if (Swal.isVisible()) {
+        Swal.close();
+        return;
+      }
+      const currentUrl = this.router.url.split('?')[0];
+
+      // Hierarchical back mapping so user steps back level by level
+      const pageBackMap: Record<string, string> = {
+        '/pages/printer-setting': 'pages/setting',
+        '/pages/configuration': 'pages/setting',
+        '/pages/setting': 'pages/preferences',
+        '/pages/preferences': 'pages/billing',
+        '/pages/add-product': 'pages/products',
+        '/pages/products': 'pages/home',
+        '/pages/customer-detail': 'pages/customers',
+        '/pages/customers': 'pages/home',
+        '/pages/home': 'pages/billing',
+        '/pages/invoices': 'pages/billing'
+      };
+
+      if (pageBackMap[currentUrl]) {
+        this.navCtrl.navigateRoot(pageBackMap[currentUrl], { animated: false });
+      } else if (currentUrl === '/pages/billing') {
+        this.confirmExitApp();
+      } else {
+        this.goTo('billing', 1);
+      }
+    });
+  }
+
+  confirmExitApp() {
+    Swal.fire({
+      icon: 'question',
+      title: 'Exit App',
+      text: 'Are you sure you want to exit the app?',
+      showCancelButton: true,
+      confirmButtonText: 'Exit',
+      cancelButtonText: 'Cancel',
+      confirmButtonColor: '#e74c3c',
+      cancelButtonColor: '#1a1a1a',
+      reverseButtons: true,
+    }).then((result) => {
+      if (result.isConfirmed) {
+        App.exitApp();
+      }
     });
   }
 

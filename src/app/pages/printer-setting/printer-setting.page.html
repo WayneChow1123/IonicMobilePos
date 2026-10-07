@@ -6,9 +6,15 @@
       <ion-button fill="clear" class="back-btn" (click)="goBack()">
         <ion-icon name="chevron-back-outline"></ion-icon> Back
       </ion-button>
-      <ion-button class="save-btn" (click)="saveSettings()">
-        SAVE SETTINGS
-      </ion-button>
+      <div style="display: flex; gap: 8px; align-items: center;">
+        <ion-button fill="outline" class="test-btn" [disabled]="isTestingPrint" (click)="testPrint()">
+          <ion-icon name="print-outline" slot="start"></ion-icon>
+          {{ isTestingPrint ? 'TESTING...' : 'TEST PRINT' }}
+        </ion-button>
+        <ion-button class="save-btn" (click)="saveSettings()">
+          SAVE SETTINGS
+        </ion-button>
+      </div>
     </div>
 
     <!-- PRINTER PREFERENCES -->
@@ -87,9 +93,18 @@
       <div class="mac-section">
         <span class="mac-label">MAC ADDRESS</span>
         <div class="mac-row">
-          <span class="mac-value">{{ macAddress }}</span>
+          <span class="mac-value">{{ macAddress || 'No printer selected' }}</span>
           <ion-button fill="clear" class="mac-refresh" (click)="refreshMac()">
             <ion-icon name="sync-outline"></ion-icon>
+          </ion-button>
+        </div>
+        <div *ngIf="deviceName" style="font-size: 13px; color: #059669; margin-top: 4px; font-weight: 600;">
+          Device: {{ deviceName }}
+        </div>
+        <div style="margin-top: 12px;">
+          <ion-button expand="block" fill="outline" size="small" [disabled]="isTestingPrint" (click)="testPrint()" style="--color: #2563eb; --border-color: #2563eb; font-weight: 600; font-size: 12px;">
+            <ion-icon name="print-outline" slot="start"></ion-icon>
+            {{ isTestingPrint ? 'Connecting to printer...' : 'Test Printer Connection' }}
           </ion-button>
         </div>
       </div>

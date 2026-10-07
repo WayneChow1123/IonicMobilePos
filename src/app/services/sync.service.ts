@@ -78,22 +78,20 @@ export class SyncService {
     if (typeof window !== 'undefined') {
       window.addEventListener('online', () => {
         console.log('[SyncService] Window online event fired, triggering sync...');
-        this.syncPendingOrders().catch(e => console.error('[SyncService] Window online trigger error:', e));
+        this.syncPendingOrders(true).catch(e => console.error('[SyncService] Window online trigger error:', e));
       });
       window.addEventListener('focus', () => {
-        if (typeof navigator !== 'undefined' && navigator.onLine) {
-          this.syncPendingOrders().catch(e => console.error('[SyncService] Focus trigger error:', e));
-        }
+        this.syncPendingOrders(true).catch(e => console.error('[SyncService] Focus trigger error:', e));
       });
     }
 
     // 4. 定时心跳轮询兜底（每 8 秒）：网络恢复时保证自动无感同步
     setInterval(() => {
-      if (!this.isSyncing && (typeof navigator === 'undefined' || navigator.onLine)) {
+      if (!this.isSyncing) {
         this.offlineStorage.getPendingQueue().then(queue => {
           if (queue && queue.length > 0) {
             console.log('[SyncService] Heartbeat auto-sync trigger: pending items =', queue.length);
-            this.syncPendingOrders().catch(e => console.warn('[SyncService] Heartbeat sync error:', e));
+            this.syncPendingOrders(true).catch(e => console.warn('[SyncService] Heartbeat sync error:', e));
           }
         });
       }
@@ -246,12 +244,15 @@ export class SyncService {
    * 检查当前网络是否可用
    */
   private async checkNetworkConnected(): Promise<boolean> {
+    if (typeof navigator !== 'undefined' && navigator.onLine) {
+      return true;
+    }
     try {
       const status = await Network.getStatus();
       if (status && typeof status.connected === 'boolean') {
         return status.connected;
       }
-    } catch {}
+    } catch { }
     return typeof navigator !== 'undefined' ? navigator.onLine : true;
   }
 
@@ -281,7 +282,15 @@ export class SyncService {
           if (task.type === 'CREATE_INVOICE') {
             const res = await firstValueFrom(this.api.postInvoiceDirect(task.payload));
             const serverId = res?.invoiceId || res?.id || 0;
-            try { await this.localDb.markAsSynced(task.id, serverId); } catch {}
+            try { await this.localDb.markAsSynced(task.id, serverId); } catch { }
+            if (serverId) {
+              const cachedInvs = await this.offlineStorage.getCache<any[]>('invoices_list') || [];
+              const matched = cachedInvs.find(inv => inv.id === task.id || inv.offlineId === task.id);
+              if (matched) {
+                matched.serverId = serverId;
+                await this.offlineStorage.setCache('invoices_list', cachedInvs);
+              }
+            }
             await this.offlineStorage.removeQueueItem(task.id);
             successCount++;
           } else if (task.type === 'UPDATE_INVOICE') {
@@ -344,6 +353,50 @@ export class SyncService {
             }
             await this.offlineStorage.removeQueueItem(task.id);
             successCount++;
+          } else if (task.type === 'CREATE_BULK_PAYMENT') {
+            const url = `${baseUrl}/Payment/CreateBulkPayment/bulk-payments`;
+            const payload = JSON.parse(JSON.stringify(task.payload?.data || task.payload));
+
+            // Map any offline invoiceId to real serverId if available
+            if (Array.isArray(payload?.payments)) {
+              for (const p of payload.payments) {
+                if (typeof p.invoiceId === 'string' && (p.invoiceId.startsWith('offline_') || p.invoiceId.startsWith('inv_'))) {
+                  const order = await this.localDb.getOrderByClientId(p.invoiceId);
+                  if (order && order.serverId) {
+                    p.invoiceId = order.serverId;
+                  } else {
+                    const cachedInvs = await this.offlineStorage.getCache<any[]>('invoices_list') || [];
+                    const matched = cachedInvs.find(inv => inv.id === p.invoiceId || inv.offlineId === p.invoiceId);
+                    if (matched && matched.serverId) {
+                      p.invoiceId = matched.serverId;
+                    }
+                  }
+                }
+                p.invoiceId = Number(p.invoiceId);
+              }
+            }
+
+            try {
+              await firstValueFrom(this.api.postDirect(url, payload));
+            } catch (payErr: any) {
+              const errMsg = payErr?.error?.message || (typeof payErr?.error === 'string' ? payErr?.error : payErr?.message) || '';
+              if (payErr?.status === 400 && String(errMsg).toLowerCase().includes('already fully paid')) {
+                console.log('[SyncService] Bulk payment invoice already settled on server, resolving task:', task.id);
+              } else {
+                throw payErr;
+              }
+            }
+            await this.offlineStorage.removeQueueItem(task.id);
+            successCount++;
+          } else if (task.type === 'DELETE_PAYMENT') {
+            const url = `${baseUrl}/Payment/DeletePayment/payments/${task.payload.paymentId}`;
+            try {
+              await firstValueFrom(this.api.deleteDirect(url));
+            } catch (err: any) {
+              if (err?.status !== 404) throw err;
+            }
+            await this.offlineStorage.removeQueueItem(task.id);
+            successCount++;
           }
         } catch (e: any) {
           console.warn('[SyncService] Failed to sync task:', task.id, task.type, e);
@@ -357,7 +410,7 @@ export class SyncService {
             break;
           }
           task.retryCount = (task.retryCount || 0) + 1;
-          task.lastError = e?.message || 'Data error';
+          task.lastError = e?.error?.message || (typeof e?.error === 'string' ? e.error : e?.message) || 'Data error';
           if (task.retryCount >= this.MAX_RETRY_LIMIT) {
             task.status = 'failed';
           }

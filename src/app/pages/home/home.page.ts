@@ -1,4 +1,4 @@
-﻿import { AlertService } from '../../services/alert.service';
+import { AlertService } from '../../services/alert.service';
 import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
 import { NavController } from '@ionic/angular';
 
@@ -35,7 +35,7 @@ export class HomePage implements OnInit {
   }
 
   goTo(path: string) { this.navCtrl.navigateRoot(path); }
-  goBack() { this.navCtrl.back(); }
+  goBack() { this.navCtrl.navigateRoot('pages/billing'); }
 
 }
 

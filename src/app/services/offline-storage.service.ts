@@ -332,6 +332,23 @@ export class OfflineStorageService {
     }
   }
 
+  public async removeCache(key: string): Promise<void> {
+    try {
+      const db = await this.getDB();
+      await new Promise<void>((resolve, reject) => {
+        const tx = db.transaction(this.STORE_CACHE, 'readwrite');
+        const store = tx.objectStore(this.STORE_CACHE);
+        const req = store.delete(key);
+        req.onsuccess = () => resolve();
+        req.onerror = () => reject(req.error);
+      });
+    } catch {
+      try {
+        localStorage.removeItem('td_cache_' + key);
+      } catch {}
+    }
+  }
+
   // --- LocalStorage Fallback 辅助函数 ---
   private saveToLocalStorageFallback(item: SyncQueueItem): void {
     const list = this.getFromLocalStorageFallback();

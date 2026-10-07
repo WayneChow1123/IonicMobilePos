@@ -57,8 +57,16 @@ export function updateInvoiceDocNos(invoices: any[]): void {
   if (!Array.isArray(invoices)) return;
   cachedInvoicesList = [...invoices];
 
-  // Sort ascending by ID / date so earliest created is index 1
-  const sorted = [...invoices].sort((a, b) => (Number(a.id) || 0) - (Number(b.id) || 0));
+  // Sort ascending by date / timestamp / ID so earliest created is index 1
+  const sorted = [...invoices].sort((a, b) => {
+    const timeA = new Date(a.invoiceDate || a.createdAt || 0).getTime();
+    const timeB = new Date(b.invoiceDate || b.createdAt || 0).getTime();
+    if (timeA !== timeB) return timeA - timeB;
+    const numA = Number(a.id);
+    const numB = Number(b.id);
+    if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+    return String(a.id || '').localeCompare(String(b.id || ''));
+  });
 
   cachedDocNoMap.clear();
 

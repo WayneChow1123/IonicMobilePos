@@ -1,8 +1,9 @@
 import { AlertService } from '../../services/alert.service';
 import Swal from 'sweetalert2';
 import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
-import { NavController } from '@ionic/angular';
+import { NavController, Platform } from '@ionic/angular';
 import { Subscription } from 'rxjs';
+import { App } from '@capacitor/app';
 
 import { Router, ActivatedRoute } from '@angular/router';
 import { CommonModule } from '@angular/common';
@@ -28,8 +29,10 @@ export class BillingPage implements OnInit, OnDestroy {
   private queueCountSub?: Subscription;
   private syncingSub?: Subscription;
   private syncSub?: Subscription;
+  private backButtonSub?: Subscription;
 
   ionViewWillEnter() {
+    this.registerBackButton();
     const action = this.route.snapshot.queryParams['action'];
     if (!action) {
       this.currentView = 'home';
@@ -37,6 +40,7 @@ export class BillingPage implements OnInit, OnDestroy {
     this.loadCustomers();
     this.loadAllInvoices();
     this.loadCreditNotes();
+    this.loadPayments();
     this.offlineStorage.refreshQueueCount();
     this.cdr.detectChanges();
   }
@@ -122,7 +126,7 @@ export class BillingPage implements OnInit, OnDestroy {
   cnForm: any = { customerId: 0, invoiceId: 0, reason: '', items: [] };
   paymentMethods = ['Cash', 'Card', 'Online Transfer', 'Cheque'];
   isFirstATMInput = true;
-  
+
   showInvoiceSelectionModal = false;
   selectedInvoicesList: any[] = [];
   invoiceSearchTerm = '';
@@ -132,6 +136,12 @@ export class BillingPage implements OnInit, OnDestroy {
     { text: 'Cancel', role: 'cancel' },
     { text: 'Delete', role: 'destructive', handler: () => this.deletePayment() }
   ];
+  isSubmittingPayment = false;
+  isSubmittingCN = false;
+  isDeletingPayment = false;
+  isDeletingCN = false;
+  private lastPaymentSubmissionTime = 0;
+  private lastCNSubmissionTime = 0;
   deleteCNButtons = [
     { text: 'Cancel', role: 'cancel' },
     { text: 'Delete', role: 'destructive', handler: () => this.deleteCreditNote() }
@@ -235,7 +245,7 @@ export class BillingPage implements OnInit, OnDestroy {
         this.editCNForm.items.push({
           productId: product.id,
           productName: product.name,
-          quantity: 1,
+          quantity: null,
           unitPrice: price,
           returnToStock: true
         });
@@ -249,7 +259,11 @@ export class BillingPage implements OnInit, OnDestroy {
     // Check if item already exists in the list
     const found = this.cnForm.items.find((i: any) => i.productId === product.id);
     if (found) {
-      found.returnQuantity += 1;
+      if (found.returnQuantity == null) {
+        found.returnQuantity = null;
+      } else {
+        found.returnQuantity = Number(found.returnQuantity) + 1;
+      }
     } else {
       let price = product.price || 0;
       const custPrice = this.getCustomerSpecialPrice(product.id);
@@ -264,12 +278,12 @@ export class BillingPage implements OnInit, OnDestroy {
         unitPrice: price,
         maxQuantity: 9999, // Allow return if selected from all products
         returnedQuantity: 0,
-        returnQuantity: 1,
+        returnQuantity: null,
         returnToStock: false,
-        isGlobal: true 
+        isGlobal: true
       });
     }
-    
+
     // Force UI update
     this.showCNInvoiceFinancials = true;
     this.cnForm.items = [...this.cnForm.items];
@@ -339,7 +353,7 @@ export class BillingPage implements OnInit, OnDestroy {
   }
 
   selectHistoryItem(item: any) {
-    this.cnForm.customerId = Number(item.customerId) || this.cnForm.customerId; 
+    this.cnForm.customerId = Number(item.customerId) || this.cnForm.customerId;
     this.showHistoryModal = false;
 
     // Check if item already exists in the list
@@ -351,14 +365,14 @@ export class BillingPage implements OnInit, OnDestroy {
       this.cnForm.items.push({
         productId: item.productId,
         productName: item.productName,
-        maxQuantity: item.remaining, 
+        maxQuantity: item.remaining,
         returnedQuantity: item.totalReturned,
-        returnQuantity: 0,
+        returnQuantity: null,
         returnToStock: false,
-        isGlobal: true 
+        isGlobal: true
       });
     }
-    
+
     // Force UI update
     this.showCNInvoiceFinancials = true;
     this.cnForm.items = [...this.cnForm.items];
@@ -368,26 +382,29 @@ export class BillingPage implements OnInit, OnDestroy {
   }
 
   constructor(
-    private router: Router, 
-    private route: ActivatedRoute, 
-    private navCtrl: NavController, 
-    private api: ApiService, 
-    private cdr: ChangeDetectorRef, 
+    private router: Router,
+    private route: ActivatedRoute,
+    private navCtrl: NavController,
+    private platform: Platform,
+    private api: ApiService,
+    private cdr: ChangeDetectorRef,
     private alertService: AlertService,
     private appComponent: AppComponent,
     public btPrint: BluetoothPrintService,
     private offlineStorage: OfflineStorageService,
     private syncService: SyncService
-  ) {}
+  ) { }
 
   getDocNo(inv: any): string {
     return inv?.docNo || formatDocNo(inv, this.invoices);
   }
 
   ionViewWillLeave() {
+    this.unregisterBackButton();
   }
 
   ngOnDestroy() {
+    this.unregisterBackButton();
     this.queueCountSub?.unsubscribe();
     this.syncingSub?.unsubscribe();
     this.syncSub?.unsubscribe();
@@ -403,8 +420,10 @@ export class BillingPage implements OnInit, OnDestroy {
       this.loadPayments();
     } else if (res.failCount > 0) {
       this.alertService.confirm(
-        'Sync Issue',
-        `Failed to sync ${res.failCount} task(s) to server. Clear stuck task from offline queue?`
+        'Sync Failed',
+        `Server temporarily returned an error while syncing ${res.failCount} task(s). Your offline data is safely preserved. Clear from queue only if you want to permanently discard it.`,
+        'Discard Task',
+        'Keep & Retry Later'
       ).then(async (clear) => {
         if (clear) {
           const pending = await this.offlineStorage.getPendingQueue();
@@ -414,6 +433,7 @@ export class BillingPage implements OnInit, OnDestroy {
           await this.offlineStorage.refreshQueueCount();
           this.showToastMsg('Offline queue cleared.');
           this.loadCreditNotes();
+          this.loadPayments();
         }
       });
     } else {
@@ -421,8 +441,8 @@ export class BillingPage implements OnInit, OnDestroy {
     }
   }
 
-  ngOnInit() { 
-    this.loadCustomers(); 
+  ngOnInit() {
+    this.loadCustomers();
     this.loadAllInvoices();
 
     this.queueCountSub = this.offlineStorage.queueCount$.subscribe(count => {
@@ -437,19 +457,29 @@ export class BillingPage implements OnInit, OnDestroy {
 
     this.syncSub = this.syncService.syncCompleted$.subscribe(res => {
       if (res.successCount > 0) {
-        if (this.currentView === 'cnList') {
-          this.loadCreditNotes();
-        } else if (this.currentView === 'paymentList') {
-          this.loadPayments();
-        }
+        this.loadPayments();
+        this.loadCreditNotes();
+        this.loadAllInvoices();
       }
     });
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('online', () => {
+        this.syncService.syncPendingOrders(true).then(res => {
+          if (res.successCount > 0) {
+            this.loadPayments();
+            this.loadCreditNotes();
+            this.loadAllInvoices();
+          }
+        }).catch(() => { });
+      });
+    }
 
     this.route.queryParams.subscribe(params => {
       if (params['action'] === 'newCN') {
         const custId = Number(params['customerId']);
         const invId = Number(params['invoiceId']);
-        
+
         // Short delay to ensure data is loaded
         setTimeout(() => {
           this.currentView = 'newCN';
@@ -470,7 +500,7 @@ export class BillingPage implements OnInit, OnDestroy {
           next: (res) => {
             this.payments = Array.isArray(res) ? res : [];
             this.filteredPayments = [...this.payments];
-            
+
             const payment = this.payments.find((p: any) => p.invoiceNumber === invNum);
             if (payment) {
               this.viewPaymentDetails(payment);
@@ -529,51 +559,114 @@ export class BillingPage implements OnInit, OnDestroy {
 
   loadCustomers() {
     this.api.getAllCustomers().subscribe({
-      next: (res) => { 
-        this.customers = Array.isArray(res) ? res : []; 
+      next: (res) => {
+        this.customers = Array.isArray(res) ? res : [];
         this.filteredCustomers = [...this.customers];
         if (this.currentView === 'newPayment' && (!this.paymentForm.customerId || this.paymentForm.customerId === 0) && this.customers.length > 0) {
           this.paymentForm.customerId = this.customers[0].id;
           this.loadInvoicesByCustomer(this.customers[0].id);
         }
       },
-      error: () => {}
+      error: () => { }
     });
   }
 
   loadAllInvoices() {
     this.api.getInvoices({ _t: new Date().getTime() }).subscribe({
-      next: (res) => { 
-        this.invoices = Array.isArray(res) ? res : []; 
+      next: (res) => {
+        this.invoices = Array.isArray(res) ? res : [];
         this.cnFilteredInvoices = [...this.invoices];
       },
-      error: () => {}
+      error: () => { }
     });
   }
 
   paymentInvoices: any[] = [];
 
   loadInvoicesByCustomer(customerId: any) {
-    const cid = Number(customerId);
-    this.api.getInvoices({ customerId: cid, _t: new Date().getTime() }).subscribe({
-      next: (res) => { 
+    const cid = Number(customerId || 0);
+    this.api.getInvoices({ _t: new Date().getTime() }).subscribe({
+      next: (res) => {
         const list = Array.isArray(res) ? res : [];
         console.log('API returned invoices count:', list.length);
-        this.paymentInvoices = list.filter((inv: any) => inv.status !== 'Paid');
+        this.paymentInvoices = list.filter((inv: any) => {
+          const invCid = Number(inv.customerId ?? inv.CustomerId ?? 0);
+          if (cid && cid !== 0 && invCid !== cid) {
+            return false;
+          }
+          const term = inv.termType || inv.TermType;
+          const isCredit = (term === 'On Credit' || term === 'Net 30 Days');
+          if (isCredit && (!inv.payments || inv.payments.length === 0) && inv.status !== 'Paid') {
+            inv.status = 'Unpaid';
+            if (!inv.balance || Number(inv.balance) <= 0.01) {
+              const tot = Number(inv.totalAmount || inv.TotalAmount || 0);
+              const cred = Number(inv.creditUsed || inv.CreditUsed || 0);
+              const cn = Number(inv.cnTotal || inv.CNTotal || 0);
+              inv.balance = Math.max(0, tot - cred - cn);
+              inv.paidAmount = 0;
+            }
+          }
+          const bal = inv.balance ?? inv.Balance ?? (Number(inv.totalAmount || 0) - Number(inv.paidAmount || 0));
+          return inv.status !== 'Paid' && Number(bal) > 0.01;
+        });
         this.filteredPaymentInvoices = [...this.paymentInvoices];
         this.invoiceSearchTerm = '';
-        console.log('Filtered invoices count:', this.paymentInvoices.length);
+        console.log('Filtered payment invoices count:', this.paymentInvoices.length);
         this.cdr.detectChanges(); // Force UI update
       },
-      error: (err) => { console.error('API Error:', err); }
+      error: async (err) => {
+        console.error('API Error:', err);
+        const cached = await this.offlineStorage.getCache<any[]>('invoices_list') || [];
+        this.paymentInvoices = cached.filter((inv: any) => {
+          const invCid = Number(inv.customerId ?? inv.CustomerId ?? 0);
+          if (cid && cid !== 0 && invCid !== cid) {
+            return false;
+          }
+          const term = inv.termType || inv.TermType;
+          const isCredit = (term === 'On Credit' || term === 'Net 30 Days');
+          if (isCredit && (!inv.payments || inv.payments.length === 0) && inv.status !== 'Paid') {
+            inv.status = 'Unpaid';
+            if (!inv.balance || Number(inv.balance) <= 0.01) {
+              const tot = Number(inv.totalAmount || inv.TotalAmount || 0);
+              const cred = Number(inv.creditUsed || inv.CreditUsed || 0);
+              const cn = Number(inv.cnTotal || inv.CNTotal || 0);
+              inv.balance = Math.max(0, tot - cred - cn);
+              inv.paidAmount = 0;
+            }
+          }
+          const bal = inv.balance ?? inv.Balance ?? (Number(inv.totalAmount || 0) - Number(inv.paidAmount || 0));
+          return inv.status !== 'Paid' && Number(bal) > 0.01;
+        });
+        this.filteredPaymentInvoices = [...this.paymentInvoices];
+        this.cdr.detectChanges();
+      }
     });
   }
 
   loadPayments() {
     this.isLoading = true;
+    this.cdr.detectChanges();
     this.api.getPayments().subscribe({
-      next: (res) => { this.payments = Array.isArray(res) ? res : []; this.filteredPayments = [...this.payments]; this.isLoading = false; },
-      error: () => { this.isLoading = false; }
+      next: (res) => {
+        const raw = Array.isArray(res) ? res : [];
+        this.payments = raw.map((p: any) => ({
+          ...p,
+          customerName: p.customerName || p.CustomerName || '',
+          invoiceNumber: p.invoiceNumber || p.InvoiceNumber || '',
+          amount: Number(p.amount ?? p.Amount ?? 0),
+          method: p.method || p.Method || 'CASH',
+          paymentDate: p.paymentDate || p.PaymentDate || '',
+          referenceNo: p.referenceNo || p.ReferenceNo || ''
+        }));
+        this.filteredPayments = [...this.payments];
+        this.isLoading = false;
+        this.cdr.detectChanges();
+      },
+      error: (err) => {
+        console.error('Failed to load payments:', err);
+        this.isLoading = false;
+        this.cdr.detectChanges();
+      }
     });
   }
 
@@ -735,13 +828,19 @@ export class BillingPage implements OnInit, OnDestroy {
   }
 
   filterPayments() {
-    this.filteredPayments = this.payments.filter(p =>
-      (p.customerName || '').toLowerCase().includes(this.paymentSearchTerm.toLowerCase()) ||
-      (p.invoiceNumber || '').toLowerCase().includes(this.paymentSearchTerm.toLowerCase()) ||
-      (p.docNo || '').toLowerCase().includes(this.paymentSearchTerm.toLowerCase()) ||
-      this.getDocNo(p.invoiceNumber || p).toLowerCase().includes(this.paymentSearchTerm.toLowerCase()) ||
-      (p.referenceNo || '').toLowerCase().includes(this.paymentSearchTerm.toLowerCase())
-    );
+    const term = (this.paymentSearchTerm || '').trim().toLowerCase();
+    if (!term) {
+      this.filteredPayments = [...this.payments];
+    } else {
+      this.filteredPayments = this.payments.filter(p =>
+        (p.customerName || '').toLowerCase().includes(term) ||
+        (p.invoiceNumber || '').toLowerCase().includes(term) ||
+        (p.docNo || '').toLowerCase().includes(term) ||
+        this.getDocNo(p.invoiceNumber || p).toLowerCase().includes(term) ||
+        (p.referenceNo || '').toLowerCase().includes(term)
+      );
+    }
+    this.cdr.detectChanges();
   }
 
   filterCreditNotes() {
@@ -765,12 +864,8 @@ export class BillingPage implements OnInit, OnDestroy {
   }
 
   openInvoiceModal() {
-    if (!this.paymentForm.customerId || this.paymentForm.customerId === 0) {
-      this.showToastMsg('Please select a customer first');
-      return;
-    }
     this.invoiceSearchTerm = '';
-    this.loadInvoicesByCustomer(this.paymentForm.customerId);
+    this.loadInvoicesByCustomer(this.paymentForm.customerId || 0);
     this.currentView = 'selectInvoices';
     this.cdr.detectChanges();
   }
@@ -783,7 +878,8 @@ export class BillingPage implements OnInit, OnDestroy {
       this.filteredPaymentInvoices = this.paymentInvoices.filter(inv =>
         (inv.invoiceNumber || '').toLowerCase().includes(term) ||
         (inv.docNo || '').toLowerCase().includes(term) ||
-        this.getDocNo(inv).toLowerCase().includes(term)
+        this.getDocNo(inv).toLowerCase().includes(term) ||
+        (inv.customerName || inv.CustomerName || '').toLowerCase().includes(term)
       );
     }
     this.cdr.detectChanges();
@@ -813,7 +909,19 @@ export class BillingPage implements OnInit, OnDestroy {
     this.cdr.detectChanges();
   }
 
-  openPaymentList() { this.paymentSearchTerm = ''; this.loadPayments(); this.currentView = 'paymentList'; }
+  openPaymentList() {
+    this.paymentSearchTerm = '';
+    this.currentView = 'paymentList';
+    this.loadPayments();
+    this.cdr.detectChanges();
+    if (typeof navigator !== 'undefined' && navigator.onLine) {
+      this.syncService.syncPendingOrders(true).then(res => {
+        if (res.successCount > 0) {
+          this.loadPayments();
+        }
+      }).catch(() => { });
+    }
+  }
   viewPaymentDetails(payment: any) {
     this.showPaymentPreview = false;
     this.isLoading = true;
@@ -841,12 +949,17 @@ export class BillingPage implements OnInit, OnDestroy {
         if (this.printerSettings.autoAdapt === undefined) {
           this.printerSettings.autoAdapt = true;
         }
+        if (!this.printerSettings.printerInterface) {
+          this.printerSettings.printerInterface = 'Bluetooth';
+        }
       } catch (e) {
         console.error(e);
       }
     }
     if (!this.printerSettings) {
       this.printerSettings = {
+        printerInterface: 'Bluetooth',
+        macAddress: '',
         paperWidth: 58,
         autoAdapt: true,
         bottomEmptyLine: 5,
@@ -863,7 +976,8 @@ export class BillingPage implements OnInit, OnDestroy {
           { name: 'Sign on Credit Note', enabled: true },
           { name: 'Sign on Payment', enabled: true },
           { name: 'Footer', enabled: true },
-          { name: 'Print Product Barcode', enabled: false }
+          { name: 'Print Product Barcode', enabled: false },
+          { name: 'Product Item Spacing', enabled: true }
         ]
       };
     }
@@ -894,7 +1008,7 @@ export class BillingPage implements OnInit, OnDestroy {
       this.btPrint.printPayment(this.selectedPaymentDetail, this.printerSettings, this.customers, this.allProducts);
       return;
     }
-    
+
     let iframe = document.getElementById('print-iframe') as HTMLIFrameElement;
     if (!iframe) {
       iframe = document.createElement('iframe');
@@ -910,8 +1024,8 @@ export class BillingPage implements OnInit, OnDestroy {
     const printWindow = iframe.contentWindow || (iframe.contentDocument as any)?.defaultView;
     if (!printWindow) { this.showToastMsg('Failed to initialize print iframe'); return; }
 
-    const isSmall = !this.printerSettings?.paperWidth || 
-      this.printerSettings.paperWidth <= 58 || 
+    const isSmall = !this.printerSettings?.paperWidth ||
+      this.printerSettings.paperWidth <= 58 ||
       (this.printerSettings?.autoAdapt !== false && (!this.printerSettings?.hardwareWidth || this.printerSettings.hardwareWidth <= 58));
     const width = isSmall ? '360px' : '480px';
     const styles = `<style>* { margin: 0; padding: 0; box-sizing: border-box; } body { font-family: 'Courier New', monospace; background: #F0EBE3; display: flex; justify-content: center; padding: 40px 20px; } .receipt { background: #fff; border-radius: 24px; padding: 40px 36px; max-width: ${width}; width: 100%; box-shadow: 0 4px 24px rgba(0,0,0,0.08); } .receipt-type { display: block; text-align: center; font-size: 13px; letter-spacing: 6px; color: #888; margin-bottom: 16px; } .divider { height: 1px; background: #1a1a1a; margin: 12px 0; } .divider-thin { height: 1px; background: #ddd; margin: 12px 0; } .company { text-align: center; font-size: 22px; font-weight: 700; margin: 12px 0 4px; } .co-reg { display: block; text-align: center; font-size: 12px; color: #888; margin-bottom: 8px; } .address { display: block; text-align: center; font-size: 11px; color: #666; line-height: 1.6; } .contact { display: block; text-align: center; font-size: 11px; color: #888; margin-top: 6px; } .doc-row { display: flex; gap: 12px; margin: 4px 0; } .doc-label { font-size: 12px; font-weight: 700; min-width: 70px; } .doc-value { font-size: 12px; font-weight: 700; } .to-section { margin: 16px 0; } .to-label { font-size: 12px; font-style: italic; color: #888; } .to-box { border: 1px solid #ddd; border-radius: 8px; padding: 12px; margin-top: 6px; font-size: 12px; line-height: 1.6; } .table-header { display: flex; justify-content: space-between; font-size: 11px; font-weight: 700; font-style: italic; } .item-row { margin: 12px 0; } .item-desc { display: flex; justify-content: space-between; font-size: 12px; font-weight: 700; } .item-calc { font-size: 11px; color: #888; margin-top: 2px; display: flex; justify-content: space-between; } .total-row { display: flex; justify-content: space-between; font-size: 12px; margin: 4px 0; } .net-bar { background: #1a1a1a; color: #fff; border-radius: 8px; padding: 14px 20px; display: flex; justify-content: space-between; align-items: center; margin: 16px 0; } .net-label { font-size: 12px; font-weight: 700; font-style: italic; } .net-value { font-size: 20px; font-weight: 700; } .due-box { border: 1px solid #ddd; border-radius: 8px; padding: 16px; text-align: center; margin: 16px 0; } .due-label { display: block; font-size: 10px; letter-spacing: 3px; color: #888; margin-bottom: 6px; } .due-date { font-size: 18px; font-weight: 700; } .sig-box { border: 1px solid #ddd; border-radius: 8px; padding: 16px; min-height: 100px; margin: 16px 0; } .sig-label { font-size: 11px; color: #ccc; font-style: italic; } .thanks { text-align: center; font-size: 12px; letter-spacing: 6px; color: #ccc; margin-top: 20px; }</style>`;
@@ -957,25 +1071,25 @@ export class BillingPage implements OnInit, OnDestroy {
     let itemsHtml = '';
     const items = pd.invoice?.items || [];
     items.forEach((item: any, i: number) => {
-      const subtotal = item.total.toFixed(2);
-      itemsHtml += `<div class="item-row"><div class="item-desc"><span>${i + 1}. ${item.productName}</span></div><div class="item-calc"><span>${item.quantity} x ${(item.unitPrice || 0).toFixed(2)}</span><span>${subtotal}</span></div></div>`;
+      const subtotal = (Number(item.total != null ? item.total : ((Number(item.quantity) || 1) * (Number(item.unitPrice) || 0)))).toFixed(2);
+      itemsHtml += `<div class="item-row"><div class="item-desc"><span>${i + 1}. ${item.productName || 'Item'}</span></div><div class="item-calc"><span>${item.quantity || 1} x ${(Number(item.unitPrice) || 0).toFixed(2)}</span><span>${subtotal}</span></div></div>`;
     });
 
     const receiptNumber = pd.receiptNumber || `RCPT-${pd.id}`;
     const invoiceNumber = this.getDocNo(pd.invoice || pd.invoiceNumber);
-    
+
     const paymentDetailHtml = `<div style="padding:12px 20px;border:1px dashed #ddd;border-radius:8px;margin-bottom:16px;background:#fcfcfc;">
-        <div style="display:flex;justify-content:space-between;font-size:12px;font-weight:700;padding:3px 0;"><span>PAYMENT METHOD</span><span style="text-transform:uppercase;">${pd.paymentMethod}</span></div>
+        <div style="display:flex;justify-content:space-between;font-size:12px;font-weight:700;padding:3px 0;"><span>PAYMENT METHOD</span><span style="text-transform:uppercase;">${pd.paymentMethod || 'CASH'}</span></div>
         ${pd.referenceNo ? `<div style="display:flex;justify-content:space-between;font-size:12px;font-weight:700;padding:3px 0;"><span>REFERENCE NO</span><span>${pd.referenceNo}</span></div>` : ''}
-        <div style="display:flex;justify-content:space-between;font-size:12px;font-weight:700;padding:3px 0;border-top:1px dashed #eee;margin-top:6px;padding-top:6px;"><span>INVOICE TOTAL</span><span>RM ${(pd.invoice?.totalAmount || 0).toFixed(2)}</span></div>
-        <div style="display:flex;justify-content:space-between;font-size:12px;font-weight:700;padding:3px 0;"><span>INVOICE BALANCE</span><span>RM ${(pd.invoice?.balance || 0).toFixed(2)}</span></div>
+        <div style="display:flex;justify-content:space-between;font-size:12px;font-weight:700;padding:3px 0;border-top:1px dashed #eee;margin-top:6px;padding-top:6px;"><span>INVOICE TOTAL</span><span>RM ${(Number(pd.invoice?.totalAmount) || 0).toFixed(2)}</span></div>
+        <div style="display:flex;justify-content:space-between;font-size:12px;font-weight:700;padding:3px 0;"><span>INVOICE BALANCE</span><span>RM ${(Number(pd.invoice?.balance) || 0).toFixed(2)}</span></div>
     </div>`;
 
     let sigBoxHtml = '';
     if (this.isOptionEnabled('Sign on Payment')) {
       sigBoxHtml = `<div class="sig-box"><span class="sig-label">PAYMENT RECEIVED SIGNATURE</span></div>`;
     }
-    
+
     let footerHtml = '';
     if (this.isOptionEnabled('Footer')) {
       footerHtml = `<div class="thanks">THANK YOU</div>`;
@@ -987,7 +1101,7 @@ export class BillingPage implements OnInit, OnDestroy {
       emptyLinesHtml += `<div style="height: 20px;"></div>`;
     }
 
-    printWindow.document.write(`<!DOCTYPE html><html><head><title>Receipt ${receiptNumber}</title>${styles}</head><body><div class="receipt"><span class="receipt-type">OFFICIAL RECEIPT</span><div class="divider"></div>${companyHeaderHtml}<div style="margin-top:20px;"><div class="doc-row"><span class="doc-label">RECEIPT NO</span><span class="doc-value">: ${receiptNumber}</span></div><div class="doc-row"><span class="doc-label">INVOICE NO</span><span class="doc-value">: ${invoiceNumber}</span></div>${dateHtml}</div>${customerBoxHtml}<div class="divider-thin"></div><div class="table-header"><span>DESCRIPTION</span><span>SUBTOTAL</span></div><div class="divider-thin"></div>${itemsHtml}<div class="divider-thin"></div>${paymentDetailHtml}<div class="net-bar"><span class="net-label">PAYMENT RECEIVED</span><span class="net-value">RM ${pd.paymentAmount.toFixed(2)}</span></div>${sigBoxHtml}${footerHtml}${emptyLinesHtml}</div></body></html>`);
+    printWindow.document.write(`<!DOCTYPE html><html><head><title>Receipt ${receiptNumber}</title>${styles}</head><body><div class="receipt"><span class="receipt-type">OFFICIAL RECEIPT</span><div class="divider"></div>${companyHeaderHtml}<div style="margin-top:20px;"><div class="doc-row"><span class="doc-label">RECEIPT NO</span><span class="doc-value">: ${receiptNumber}</span></div><div class="doc-row"><span class="doc-label">INVOICE NO</span><span class="doc-value">: ${invoiceNumber}</span></div>${dateHtml}</div>${customerBoxHtml}<div class="divider-thin"></div><div class="table-header"><span>DESCRIPTION</span><span>SUBTOTAL</span></div><div class="divider-thin"></div>${itemsHtml}<div class="divider-thin"></div>${paymentDetailHtml}<div class="net-bar"><span class="net-label">PAYMENT RECEIVED</span><span class="net-value">RM ${(Number(pd.paymentAmount) || 0).toFixed(2)}</span></div>${sigBoxHtml}${footerHtml}${emptyLinesHtml}</div></body></html>`);
     printWindow.document.close();
     setTimeout(() => printWindow.print(), 500);
   }
@@ -1208,11 +1322,22 @@ export class BillingPage implements OnInit, OnDestroy {
 
   removeCNItem(item: any) {
     if (!this.cnForm?.items) return;
-    const idx = this.cnForm.items.indexOf(item);
-    if (idx > -1) {
-      this.cnForm.items.splice(idx, 1);
-      this.cnForm.items = [...this.cnForm.items];
-    }
+    const prodName = item?.productName || item?.name || 'this product';
+    this.alertService.confirm(
+      'Remove Product',
+      `Are you sure you want to remove "${prodName}" from the credit note?`,
+      'Yes, remove',
+      'Cancel'
+    ).then((confirmed) => {
+      if (confirmed) {
+        const idx = this.cnForm.items.indexOf(item);
+        if (idx > -1) {
+          this.cnForm.items.splice(idx, 1);
+          this.cnForm.items = [...this.cnForm.items];
+          this.cdr.detectChanges();
+        }
+      }
+    });
   }
 
   getSelectedPaymentCustomer(): any {
@@ -1286,7 +1411,7 @@ export class BillingPage implements OnInit, OnDestroy {
               unitPrice: Number(item.unitPrice || item.price || 0),
               maxQuantity: Math.max(1, remainingQty),
               returnedQuantity: item.returnedQuantity || 0,
-              returnQuantity: 0,
+              returnQuantity: null,
               returnToStock: false
             };
           });
@@ -1300,7 +1425,7 @@ export class BillingPage implements OnInit, OnDestroy {
           this.selectedCNInvoiceDetail = res;
           const cid = res.customerId || (res.customer ? res.customer.id : 0);
           if (cid) {
-            this.cnForm.customerId = Number(cid); 
+            this.cnForm.customerId = Number(cid);
             this.loadCustomerProductPrices(Number(cid));
           }
           if (loadProducts) {
@@ -1316,7 +1441,7 @@ export class BillingPage implements OnInit, OnDestroy {
                     unitPrice: Number(item.unitPrice || item.price || 0),
                     maxQuantity: remainingQty,
                     returnedQuantity: item.returnedQuantity || 0,
-                    returnQuantity: 0,
+                    returnQuantity: null,
                     returnToStock: false
                   });
                 }
@@ -1345,6 +1470,10 @@ export class BillingPage implements OnInit, OnDestroy {
     } else {
       this.paymentForm.invoiceIds.push(inv.id);
       this.selectedInvoicesList.push(inv);
+      const invCid = Number(inv.customerId ?? inv.CustomerId ?? 0);
+      if (invCid && (!this.paymentForm.customerId || this.paymentForm.customerId === 0)) {
+        this.paymentForm.customerId = invCid;
+      }
     }
   }
 
@@ -1373,18 +1502,18 @@ export class BillingPage implements OnInit, OnDestroy {
 
   handleATMInput(event: any) {
     const key = event.key;
-    
+
     // Allow Tab and Enter to pass through without blocking
     if (key === 'Tab' || key === 'Enter') {
       return;
     }
-    
+
     // Prevent default typing/navigation behavior for numbers, Backspace, and other characters
     event.preventDefault();
-    
+
     const balance = this.getBulkBalance();
     let digits = '';
-    
+
     if (this.isFirstATMInput && key >= '0' && key <= '9') {
       this.isFirstATMInput = false;
       digits = key;
@@ -1392,13 +1521,13 @@ export class BillingPage implements OnInit, OnDestroy {
       if (key >= '0' && key <= '9') {
         this.isFirstATMInput = false;
       }
-      
+
       let currentCents = Math.round((this.paymentForm.amount || 0) * 100);
       let centsStr = currentCents.toString();
       if (centsStr === '0' || centsStr === 'NaN') {
         centsStr = '';
       }
-      
+
       if (key >= '0' && key <= '9') {
         centsStr += key;
       } else if (key === 'Backspace') {
@@ -1408,14 +1537,14 @@ export class BillingPage implements OnInit, OnDestroy {
       }
       digits = centsStr;
     }
-    
+
     const rawVal = digits ? parseInt(digits, 10) : 0;
     let newVal = rawVal / 100;
-    
+
     if (newVal > balance) {
       newVal = balance;
     }
-    
+
     this.paymentForm.amount = newVal;
   }
 
@@ -1465,15 +1594,15 @@ export class BillingPage implements OnInit, OnDestroy {
     }
     const balance = this.getBulkBalance();
     const amount = Number(this.paymentForm.amount);
-    
+
     if (isNaN(amount) || amount <= 0) {
       return 'Amount must be greater than 0';
     }
-    
+
     if (amount > balance) {
       return `Amount cannot exceed the balance due: RM ${balance.toFixed(2)}`;
     }
-    
+
     return null;
   }
 
@@ -1485,17 +1614,28 @@ export class BillingPage implements OnInit, OnDestroy {
   }
 
   savePayment() {
+    if (this.isSubmittingPayment) return;
+    const now = Date.now();
+    if (now - this.lastPaymentSubmissionTime < 3000) {
+      console.warn('[Billing] Duplicate payment click prevented');
+      return;
+    }
+
     if (!this.paymentForm.customerId) { this.showToastMsg('Please select a customer'); return; }
-    
+
     const errorMsg = this.getPaymentAmountValidationError();
     if (errorMsg) { this.showToastMsg(errorMsg); return; }
-    
+
+    this.isSubmittingPayment = true;
+    this.lastPaymentSubmissionTime = now;
+    this.cdr.detectChanges();
+
     const totalInputAmount = Number(this.paymentForm.amount);
 
     // Distribute payment — each invoice gets at most its own balance
     let remainingAmount = totalInputAmount;
     const payments = [];
-    
+
     // Sort invoices oldest first based on invoiceDate
     const sortedInvoices = [...this.selectedInvoicesList].sort((a, b) => {
       const dateA = new Date(a.invoiceDate || 0).getTime();
@@ -1517,6 +1657,8 @@ export class BillingPage implements OnInit, OnDestroy {
     }
 
     if (payments.length === 0) {
+      this.isSubmittingPayment = false;
+      this.cdr.detectChanges();
       this.showToastMsg('Could not distribute payment amount to selected invoices.'); return;
     }
 
@@ -1533,9 +1675,37 @@ export class BillingPage implements OnInit, OnDestroy {
       ? `Payment recorded! Excess RM ${excess.toFixed(2)} converted to Credit Note.`
       : 'Bulk Payment created successfully!';
 
-    this.api.createBulkPayment(payload).subscribe({
-      next: () => { this.showToastMsg(successMsg); this.openPaymentList(); },
+    const extraInfo = {
+      customer: this.customers.find((c: any) => c.id == this.paymentForm.customerId),
+      customerName: this.customers.find((c: any) => c.id == this.paymentForm.customerId)?.name,
+      invoices: sortedInvoices,
+      excess: excess
+    };
+
+    this.api.createBulkPayment(payload, extraInfo).subscribe({
+      next: (res: any) => {
+        this.isSubmittingPayment = false;
+        this.cdr.detectChanges();
+        if (res?.isOffline) {
+          const offlineSuccess = excess > 0.01
+            ? `Payment saved offline! Excess RM ${excess.toFixed(2)} converted to offline CN.`
+            : 'Payment saved offline! (Queued for sync)';
+          this.showToastMsg(offlineSuccess);
+          if (res.lastPaymentDetail) {
+            this.selectedPaymentDetail = res.lastPaymentDetail;
+            this.currentView = 'paymentDetails';
+            this.showPaymentPreview = true;
+          } else {
+            this.openPaymentList();
+          }
+        } else {
+          this.showToastMsg(successMsg);
+          this.openPaymentList();
+        }
+      },
       error: (err: any) => {
+        this.isSubmittingPayment = false;
+        this.cdr.detectChanges();
         const errBody = err.error;
         this.showToastMsg('Failed: ' + (errBody?.message || errBody || err.message || 'error'));
       }
@@ -1571,15 +1741,22 @@ export class BillingPage implements OnInit, OnDestroy {
   }
 
   saveCreditNote() {
+    if (this.isSubmittingCN) return;
+    const now = Date.now();
+    if (now - this.lastCNSubmissionTime < 3000) {
+      console.warn('[Billing] Duplicate CN click prevented');
+      return;
+    }
+
     if (!this.cnForm.customerId || this.cnForm.customerId == 0) {
       // If no customer selected, try to get from items
       if (this.cnForm.items.length > 0) {
         // Already set in selectHistoryItem
       } else {
-        this.showToastMsg('Please select a customer'); return; 
+        this.showToastMsg('Please select a customer'); return;
       }
     }
-    
+
     const itemsToReturn = this.cnForm.items.filter((i: any) => i.returnQuantity > 0);
     if (itemsToReturn.length === 0) {
       this.showToastMsg('Please select at least one item to return');
@@ -1612,11 +1789,17 @@ export class BillingPage implements OnInit, OnDestroy {
     const customerName = customer ? customer.name : (this.cnForm.customerName || '');
     const extraInfo = { customerName, customerId: this.cnForm.customerId };
 
+    this.isSubmittingCN = true;
+    this.lastCNSubmissionTime = now;
+    this.cdr.detectChanges();
+
     console.log('[CN DEBUG] payload', payload, 'invoiceId', this.cnForm.invoiceId, 'useGlobalMode', useGlobalMode);
     if (!useGlobalMode) {
       const invId = this.cnForm.invoiceId;
       this.api.createCreditNote(invId, payload, extraInfo).subscribe({
         next: (res: any) => {
+          this.isSubmittingCN = false;
+          this.cdr.detectChanges();
           if (res?.isOffline) {
             this.showToastMsg('Credit Note saved offline! (Queued for sync)');
           } else {
@@ -1624,21 +1807,34 @@ export class BillingPage implements OnInit, OnDestroy {
           }
           this.openCNList();
         },
-        error: (err: any) => { console.error('[CN ERROR]', err); const detail = typeof err.error === 'string' ? err.error : JSON.stringify(err.error); this.showToastMsg('Failed: ' + (err.error?.message || detail || err.message || 'error')); }
+        error: (err: any) => {
+          this.isSubmittingCN = false;
+          this.cdr.detectChanges();
+          console.error('[CN ERROR]', err);
+          const detail = typeof err.error === 'string' ? err.error : JSON.stringify(err.error);
+          this.showToastMsg('Failed: ' + (err.error?.message || detail || err.message || 'error'));
+        }
       });
     } else {
       // 智能全局模式：支持跨单退货
-      const payloadGlobal = { 
-        reason: (this.cnForm.reason?.trim() ?? ''), 
-        items: payloadItems, 
+      const payloadGlobal = {
+        reason: (this.cnForm.reason?.trim() ?? ''),
+        items: payloadItems,
         isManual: true,
         preferredInvoiceId: (this.cnForm.invoiceId && !isOfflineInvoice && this.cnForm.invoiceId != 0 && !isNaN(Number(this.cnForm.invoiceId))) ? Number(this.cnForm.invoiceId) : null
       };
       const cid = this.cnForm.customerId || (this.selectedCNInvoiceDetail?.customerId) || 0;
-      if (!cid || cid == 0) { this.showToastMsg('Customer ID is required for global return'); return; }
+      if (!cid || cid == 0) {
+        this.isSubmittingCN = false;
+        this.cdr.detectChanges();
+        this.showToastMsg('Customer ID is required for global return');
+        return;
+      }
 
       this.api.createGlobalCreditNote(Number(cid), payloadGlobal, extraInfo).subscribe({
         next: (res: any) => {
+          this.isSubmittingCN = false;
+          this.cdr.detectChanges();
           if (res?.isOffline) {
             this.showToastMsg('Global Credit Note saved offline! (Queued for sync)');
           } else {
@@ -1646,28 +1842,50 @@ export class BillingPage implements OnInit, OnDestroy {
           }
           this.openCNList();
         },
-        error: (err: any) => this.showToastMsg('Failed: ' + (err.error?.message || err.error || err.message || 'error'))
+        error: (err: any) => {
+          this.isSubmittingCN = false;
+          this.cdr.detectChanges();
+          this.showToastMsg('Failed: ' + (err.error?.message || err.error || err.message || 'error'));
+        }
       });
     }
   }
 
-  confirmDeletePayment(payment: any) { this.selectedPayment = payment; this.alertService.confirm('Delete Payment', 'Are you sure?').then(c => { if(c) this.deletePayment(); }); }
+  confirmDeletePayment(payment: any) { this.selectedPayment = payment; this.alertService.confirm('Delete Payment', 'Are you sure?').then(c => { if (c) this.deletePayment(); }); }
   deletePayment() {
-    if (!this.selectedPayment) return;
+    if (!this.selectedPayment || this.isDeletingPayment) return;
+    this.isDeletingPayment = true;
+    this.cdr.detectChanges();
     this.api.deletePayment(this.selectedPayment.id).subscribe({
-      next: () => { this.showToastMsg('Payment deleted!'); this.loadPayments(); },
-      error: (err: any) => this.showToastMsg('Failed: ' + (err.error || err.message || 'error'))
+      next: (res: any) => {
+        this.isDeletingPayment = false;
+        if (res?.isOffline) {
+          this.showToastMsg('Payment deleted offline!');
+        } else {
+          this.showToastMsg('Payment deleted!');
+        }
+        this.loadPayments();
+        this.loadAllInvoices();
+        this.cdr.detectChanges();
+      },
+      error: (err: any) => {
+        this.isDeletingPayment = false;
+        this.showToastMsg('Failed: ' + (err.error || err.message || 'error'));
+        this.cdr.detectChanges();
+      }
     });
   }
 
   confirmDeleteCN(cn: any) {
     this.selectedCN = cn;
-    this.alertService.confirm('Delete Credit Note', 'Are you sure you want to delete ' + (cn.cnNumber || 'CN-' + cn.id) + '?').then(c => { if(c) this.deleteCreditNote(); });
+    this.alertService.confirm('Delete Credit Note', 'Are you sure you want to delete ' + (cn.cnNumber || 'CN-' + cn.id) + '?').then(c => { if (c) this.deleteCreditNote(); });
   }
 
   async deleteCreditNote() {
     const target = this.selectedCNDetail || this.selectedCN;
-    if (!target) return;
+    if (!target || this.isDeletingCN) return;
+    this.isDeletingCN = true;
+    this.cdr.detectChanges();
 
     const isOfflineCN = target.isOffline || String(target.id).startsWith('cn_');
 
@@ -1684,6 +1902,7 @@ export class BillingPage implements OnInit, OnDestroy {
       const updatedCache = cached.filter(c => String(c.id) !== String(target.id));
       await this.offlineStorage.setCache('credit_notes_list', updatedCache);
 
+      this.isDeletingCN = false;
       this.showToastMsg('Offline Credit Note deleted!');
       this.showCNActionsDropdown = false;
       if (this.currentView === 'cnDetails') {
@@ -1700,6 +1919,7 @@ export class BillingPage implements OnInit, OnDestroy {
 
     this.api.deleteCreditNote(invId, cnId).subscribe({
       next: async (res: any) => {
+        this.isDeletingCN = false;
         if (res?.isOffline) {
           this.showToastMsg('Credit Note marked for deletion (Queued for sync)!');
         } else {
@@ -1715,7 +1935,11 @@ export class BillingPage implements OnInit, OnDestroy {
         }
         this.cdr.detectChanges();
       },
-      error: (err: any) => this.showToastMsg('Failed: ' + (err.error?.message || err.error || err.message || 'error'))
+      error: (err: any) => {
+        this.isDeletingCN = false;
+        this.showToastMsg('Failed: ' + (err.error?.message || err.error || err.message || 'error'));
+        this.cdr.detectChanges();
+      }
     });
   }
 
@@ -1768,7 +1992,7 @@ export class BillingPage implements OnInit, OnDestroy {
         this.selectedCNDetail = { ...this.selectedCNDetail, ...res, amount: res.amount != null ? res.amount : this.selectedCNDetail.amount, Items: norm, items: norm };
         this.cdr.detectChanges();
       },
-      error: () => {}
+      error: () => { }
     });
   }
 
@@ -1829,6 +2053,7 @@ export class BillingPage implements OnInit, OnDestroy {
   }
 
   saveEditCN() {
+    if (this.isCNLoading) return;
     if (!this.editCNForm || !this.selectedCNDetail) return;
     if (!this.editCNForm.customerId || this.editCNForm.customerId === 0) {
       this.showToastMsg('Please select a customer');
@@ -1975,8 +2200,8 @@ export class BillingPage implements OnInit, OnDestroy {
     const printWindow = iframe.contentWindow || (iframe.contentDocument as any)?.defaultView;
     if (!printWindow) { this.showToastMsg('Failed to initialize print iframe'); return; }
 
-    const isSmall = !this.printerSettings?.paperWidth || 
-      this.printerSettings.paperWidth <= 58 || 
+    const isSmall = !this.printerSettings?.paperWidth ||
+      this.printerSettings.paperWidth <= 58 ||
       (this.printerSettings?.autoAdapt !== false && (!this.printerSettings?.hardwareWidth || this.printerSettings.hardwareWidth <= 58));
     const width = isSmall ? '360px' : '480px';
     const styles = `<style>* { margin: 0; padding: 0; box-sizing: border-box; } body { font-family: 'Courier New', monospace; background: #F0EBE3; display: flex; justify-content: center; padding: 40px 20px; } .receipt { background: #fff; border-radius: 24px; padding: 40px 36px; max-width: ${width}; width: 100%; box-shadow: 0 4px 24px rgba(0,0,0,0.08); } .receipt-type { display: block; text-align: center; font-size: 13px; letter-spacing: 6px; color: #888; margin-bottom: 16px; } .divider { height: 1px; background: #1a1a1a; margin: 12px 0; } .divider-thin { height: 1px; background: #ddd; margin: 12px 0; } .company { text-align: center; font-size: 22px; font-weight: 700; margin: 12px 0 4px; } .co-reg { display: block; text-align: center; font-size: 12px; color: #888; margin-bottom: 8px; } .address { display: block; text-align: center; font-size: 11px; color: #666; line-height: 1.6; } .contact { display: block; text-align: center; font-size: 11px; color: #888; margin-top: 6px; } .doc-row { display: flex; gap: 12px; margin: 4px 0; } .doc-label { font-size: 12px; font-weight: 700; min-width: 70px; } .doc-value { font-size: 12px; font-weight: 700; } .to-section { margin: 16px 0; } .to-label { font-size: 12px; font-style: italic; color: #888; } .to-box { border: 1px solid #ddd; border-radius: 8px; padding: 12px; margin-top: 6px; font-size: 12px; line-height: 1.6; } .table-header { display: flex; justify-content: space-between; font-size: 11px; font-weight: 700; font-style: italic; } .item-row { margin: 12px 0; } .item-desc { display: flex; justify-content: space-between; font-size: 12px; font-weight: 700; } .item-calc { font-size: 11px; color: #888; margin-top: 2px; display: flex; justify-content: space-between; } .total-row { display: flex; justify-content: space-between; font-size: 12px; margin: 4px 0; } .net-bar { background: #1a1a1a; color: #fff; border-radius: 8px; padding: 14px 20px; display: flex; justify-content: space-between; align-items: center; margin: 16px 0; } .net-label { font-size: 12px; font-weight: 700; font-style: italic; } .net-value { font-size: 20px; font-weight: 700; } .sig-box { border: 1px solid #ddd; border-radius: 8px; padding: 16px; min-height: 100px; margin: 16px 0; } .sig-label { font-size: 11px; color: #ccc; font-style: italic; } .thanks { text-align: center; font-size: 12px; letter-spacing: 6px; color: #ccc; margin-top: 20px; }</style>`;
@@ -2075,15 +2300,117 @@ export class BillingPage implements OnInit, OnDestroy {
   }
 
   showToastMsg(msg: string) { const isWarn = msg.toLowerCase().includes('please') || msg.toLowerCase().includes('must') || msg.toLowerCase().includes('cannot') || msg.toLowerCase().includes('required') || msg.toLowerCase().includes('no '); const isErr = msg.toLowerCase().includes('fail') || msg.toLowerCase().includes('error'); this.alertService.toast(msg, isErr ? 'error' : (isWarn ? 'warning' : 'success')); }
-  goTo(path: string, params?: any) { 
+  goTo(path: string, params?: any) {
     if (params) {
-      this.navCtrl.navigateRoot(path, { queryParams: params }); 
+      this.navCtrl.navigateRoot(path, { queryParams: params });
     } else {
-      this.navCtrl.navigateRoot(path); 
+      this.navCtrl.navigateRoot(path);
     }
   }
 
-  goBack() { this.navCtrl.navigateRoot('pages/home'); }
+  registerBackButton() {
+    this.unregisterBackButton();
+    this.backButtonSub = this.platform.backButton.subscribeWithPriority(10, () => {
+      this.handleHardwareBack();
+    });
+  }
+
+  unregisterBackButton() {
+    if (this.backButtonSub) {
+      this.backButtonSub.unsubscribe();
+      this.backButtonSub = undefined;
+    }
+  }
+
+  handleHardwareBack() {
+    if (Swal.isVisible()) {
+      Swal.close();
+      return;
+    }
+    if (this.showPaymentPreview) {
+      this.showPaymentPreview = false;
+      this.cdr.detectChanges();
+      return;
+    }
+    if (this.showCustomerModal) {
+      this.closeCustomerModal();
+      this.cdr.detectChanges();
+      return;
+    }
+    if (this.showCNInvoiceModal) {
+      this.closeCNInvoiceModal();
+      this.cdr.detectChanges();
+      return;
+    }
+    if (this.showHistoryModal) {
+      this.showHistoryModal = false;
+      this.cdr.detectChanges();
+      return;
+    }
+    if (this.showProductModal) {
+      this.showProductModal = false;
+      this.cdr.detectChanges();
+      return;
+    }
+    if (this.showCNPreview) {
+      this.showCNPreview = false;
+      this.cdr.detectChanges();
+      return;
+    }
+    if (this.showCNActionsDropdown) {
+      this.showCNActionsDropdown = false;
+      this.cdr.detectChanges();
+      return;
+    }
+    if (this.currentView === 'selectInvoices') {
+      this.currentView = 'newPayment';
+      this.cdr.detectChanges();
+      return;
+    }
+    if (this.currentView === 'cnDetails') {
+      this.handleCNDetailsBack();
+      this.cdr.detectChanges();
+      return;
+    }
+    if (this.currentView === 'paymentDetails') {
+      this.openPaymentList();
+      this.cdr.detectChanges();
+      return;
+    }
+    if (this.currentView !== 'home') {
+      this.currentView = 'home';
+      this.cdr.detectChanges();
+      return;
+    }
+    // Main Page (home view): prompt exit
+    this.confirmExitApp();
+  }
+
+  confirmExitApp() {
+    Swal.fire({
+      icon: 'question',
+      title: 'Exit App',
+      text: 'Are you sure you want to exit the app?',
+      showCancelButton: true,
+      confirmButtonText: 'Exit',
+      cancelButtonText: 'Cancel',
+      confirmButtonColor: '#e74c3c',
+      cancelButtonColor: '#1a1a1a',
+      reverseButtons: true,
+    }).then((result) => {
+      if (result.isConfirmed) {
+        App.exitApp();
+      }
+    });
+  }
+
+  goBack() {
+    if (this.currentView === 'home') {
+      this.confirmExitApp();
+    } else {
+      this.handleHardwareBack();
+    }
+  }
 }
 
 

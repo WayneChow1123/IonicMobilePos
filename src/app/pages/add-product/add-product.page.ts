@@ -1,4 +1,4 @@
-﻿import { AlertService } from '../../services/alert.service';
+import { AlertService } from '../../services/alert.service';
 import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
 import { NavController } from '@ionic/angular';
 import { Router } from '@angular/router';
@@ -87,7 +87,7 @@ export class AddProductPage implements OnInit {
   }
 
   showToastMsg(msg: string) { const isWarn = msg.toLowerCase().includes('please') || msg.toLowerCase().includes('must') || msg.toLowerCase().includes('cannot') || msg.toLowerCase().includes('required') || msg.toLowerCase().includes('no '); const isErr = msg.toLowerCase().includes('fail') || msg.toLowerCase().includes('error'); this.alertService.toast(msg, isErr ? 'error' : (isWarn ? 'warning' : 'success')); }
-  goBack() { this.navCtrl.navigateRoot('pages/home'); }
+  goBack() { this.navCtrl.navigateRoot('pages/products'); }
 }
 
 

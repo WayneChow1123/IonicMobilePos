@@ -220,6 +220,18 @@ export class LocalDbService {
   }
 
   /**
+   * 删除本地离线订单及其明细与支付记录
+   */
+  public async deleteOrderByClientId(clientId: string): Promise<void> {
+    await this.db.transaction('rw', this.db.orders, this.db.order_items, this.db.payments, async () => {
+      await this.db.orders.delete(clientId);
+      await this.db.order_items.where('orderClientId').equals(clientId).delete();
+      await this.db.payments.where('orderClientId').equals(clientId).delete();
+    });
+    this.notifyChange();
+  }
+
+  /**
    * 记录同步失败重试及错误原因
    */
   public async markSyncFailed(clientId: string, errorMessage: string): Promise<void> {

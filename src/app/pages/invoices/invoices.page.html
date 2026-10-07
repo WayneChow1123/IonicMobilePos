@@ -84,7 +84,7 @@
               <span class="status-badge" [class.paid]="invoice.status==='Paid'" [class.partial]="invoice.status==='Partial'" [class.unpaid]="invoice.status==='Unpaid'">{{ invoice.status || 'Unpaid' }}</span>
               <div class="amount-box">
                 <span class="paid-amount" style="color: #e67e22;" *ngIf="(invoice.CNTotal || invoice.cnTotal || 0) > 0">CN: - RM {{ (invoice.CNTotal || invoice.cnTotal) | number:'1.2-2' }}</span>
-                <span class="item-amount">RM {{ (invoice.totalAmount || invoice.TotalAmount || 0) | number:'1.2-2' }}</span>
+                <span class="item-amount">RM {{ getInvoiceDisplayTotal(invoice) | number:'1.2-2' }}</span>
               </div>
             </div>
           </div>
@@ -382,9 +382,10 @@
             <span>View Payment Details</span>
           </button>
           
-          <button class="dropdown-item" (click)="showActionsDropdown = false; confirmDeleteInModal()" style="color: #e57373; border-top: 1px solid rgba(0,0,0,0.08);">
-            <ion-icon name="trash-outline"></ion-icon>
-            <span>Delete Invoice</span>
+          <button class="dropdown-item" (click)="showActionsDropdown = false; confirmDeleteInModal()" [disabled]="isDeleting" style="color: #e57373; border-top: 1px solid rgba(0,0,0,0.08);">
+            <ion-spinner *ngIf="isDeleting" name="crescent" style="width:16px;height:16px;margin-right:6px;"></ion-spinner>
+            <ion-icon *ngIf="!isDeleting" name="trash-outline"></ion-icon>
+            <span>{{ isDeleting ? 'Deleting...' : 'Delete Invoice' }}</span>
           </button>
         </div>
       </div>
@@ -409,7 +410,7 @@
 
     <div *ngIf="selectedInvoice?.status === 'Partial'" class="partial-banner">
       <ion-icon name="time"></ion-icon>
-      <span>Partially paid - RM {{ selectedInvoice?.paidAmount | number:'1.2-2' }} of RM {{ selectedInvoice?.totalAmount | number:'1.2-2' }}</span>
+      <span>Partially paid - RM {{ selectedInvoice?.paidAmount | number:'1.2-2' }} of RM {{ getInvoiceDisplayTotal(selectedInvoice) | number:'1.2-2' }}</span>
     </div>
 
     <div *ngIf="selectedInvoice?.creditNotes?.length > 0" style="margin-bottom:12px;">
@@ -429,8 +430,9 @@
           </div>
         </div>
         <div style="display:flex;align-items:center;margin-left:auto;gap:4px;">
-          <ion-button fill="clear" style="--color:#e57373;" (click)="confirmDeleteCNFromInvoice(cn); $event.stopPropagation()">
-            <ion-icon name="trash-outline" style="font-size:18px;"></ion-icon>
+          <ion-button fill="clear" style="--color:#e57373;" (click)="confirmDeleteCNFromInvoice(cn); $event.stopPropagation()" [disabled]="isDeleting">
+            <ion-spinner *ngIf="isDeleting" name="crescent" style="width:16px;height:16px;"></ion-spinner>
+            <ion-icon *ngIf="!isDeleting" name="trash-outline" style="font-size:18px;"></ion-icon>
           </ion-button>
           <ion-icon name="chevron-forward-outline" style="font-size:18px;color:#d4a017;"></ion-icon>
         </div>
@@ -438,7 +440,7 @@
       <div class="form-card cn-summary-card" style="background:#fff3cd;margin-top:8px;">
         <div style="display:flex;justify-content:space-between;align-items:center;">
           <span style="font-weight:700;color:#1a1a1a;font-size:15px;" class="cn-sum-label">Original Amount</span>
-          <span style="font-weight:700;font-size:15px;" class="cn-sum-value">RM {{ selectedInvoice.totalAmount | number:'1.2-2' }}</span>
+          <span style="font-weight:700;font-size:15px;" class="cn-sum-value">RM {{ getInvoiceDisplayTotal(selectedInvoice) | number:'1.2-2' }}</span>
         </div>
         <div *ngIf="getTotalCN() > 0" style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;">
           <span style="font-weight:700;color:#e67e22;font-size:15px;">Returns (CN)</span>
@@ -472,23 +474,143 @@
       </div>
     </div>
 
-    <div class="form-card" style="background:#cfe2ff;">
-      <div class="form-group" *ngIf="selectedInvoice">
-        <label>INVOICE NUMBER (ID: {{ selectedInvoice.id }})</label>
-        <div style="font-size:16px; font-weight:800; color:#1a1a1a; padding:6px 0;" class="detail-invoice-num">{{ getDocNo(selectedInvoice) }}</div>
+    <!-- INVOICE INFO & METADATA CARD -->
+    <div class="form-card invoice-meta-card">
+      
+      <!-- INVOICE NUMBER -->
+      <div class="inv-meta-group">
+        <div class="inv-meta-header">
+          <span class="inv-meta-label">INVOICE NUMBER</span>
+          <span class="meta-status-chip" [class.paid]="(editForm.termType === 'CASH SALE' || selectedInvoice?.status === 'Paid') && editForm.termType !== 'On Credit' && editForm.termType !== 'Net 30 Days'" [class.unpaid]="editForm.termType === 'On Credit' || editForm.termType === 'Net 30 Days' || selectedInvoice?.status === 'Unpaid'">
+            <ion-icon [name]="(editForm.termType === 'CASH SALE' || selectedInvoice?.status === 'Paid') && editForm.termType !== 'On Credit' && editForm.termType !== 'Net 30 Days' ? 'checkmark-circle' : 'time'"></ion-icon>
+            {{ (editForm.termType === 'CASH SALE' || selectedInvoice?.status === 'Paid') && editForm.termType !== 'On Credit' && editForm.termType !== 'Net 30 Days' ? 'PAID' : 'UNPAID' }}
+          </span>
+        </div>
+        
+        <div *ngIf="!isEditMode" class="inv-num-display">
+          <div class="inv-num-icon-box">
+            <ion-icon name="receipt-outline"></ion-icon>
+          </div>
+          <div class="inv-num-text">{{ editForm.invoiceNumber || getDocNo(selectedInvoice) }}</div>
+        </div>
+
+        <div *ngIf="isEditMode" class="inv-num-input-wrap">
+          <ion-icon name="pencil-outline" class="inv-num-input-icon"></ion-icon>
+          <input type="text" [(ngModel)]="editForm.invoiceNumber" placeholder="Enter invoice number..." class="inv-num-input" />
+        </div>
       </div>
-      <div class="form-group">
-        <label>INVOICE DATE</label>
-        <input type="datetime-local" [(ngModel)]="editForm.invoiceDate" class="form-input" [readonly]="!isEditMode"/>
+
+      <!-- INVOICE DATE (PREMIUM REDESIGNED) -->
+      <div class="inv-meta-group" style="margin-top: 14px;">
+        <div class="inv-meta-header">
+          <span class="inv-meta-label">INVOICE DATE & TIME</span>
+          <button *ngIf="isEditMode" type="button" class="btn-quick-now" (click)="setEditDateNow()">
+            <ion-icon name="flash-outline"></ion-icon>
+            <span>Set to Now</span>
+          </button>
+        </div>
+
+        <!-- View Mode Date Display -->
+        <div *ngIf="!isEditMode" class="inv-date-display-box">
+          <div class="date-avatar">
+            <ion-icon name="calendar-outline"></ion-icon>
+          </div>
+          <div class="date-details">
+            <div class="date-primary">{{ editForm.invoiceDate | date:'dd MMMM yyyy' }}</div>
+            <div class="date-secondary">
+              <ion-icon name="time-outline"></ion-icon>
+              <span>{{ editForm.invoiceDate | date:'hh:mm a' }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Edit Mode Date Card (Interactive, no native browser popup) -->
+        <div *ngIf="isEditMode" class="inv-date-tappable-card" (click)="openDatePicker()">
+          <div class="date-card-left">
+            <div class="date-card-icon-wrap">
+              <ion-icon name="calendar-clear-outline"></ion-icon>
+            </div>
+            <div class="date-card-content">
+              <div class="date-card-primary-date">{{ editForm.invoiceDate | date:'dd MMM yyyy' }}</div>
+              <div class="date-card-secondary-time">
+                <ion-icon name="time-outline"></ion-icon>
+                <span>{{ editForm.invoiceDate | date:'hh:mm a' }}</span>
+              </div>
+            </div>
+          </div>
+          <div class="date-card-action-badge">
+            <span>Edit</span>
+            <ion-icon name="chevron-forward-outline"></ion-icon>
+          </div>
+        </div>
       </div>
-      <div class="form-group">
-        <label>TERM TYPE</label>
-        <input type="text" [value]="selectedInvoice?.termType || selectedInvoice?.TermType || editForm.termType || 'CASH SALE'" class="form-input" readonly/>
+
+      <!-- TERM TYPE (PREMIUM REDESIGNED) -->
+      <div class="inv-meta-group" style="margin-top: 14px;">
+        <div class="inv-meta-header">
+          <span class="inv-meta-label">TERM TYPE</span>
+          <span class="term-status-preview" [class.paid]="editForm.termType === 'CASH SALE'" [class.unpaid]="editForm.termType !== 'CASH SALE'">
+            <ion-icon [name]="editForm.termType === 'CASH SALE' ? 'checkmark-circle' : 'time'"></ion-icon>
+            Status: {{ editForm.termType === 'CASH SALE' ? 'PAID' : 'UNPAID' }}
+          </span>
+        </div>
+
+        <!-- View Mode Term Type -->
+        <div *ngIf="!isEditMode" class="term-view-row">
+          <div class="term-type-tag" [class.cash]="editForm.termType === 'CASH SALE'" [class.credit]="editForm.termType === 'On Credit' || editForm.termType === 'Net 30 Days'">
+            <ion-icon [name]="editForm.termType === 'CASH SALE' ? 'cash-outline' : 'card-outline'"></ion-icon>
+            <span>{{ editForm.termType || 'CASH SALE' }}</span>
+          </div>
+          <div class="term-type-desc">
+            <span *ngIf="editForm.termType === 'CASH SALE'" class="term-desc-cash">Cash Sale (Paid)</span>
+            <span *ngIf="editForm.termType === 'On Credit' || editForm.termType === 'Net 30 Days'" class="term-desc-credit">On Credit (Unpaid)</span>
+          </div>
+        </div>
+
+        <!-- Edit Mode Modern Segmented Control -->
+        <div *ngIf="isEditMode" class="term-segmented-container">
+          <div class="term-segmented-bar">
+            <button type="button" class="term-seg-btn" [class.active-cash]="editForm.termType === 'CASH SALE'" (click)="setEditTermType('CASH SALE')">
+              <ion-icon name="cash-outline"></ion-icon>
+              <span>Cash Sale</span>
+            </button>
+            <button type="button" class="term-seg-btn" [class.active-credit]="editForm.termType === 'On Credit'" (click)="setEditTermType('On Credit')">
+              <ion-icon name="card-outline"></ion-icon>
+              <span>On Credit</span>
+            </button>
+            <button type="button" class="term-seg-btn" [class.active-net]="editForm.termType === 'Net 30 Days'" (click)="setEditTermType('Net 30 Days')">
+              <ion-icon name="calendar-outline"></ion-icon>
+              <span>Net 30 Days</span>
+            </button>
+          </div>
+          
+          <!-- Compact status hint -->
+          <div *ngIf="editForm.termType === 'CASH SALE'" class="term-compact-hint cash">
+            <ion-icon name="checkmark-circle"></ion-icon>
+            <span>Marked as <strong>PAID</strong> (Settled in full with cash)</span>
+          </div>
+          <div *ngIf="editForm.termType === 'On Credit' || editForm.termType === 'Net 30 Days'" class="term-compact-hint credit">
+            <ion-icon name="alert-circle"></ion-icon>
+            <span>Marked as <strong>UNPAID</strong> • Will appear in <strong>New Payment</strong></span>
+          </div>
+        </div>
       </div>
-      <div class="form-group">
-        <label>REMARK</label>
-        <input type="text" [(ngModel)]="editForm.remark" placeholder="Enter remark" class="form-input" [readonly]="!isEditMode"/>
+
+      <!-- REMARK -->
+      <div class="inv-meta-group" style="margin-top: 14px;">
+        <div class="inv-meta-header">
+          <span class="inv-meta-label">INVOICE REMARK</span>
+        </div>
+        <div *ngIf="!isEditMode" class="remark-view-box">
+          <ion-icon name="document-text-outline" style="color:#888; font-size:16px; flex-shrink:0;"></ion-icon>
+          <span style="font-size:13px; font-weight:600; color:#444;">{{ editForm.remark || 'No remark provided' }}</span>
+        </div>
+        <div *ngIf="isEditMode" class="inv-num-input-wrap">
+          <ion-icon name="document-text-outline" class="inv-num-input-icon"></ion-icon>
+          <input type="text" [(ngModel)]="editForm.remark" placeholder="Enter invoice remark..." class="inv-num-input" />
+        </div>
       </div>
+
     </div>
 
     <!-- CUSTOMER CARD -->
@@ -568,7 +690,7 @@
              [style.cursor]="isEditMode ? 'pointer' : 'default'"
              style="display:flex; justify-content:space-between; align-items:center; width:100%; border-bottom:1px solid rgba(0,0,0,0.1); padding:4px 0;">
           <span *ngIf="!item.productId" style="font-size:14px; font-weight:600; color:#888;">-- Select Product --</span>
-          <span *ngIf="item.productId" style="font-size:14px; font-weight:700; color:#1a1a1a; text-transform:uppercase;">{{ getProductName(item.productId) }}</span>
+          <span *ngIf="item.productId" style="font-size:14px; font-weight:700; color:#1a1a1a; text-transform:uppercase;">{{ getProductName(item.productId, item) }}</span>
           <ion-icon *ngIf="isEditMode" name="chevron-down-outline" style="color:#1a1a1a; font-size:16px;"></ion-icon>
         </div>
       </div>
@@ -587,7 +709,13 @@
       </div>
     </div>
 
-    <button *ngIf="isEditMode" class="save-btn" (click)="saveInvoice()">UPDATE INVOICE</button>
+    <button *ngIf="isEditMode" class="save-btn" (click)="saveInvoice()" [disabled]="isSubmitting" [style.opacity]="isSubmitting ? 0.6 : 1">
+      <span *ngIf="isSubmitting" style="display:inline-flex;align-items:center;justify-content:center;gap:8px;">
+        <ion-spinner name="crescent" style="width:18px;height:18px;"></ion-spinner>
+        UPDATING...
+      </span>
+      <span *ngIf="!isSubmitting">UPDATE INVOICE</span>
+    </button>
     </div>
     <!-- Edit Invoice Bottom Summary Card -->
     <div class="grand-summary-card" style="flex-shrink:0;margin-top:12px;">
@@ -698,7 +826,7 @@
 
         <div class="receipt-divider-thin" style="margin-top:16px;"></div>
         <div class="receipt-totals">
-          <div class="total-row"><span>GROSS TOTAL</span><span>RM {{ selectedInvoice?.totalAmount | number:'1.2-2' }}</span></div>
+          <div class="total-row"><span>GROSS TOTAL</span><span>RM {{ getInvoiceDisplayTotal(selectedInvoice) | number:'1.2-2' }}</span></div>
           <div class="total-row"><span>TAX TOTAL</span><span>RM {{ previewData?.taxTotal || '0.00' }}</span></div>
           <!-- 退货行 (如果有) -->
           <div *ngIf="getTotalCN() > 0" class="total-row cn-deduct">
@@ -944,9 +1072,11 @@
 
         <div class="ni-pay-actions">
           <button class="ni-btn-cancel" (click)="showPaymentCollection = false">CANCEL</button>
-          <button class="ni-btn-pay" (click)="confirmPayment()">
-            <span>PAY</span>
-            <ion-icon name="chevron-forward-outline"></ion-icon>
+          <button class="ni-btn-pay" (click)="confirmPayment()" [disabled]="isSubmitting" [style.opacity]="isSubmitting ? 0.6 : 1">
+            <span *ngIf="!isSubmitting">PAY</span>
+            <ion-spinner *ngIf="isSubmitting" name="crescent" style="width:18px;height:18px;"></ion-spinner>
+            <span *ngIf="isSubmitting" style="margin-left:4px;">SAVING...</span>
+            <ion-icon *ngIf="!isSubmitting" name="chevron-forward-outline"></ion-icon>
           </button>
         </div>
       </div>
@@ -1131,7 +1261,7 @@
       <div (click)="openProductPickerFromEditModal()" style="background:#F0EBE3;border-radius:12px;padding:12px 14px;margin-bottom:16px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;">
         <div>
           <div style="font-size:10px;font-weight:700;color:#888;letter-spacing:1px;">PRODUCT</div>
-          <div style="font-size:15px;font-weight:800;color:#1a1a1a;margin-top:4px;">{{ getProductName(editItemForm.productId) || getProductName(editForm.items[editItemIndex]?.productId) || '---' }}</div>
+          <div style="font-size:15px;font-weight:800;color:#1a1a1a;margin-top:4px;">{{ getProductName(editItemForm.productId, editItemForm) || getProductName(editForm.items[editItemIndex]?.productId, editForm.items[editItemIndex]) || '---' }}</div>
           <div style="font-size:11px;color:#888;margin-top:2px;">Code: {{ getProductCode(editItemForm.productId || editForm.items[editItemIndex]?.productId) || '-' }}</div>
         </div>
         <ion-icon name="chevron-forward-outline" style="color:#888;font-size:18px;"></ion-icon>
@@ -1151,6 +1281,44 @@
       <div style="display:flex;gap:10px;">
         <button class="save-btn" style="flex:1;background:#888;" (click)="closeEditItemModal()">CANCEL</button>
         <button class="save-btn" style="flex:1;background:#5c85d6;" (click)="saveEditItemAndUpdate()">SAVE</button>
+      </div>
+    </div>
+  </ng-template>
+</ion-modal>
+
+<!-- DATE & TIME PICKER MODAL -->
+<ion-modal [isOpen]="showDatePickerModal" (didDismiss)="closeDatePicker()" class="pos-date-picker-modal" style="--border-radius: 24px; --height: auto; --width: 92vw; --max-width: 360px;">
+  <ng-template>
+    <div class="pos-date-modal-card">
+      <div class="pos-date-modal-header">
+        <div class="pos-date-modal-title-col">
+          <div class="pos-date-modal-title">Select Date & Time</div>
+          <div class="pos-date-modal-subtitle">{{ (tempPickerDate || editForm.invoiceDate) | date:'EEEE, dd MMM yyyy • hh:mm a' }}</div>
+        </div>
+        <button type="button" class="pos-date-modal-close" (click)="closeDatePicker()">
+          <ion-icon name="close-outline"></ion-icon>
+        </button>
+      </div>
+
+      <div class="pos-date-picker-body">
+        <ion-datetime
+          [(ngModel)]="tempPickerDate"
+          presentation="date-time"
+          [showDefaultButtons]="false"
+          size="cover"
+          class="custom-pos-datetime">
+        </ion-datetime>
+      </div>
+
+      <div class="pos-date-modal-footer">
+        <button type="button" class="btn-picker-now" (click)="setTempDateToNow()">
+          <ion-icon name="flash-outline"></ion-icon>
+          <span>Now</span>
+        </button>
+        <div class="pos-date-footer-right">
+          <button type="button" class="btn-picker-cancel" (click)="closeDatePicker()">Cancel</button>
+          <button type="button" class="btn-picker-confirm" (click)="confirmDatePicker()">Apply</button>
+        </div>
       </div>
     </div>
   </ng-template>

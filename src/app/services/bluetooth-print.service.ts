@@ -195,19 +195,55 @@ export class BluetoothPrintService {
       });
     }
 
-    // Connect to printer
+    // Connect to printer (support both Insecure and Secure RFCOMM for thermal POS printers)
     await new Promise<void>((resolve, reject) => {
-      this.bluetoothSerial.connect(
-        mac,
-        () => {
-          this.currentConnectedMac = mac;
-          resolve();
-        },
-        (err: any) => {
+      let isSettled = false;
+      const timer = setTimeout(() => {
+        if (!isSettled) {
+          isSettled = true;
           this.currentConnectedMac = null;
-          reject(err);
+          reject(new Error('Printer connection timed out. Please ensure the printer is turned on and paired.'));
         }
-      );
+      }, 10000);
+
+      const settleSuccess = () => {
+        if (isSettled) return;
+        isSettled = true;
+        clearTimeout(timer);
+        this.currentConnectedMac = mac;
+        resolve();
+      };
+
+      const settleFail = (err: any) => {
+        if (isSettled) return;
+        isSettled = true;
+        clearTimeout(timer);
+        this.currentConnectedMac = null;
+        reject(err || new Error('Unable to connect to printer. Please check Bluetooth pairing in phone settings.'));
+      };
+
+      // Try Insecure connection first (standard for ESC/POS Bluetooth receipt printers)
+      if (typeof this.bluetoothSerial.connectInsecure === 'function') {
+        this.bluetoothSerial.connectInsecure(
+          mac,
+          () => settleSuccess(),
+          (insecureErr: any) => {
+            // If insecure connection fails, retry with standard connect
+            this.bluetoothSerial.connect(
+              mac,
+              () => settleSuccess(),
+              (secureErr: any) => settleFail(insecureErr || secureErr)
+            );
+          }
+        );
+      } else {
+        // Fallback if connectInsecure is unavailable
+        this.bluetoothSerial.connect(
+          mac,
+          () => settleSuccess(),
+          (err: any) => settleFail(err)
+        );
+      }
     });
   }
 
@@ -305,6 +341,40 @@ export class BluetoothPrintService {
     }
   }
 
+  /** Prints a self-test slip to verify connection and paper formatting */
+  testPrint(settings: any): Promise<boolean> {
+    return new Promise((resolve) => {
+      if (!this.isAvailable()) {
+        this.alertService.toast('Bluetooth printing is only available on native devices (APK)', 'error');
+        return resolve(false);
+      }
+      if (this.isPrinting) {
+        this.alertService.toast('Printing in progress, please wait...', 'warning');
+        return resolve(false);
+      }
+
+      const mac = settings?.macAddress;
+      if (!mac || (mac === '02:29:DE:43:D8:2C' && !settings?.deviceName)) {
+        this.alertService.toast('Please tap the sync icon to search and select your Bluetooth printer first!', 'warning');
+        return resolve(false);
+      }
+
+      this.checkPermission(
+        () => {
+          try {
+            const buffer = this.buildTestBuffer(settings);
+            this.executePrintJob(mac, buffer, 'Test Slip', settings, resolve);
+          } catch (e: any) {
+            this.isPrinting = false;
+            this.alertService.toast(`Format error: ${e.message}`, 'error');
+            resolve(false);
+          }
+        },
+        () => resolve(false)
+      );
+    });
+  }
+
   /** Prints an invoice directly to the configured Bluetooth MAC address */
   printInvoice(inv: any, pd: any, settings: any, customers: any[], products: any[]): Promise<boolean> {
     return new Promise((resolve) => {
@@ -317,7 +387,12 @@ export class BluetoothPrintService {
         return resolve(false);
       }
 
-      const mac = settings.macAddress || '02:29:DE:43:D8:2C';
+      const mac = settings?.macAddress;
+      if (!mac || (mac === '02:29:DE:43:D8:2C' && !settings?.deviceName)) {
+        this.alertService.toast('Please configure and select your Bluetooth printer in Printer Settings first!', 'warning');
+        return resolve(false);
+      }
+
       this.checkPermission(
         () => {
           try {
@@ -359,7 +434,7 @@ export class BluetoothPrintService {
 
   private detectHardwareWidth(settings: any): number {
     const name = (settings?.deviceName || settings?.macAddress || '').toUpperCase();
-    if (name.includes('80') || name.includes('300') || name.includes('800') || name.includes('83')) {
+    if (name.includes('80') || name.includes('300') || name.includes('800') || name.includes('83') || name.includes('MTP-3') || name.includes('MTP3') || name.includes('PT-3')) {
       return 80;
     }
     return 48; // Standard portable Bluetooth printer is 48mm
@@ -386,9 +461,15 @@ export class BluetoothPrintService {
 
     // Helpers
     const getCustomer = (id: any) => customers.find((c: any) => c.id == id);
-    const getProductName = (id: any) => {
-      const p = products.find((x: any) => x.id == id);
-      return p ? p.name : 'Product #' + id;
+    const getProductName = (id: any, item?: any) => {
+      if (item) {
+        if (item.productName && !item.productName.startsWith('Product #')) return item.productName;
+        if (item.ProductName && !item.ProductName.startsWith('Product #')) return item.ProductName;
+        if (item.product?.name) return item.product.name;
+        if (item.name) return item.name;
+      }
+      const p = (products || []).find((x: any) => x.id == id || x.productId == id);
+      return p ? (p.name || p.productName) : (item?.productName || item?.ProductName || ('Product #' + id));
     };
     const getCustomerFullAddress = (id: any): string => {
       const c = getCustomer(id);
@@ -512,7 +593,7 @@ export class BluetoothPrintService {
     // 7. Items List
     const items = pd?.items || inv?.items || [];
     items.forEach((item: any, i: number) => {
-      let prodName = item.productName || getProductName(item.productId);
+      let prodName = getProductName(item.productId, item);
       if (isOptionEnabled('Print Item Code')) {
         const product = products.find(p => p.id == item.productId);
         const code = product?.productCode || product?.code || '';
@@ -565,6 +646,11 @@ export class BluetoothPrintService {
 
       if (item.remark) {
         builder.appendText(`   * ${item.remark}\n`);
+      }
+
+      // Add a blank line between products if Product Item Spacing is enabled
+      if (isOptionEnabled('Product Item Spacing') && i < items.length - 1) {
+        builder.appendText("\n");
       }
     });
 
@@ -706,7 +792,11 @@ export class BluetoothPrintService {
         return resolve(false);
       }
 
-      const mac = settings.macAddress || '02:29:DE:43:D8:2C';
+      const mac = settings?.macAddress;
+      if (!mac || (mac === '02:29:DE:43:D8:2C' && !settings?.deviceName)) {
+        this.alertService.toast('Please configure and select your Bluetooth printer in Printer Settings first!', 'warning');
+        return resolve(false);
+      }
       this.checkPermission(
         () => {
           try {
@@ -842,6 +932,11 @@ export class BluetoothPrintService {
           builder.appendText(`   Barcode: ${barcode}\n`);
         }
       }
+
+      // Add a blank line between products if Product Item Spacing is enabled
+      if (isOptionEnabled('Product Item Spacing') && i < items.length - 1) {
+        builder.appendText("\n");
+      }
     });
 
     builder.appendText("-".repeat(width) + "\n");
@@ -895,7 +990,11 @@ export class BluetoothPrintService {
         return resolve(false);
       }
 
-      const mac = settings.macAddress || '02:29:DE:43:D8:2C';
+      const mac = settings?.macAddress;
+      if (!mac || (mac === '02:29:DE:43:D8:2C' && !settings?.deviceName)) {
+        this.alertService.toast('Please configure and select your Bluetooth printer in Printer Settings first!', 'warning');
+        return resolve(false);
+      }
       this.checkPermission(
         () => {
           try {
@@ -959,9 +1058,15 @@ export class BluetoothPrintService {
       return cn.customerAddress || cn.address || cn.customer?.address || '';
     };
 
-    const getProductName = (id: any) => {
-      const p = products.find((x: any) => x.id == id);
-      return p ? p.name : 'Product #' + id;
+    const getProductName = (id: any, item?: any) => {
+      if (item) {
+        if (item.productName && !item.productName.startsWith('Product #')) return item.productName;
+        if (item.ProductName && !item.ProductName.startsWith('Product #')) return item.ProductName;
+        if (item.product?.name) return item.product.name;
+        if (item.name) return item.name;
+      }
+      const p = (products || []).find((x: any) => x.id == id || x.productId == id);
+      return p ? (p.name || p.productName) : (item?.productName || item?.ProductName || ('Product #' + id));
     };
     const isOptionEnabled = (name: string): boolean => {
       if (!settings.contentOptions) return true;
@@ -1043,7 +1148,7 @@ export class BluetoothPrintService {
 
     const items = cn.Items || cn.items || [];
     items.forEach((item: any, i: number) => {
-      let prodName = item.productName || item.Name || getProductName(item.productId);
+      let prodName = getProductName(item.productId, item);
       if (isOptionEnabled('Print Item Code')) {
         const product = products.find(p => p.id == item.productId);
         const code = item.productCode || product?.productCode || product?.code || '';
@@ -1063,6 +1168,11 @@ export class BluetoothPrintService {
         const product = products.find(p => p.id == item.productId);
         const barcode = item.barcode || product?.barcode || '';
         if (barcode) builder.appendText(`   Barcode: ${barcode}\n`);
+      }
+
+      // Add a blank line between products if Product Item Spacing is enabled
+      if (isOptionEnabled('Product Item Spacing') && i < items.length - 1) {
+        builder.appendText("\n");
       }
     });
 
@@ -1092,6 +1202,56 @@ export class BluetoothPrintService {
     }
 
     const emptyLines = settings.bottomEmptyLine ?? 5;
+    builder.appendText("\n".repeat(emptyLines));
+    return builder.getBuffer();
+  }
+
+  private buildTestBuffer(settings: any): ArrayBuffer {
+    const { width } = this.resolvePrintWidth(settings);
+    const builder = new BufferBuilder();
+
+    const ESC = 0x1B;
+    const GS = 0x1D;
+    const FS = 0x1C;
+
+    const CMD_INIT = [ESC, 0x40];
+    const CMD_CANCEL_CHINESE = [FS, 0x2E];
+    const CMD_ALIGN_CENTER = [ESC, 0x61, 0x01];
+    const CMD_ALIGN_LEFT = [ESC, 0x61, 0x00];
+    const CMD_BOLD_ON = [ESC, 0x45, 0x01];
+    const CMD_BOLD_OFF = [ESC, 0x45, 0x00];
+    const CMD_DOUBLE_ON = [GS, 0x21, 0x11];
+    const CMD_DOUBLE_OFF = [GS, 0x21, 0x00];
+
+    builder.append(CMD_INIT);
+    builder.append(CMD_CANCEL_CHINESE);
+
+    // Header
+    builder.append(CMD_ALIGN_CENTER);
+    builder.append(CMD_DOUBLE_ON);
+    builder.append(CMD_BOLD_ON);
+    builder.appendText("MOBILE POS\n");
+    builder.append(CMD_DOUBLE_OFF);
+    builder.appendText("PRINTER TEST SLIP\n");
+    builder.append(CMD_BOLD_OFF);
+    builder.appendText("=".repeat(width) + "\n");
+
+    // Details
+    builder.append(CMD_ALIGN_LEFT);
+    builder.appendText(this.formatRow("Printer Name:", sanitizePrintText(settings?.deviceName || "BT Printer"), width) + "\n");
+    builder.appendText(this.formatRow("MAC Address:", settings?.macAddress || "N/A", width) + "\n");
+    builder.appendText(this.formatRow("Paper Setting:", `${settings?.paperWidth || 48}mm (${width} cols)`, width) + "\n");
+    builder.appendText(this.formatRow("Test Time:", new Date().toLocaleTimeString(), width) + "\n");
+    builder.appendText("-".repeat(width) + "\n");
+
+    builder.append(CMD_ALIGN_CENTER);
+    builder.append(CMD_BOLD_ON);
+    builder.appendText("*** CONNECTION SUCCESS ***\n");
+    builder.append(CMD_BOLD_OFF);
+    builder.appendText("Bluetooth printing is operational!\n");
+    builder.appendText("=".repeat(width) + "\n");
+
+    const emptyLines = Math.max(3, settings?.bottomEmptyLine ?? 5);
     builder.appendText("\n".repeat(emptyLines));
     return builder.getBuffer();
   }

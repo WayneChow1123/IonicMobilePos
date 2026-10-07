@@ -44,7 +44,12 @@ export class AlertService {
     });
   }
 
-  confirm(title: string, text: string = "You won't be able to revert this!"): Promise<boolean> {
+  confirm(
+    title: string,
+    text: string = "You won't be able to revert this!",
+    confirmButtonText: string = 'Yes, delete it!',
+    cancelButtonText: string = 'Cancel'
+  ): Promise<boolean> {
     return Swal.fire({
       title: title,
       text: text,
@@ -52,7 +57,8 @@ export class AlertService {
       showCancelButton: true,
       confirmButtonColor: '#e57373',
       cancelButtonColor: '#1a1a1a',
-      confirmButtonText: 'Yes, delete it!'
+      confirmButtonText: confirmButtonText,
+      cancelButtonText: cancelButtonText
     }).then((result: any) => {
       return result.isConfirmed;
     });

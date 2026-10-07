@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Observable, of, from, throwError, firstValueFrom } from 'rxjs';
 import { map, tap, catchError, switchMap, timeout } from 'rxjs/operators';
+import { Network } from '@capacitor/network';
 import { updateInvoiceDocNos, formatDocNo } from '../utils/invoice-helper';
 import { OfflineStorageService } from './offline-storage.service';
 import { LocalDbService, SyncStatus } from './local-db.service';
@@ -16,12 +17,40 @@ export class ApiService {
 
   private cachedCustomers: any[] | null = null;
   private cachedProducts: any[] | null = null;
+  public isNetworkOnline: boolean = true;
 
   constructor(
     private http: HttpClient,
     private offlineStorage: OfflineStorageService,
     private localDb: LocalDbService
-  ) { }
+  ) {
+    this.initNetworkStatus();
+  }
+
+  private initNetworkStatus() {
+    try {
+      Network.getStatus().then(status => {
+        this.isNetworkOnline = status.connected;
+      }).catch(() => {
+        this.isNetworkOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+      });
+
+      Network.addListener('networkStatusChange', status => {
+        this.isNetworkOnline = status.connected;
+      });
+    } catch {
+      this.isNetworkOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+    }
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('online', () => { this.isNetworkOnline = true; });
+      window.addEventListener('offline', () => { this.isNetworkOnline = false; });
+    }
+  }
+
+  public isOnline(): boolean {
+    return this.isNetworkOnline;
+  }
 
   clearCustomerCache() {
     this.cachedCustomers = null;
@@ -88,11 +117,12 @@ export class ApiService {
       );
     };
 
-    if ((typeof navigator !== 'undefined' && !navigator.onLine) || String(invoiceId).startsWith('inv_')) {
+    if (!this.isOnline() || String(invoiceId).startsWith('inv_') || String(invoiceId).startsWith('offline_')) {
       return saveOfflineCN();
     }
 
     return this.http.post(this.baseUrl + '/Credit/CreateCreditNote/invoices/' + invoiceId + '/credit-notes', data).pipe(
+      timeout(4000),
       tap(() => this.clearCustomerCache()),
       catchError(() => saveOfflineCN())
     );
@@ -140,11 +170,12 @@ export class ApiService {
       );
     };
 
-    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    if (!this.isOnline()) {
       return saveOfflineGlobalCN();
     }
 
     return this.http.post(this.baseUrl + '/Credit/CreateGlobalCreditNote/customers/' + customerId + '/credit-notes-global', data).pipe(
+      timeout(4000),
       tap(() => this.clearCustomerCache()),
       catchError(() => saveOfflineGlobalCN())
     );
@@ -176,7 +207,7 @@ export class ApiService {
       return null;
     };
 
-    if ((typeof navigator !== 'undefined' && !navigator.onLine) || String(cnId).startsWith('cn_')) {
+    if (!this.isOnline() || String(cnId).startsWith('cn_')) {
       return from(fetchOfflineCN());
     }
 
@@ -229,11 +260,12 @@ export class ApiService {
       };
     };
 
-    if ((typeof navigator !== 'undefined' && !navigator.onLine) || String(cnId).startsWith('cn_')) {
+    if (!this.isOnline() || String(cnId).startsWith('cn_')) {
       return from(saveOfflineUpdateCN());
     }
 
     return this.http.put(this.baseUrl + '/Credit/UpdateCreditNote/credit-notes/' + cnId, data).pipe(
+      timeout(4000),
       tap(() => this.clearCustomerCache()),
       catchError(() => from(saveOfflineUpdateCN()))
     );
@@ -261,11 +293,12 @@ export class ApiService {
       };
     };
 
-    if ((typeof navigator !== 'undefined' && !navigator.onLine) || String(cnId).startsWith('cn_')) {
+    if (!this.isOnline() || String(cnId).startsWith('cn_')) {
       return from(saveOfflineDeleteCN());
     }
 
     return this.http.delete(this.baseUrl + '/Credit/DeleteCreditNote/invoices/' + invoiceId + '/credit-notes/' + cnId, { responseType: 'text' }).pipe(
+      timeout(4000),
       tap(() => this.clearCustomerCache()),
       catchError(() => from(saveOfflineDeleteCN()))
     );
@@ -304,7 +337,7 @@ export class ApiService {
       return [...offlineCNs, ...cached].filter(c => !deletedCNIds.includes(String(c.id)));
     };
 
-    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    if (!this.isOnline()) {
       return from(fetchOfflineFallback());
     }
 
@@ -339,7 +372,7 @@ export class ApiService {
       return cached;
     };
 
-    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    if (!this.isOnline()) {
       if (this.cachedCustomers) return of(this.cachedCustomers);
       return from(fetchOfflineCustomers());
     }
@@ -352,7 +385,7 @@ export class ApiService {
             this.offlineStorage.setCache('customers', res);
           }
         },
-        error: () => {}
+        error: () => { }
       });
       return of(this.cachedCustomers);
     }
@@ -405,7 +438,7 @@ export class ApiService {
       return history;
     };
 
-    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    if (!this.isOnline()) {
       return from(fetchOfflineHistory());
     }
 
@@ -427,6 +460,7 @@ export class ApiService {
         return sum + (p * q);
       }, 0);
       const roundedTotal = Math.round((calculatedTotal + Number.EPSILON) * 100) / 100;
+      data.totalAmount = roundedTotal;
 
       const orderData = {
         clientId: data.offlineReferenceId,
@@ -488,11 +522,12 @@ export class ApiService {
       );
     };
 
-    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    if (!this.isOnline()) {
       return saveOfflineFallback();
     }
 
     return this.http.post(this.baseUrl + '/Invoice/CreateInvoice/invoices', data).pipe(
+      timeout(4000),
       tap((res: any) => {
         this.clearCustomerCache();
         const serverId = res?.invoiceId || res?.id;
@@ -509,11 +544,8 @@ export class ApiService {
         }
       }),
       catchError((err: any) => {
-        if (err instanceof HttpErrorResponse && err.status === 0) {
-          console.warn('[Offline Fallback] Network unreachable, enqueuing invoice locally:', err);
-          return saveOfflineFallback();
-        }
-        return throwError(() => err);
+        console.warn('[Offline Fallback] Network unreachable or timeout, enqueuing invoice locally:', err);
+        return saveOfflineFallback();
       })
     );
   }
@@ -532,7 +564,7 @@ export class ApiService {
    */
   public async prefetchInvoiceDetails(invoices: any[]): Promise<void> {
     if (!invoices || !Array.isArray(invoices) || this.isPrefetchingInvoices) return;
-    if (typeof navigator !== 'undefined' && !navigator.onLine) return;
+    if (!this.isOnline()) return;
 
     this.isPrefetchingInvoices = true;
     try {
@@ -540,7 +572,7 @@ export class ApiService {
       const targetInvoices = invoices.slice(0, 60);
       for (const inv of targetInvoices) {
         if (!inv || !inv.id) continue;
-        if (typeof navigator !== 'undefined' && !navigator.onLine) break;
+        if (!this.isOnline()) break;
 
         const cached = await this.offlineStorage.getCache<any>('inv_detail_' + inv.id);
         const hasCachedItems = (cached?.items || cached?.Items) && (cached?.items || cached?.Items).length > 0;
@@ -567,6 +599,94 @@ export class ApiService {
     }
   }
 
+  private readonly INV_DATA_OVERRIDES_KEY = 'invoice_data_overrides';
+
+  getInvoiceOverridesMap(): Record<string, any> {
+    try {
+      const data = localStorage.getItem(this.INV_DATA_OVERRIDES_KEY);
+      return data ? JSON.parse(data) : {};
+    } catch {
+      return {};
+    }
+  }
+
+  saveInvoiceOverride(invoiceId: any, override: any) {
+    if (!invoiceId) return;
+    try {
+      const map = this.getInvoiceOverridesMap();
+      map[String(invoiceId)] = { ...(map[String(invoiceId)] || {}), ...override };
+      localStorage.setItem(this.INV_DATA_OVERRIDES_KEY, JSON.stringify(map));
+    } catch { }
+  }
+
+  applyInvoiceOverrides(invoices: any[]) {
+    if (!Array.isArray(invoices) || invoices.length === 0) return;
+    const map = this.getInvoiceOverridesMap();
+    for (const inv of invoices) {
+      this.applyInvoiceOverrideToItem(inv, map);
+    }
+  }
+
+  applyInvoiceOverrideToItem(inv: any, map?: Record<string, any>) {
+    if (!inv || !inv.id) return;
+    const overrides = map || this.getInvoiceOverridesMap();
+    const ov = overrides[String(inv.id)];
+    if (ov) {
+      if (ov.termType) inv.termType = ov.termType;
+      if (ov.status) inv.status = ov.status;
+      if (ov.invoiceNumber) {
+        inv.invoiceNumber = ov.invoiceNumber;
+        inv.docNo = ov.invoiceNumber;
+      }
+      if (ov.customerId !== undefined) inv.customerId = ov.customerId;
+      if (ov.customerName !== undefined) inv.customerName = ov.customerName;
+      if (ov.paidAmount !== undefined) inv.paidAmount = ov.paidAmount;
+      if (ov.balance !== undefined) inv.balance = ov.balance;
+      if (ov.totalAmount !== undefined) inv.totalAmount = ov.totalAmount;
+    }
+
+    try {
+      const custData = localStorage.getItem('invoice_customer_overrides');
+      if (custData) {
+        const custMap = JSON.parse(custData);
+        const cOv = custMap[String(inv.id)] || custMap[Number(inv.id)];
+        if (cOv) {
+          if (cOv.customerId !== undefined) inv.customerId = cOv.customerId;
+          if (cOv.customerName) inv.customerName = cOv.customerName;
+          if (cOv.customerCode) inv.customerCode = cOv.customerCode;
+        }
+      }
+    } catch { }
+
+    const term = inv.termType || inv.TermType;
+    const isCreditTerm = (term === 'On Credit' || term === 'Net 30 Days');
+    if (isCreditTerm) {
+      const hasActualPayments = Array.isArray(inv.payments) && inv.payments.length > 0;
+      const tot = Number(inv.totalAmount ?? inv.TotalAmount ?? 0);
+      const cred = Number(inv.creditUsed ?? inv.CreditUsed ?? 0);
+      const cn = Number(inv.cnTotal ?? inv.CNTotal ?? 0);
+      const paid = ov?.paidAmount !== undefined ? Number(ov.paidAmount) : Number(inv.paidAmount || 0);
+      const effBal = Math.max(0, tot - cred - cn - paid);
+
+      if (effBal <= 0.01 && (cn > 0 || cred > 0 || paid > 0 || inv.status === 'Paid')) {
+        inv.status = 'Paid';
+        inv.balance = 0;
+      } else if (!hasActualPayments && (ov?.status !== 'Paid')) {
+        inv.status = (cn > 0 || cred > 0 || paid > 0) ? 'Partial' : 'Unpaid';
+        if (ov?.paidAmount !== undefined) {
+          inv.paidAmount = ov.paidAmount;
+        } else {
+          inv.paidAmount = 0;
+        }
+        if (ov?.balance !== undefined) {
+          inv.balance = ov.balance;
+        } else {
+          inv.balance = effBal;
+        }
+      }
+    }
+  }
+
   getInvoices(params?: any): Observable<any> {
     const fetchOfflineInvoices = async () => {
       const cached = await this.offlineStorage.getCache<any[]>('invoices_list') || [];
@@ -575,45 +695,67 @@ export class ApiService {
       const pendingInvoices = queue
         .filter(q => q.type === 'CREATE_INVOICE')
         .map(q => {
-          const p = q.payload;
+          const p = q.payload || {};
+          const itemsTotal = (p.items || []).reduce((sum: number, it: any) => sum + ((Number(it.unitPrice) || 0) * (Number(it.quantity) || 1)), 0);
+          const computedTotal = Math.round((itemsTotal + Number.EPSILON) * 100) / 100;
+          const totalAmount = (p.totalAmount != null && Number(p.totalAmount) > 0) ? Number(p.totalAmount) : computedTotal;
+          const paidAmount = Number(p.paidAmount) || 0;
+          const isCash = (p.termType === 'CASH SALE' || p.termType === 'Cash');
+          const status = isCash ? 'Paid' : (paidAmount >= totalAmount ? 'Paid' : (paidAmount > 0 ? 'Partial' : 'Unpaid'));
           return {
             id: q.id,
             invoiceNumber: p.orderNumber || p.invoiceNumber || ('INV-OFFLINE-' + q.id),
+            docNo: p.orderNumber || p.invoiceNumber || ('INV-OFFLINE-' + q.id),
             customerId: p.customerId,
             customerName: p.customerName || '',
-            totalAmount: p.totalAmount,
-            paidAmount: p.paidAmount || 0,
-            balance: p.balance != null ? p.balance : (p.totalAmount - (p.paidAmount || 0)),
+            totalAmount: totalAmount,
+            paidAmount: paidAmount,
+            balance: p.balance != null ? Number(p.balance) : Math.max(0, totalAmount - paidAmount),
             invoiceDate: p.orderDate || p.invoiceDate || new Date(q.createdAt).toISOString(),
-            status: p.paidAmount >= p.totalAmount ? 'Paid' : (p.paidAmount > 0 ? 'Partial' : 'Pending'),
+            status: status,
             termType: p.termType || 'Cash Sale',
             items: p.items || [],
             isOffline: true
           };
         });
-      let result = [...pendingInvoices, ...cached].filter(inv => !deletedIds.includes(inv.id));
+      const combined = [...pendingInvoices, ...cached].filter(inv => !deletedIds.includes(inv.id));
+      const seenIds = new Set<string>();
+      const seenDocs = new Set<string>();
+      let result: any[] = [];
+      for (const inv of combined) {
+        const idKey = String(inv.id || '');
+        const docKey = String(inv.invoiceNumber || inv.docNo || '').trim();
+        if (idKey && seenIds.has(idKey)) continue;
+        if (docKey && !docKey.startsWith('INV-OFFLINE') && !docKey.startsWith('OFFLINE') && seenDocs.has(docKey)) continue;
+        if (idKey) seenIds.add(idKey);
+        if (docKey && !docKey.startsWith('INV-OFFLINE') && !docKey.startsWith('OFFLINE')) seenDocs.add(docKey);
+        result.push(inv);
+      }
       if (params?.customerId) {
         result = result.filter(inv => Number(inv.customerId) === Number(params.customerId));
       }
+      this.applyInvoiceOverrides(result);
       updateInvoiceDocNos(result);
       return result;
     };
 
-    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    if (!this.isOnline()) {
       return from(fetchOfflineInvoices());
     }
 
     return this.http.get(this.baseUrl + '/Invoice/GetInvoices/invoices', { params }).pipe(
-      timeout(3500),
+      timeout(5000),
       tap((res: any) => {
         if (Array.isArray(res) && !params?.customerId) {
+          this.applyInvoiceOverrides(res);
           this.offlineStorage.setCache('invoices_list', res);
           // 在后台静默预抓取发票明细到本地缓存
-          this.prefetchInvoiceDetails(res).catch(() => {});
+          this.prefetchInvoiceDetails(res).catch(() => { });
         }
       }),
       map((res: any) => {
         if (Array.isArray(res)) {
+          this.applyInvoiceOverrides(res);
           updateInvoiceDocNos(res);
         }
         return res;
@@ -646,13 +788,13 @@ export class ApiService {
             isOffline: true
           };
         }
-      } catch {}
+      } catch { }
 
       const cachedInvoices = await this.offlineStorage.getCache<any[]>('invoices_list') || [];
       return cachedInvoices.find((i: any) => String(i.id) === String(id)) || null;
     };
 
-    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    if (!this.isOnline()) {
       return from(fetchOfflineDetail());
     }
 
@@ -660,6 +802,7 @@ export class ApiService {
       timeout(3500),
       map((res: any) => {
         if (res) {
+          this.applyInvoiceOverrideToItem(res);
           res.docNo = formatDocNo(res);
           this.offlineStorage.setCache('inv_detail_' + id, res);
         }
@@ -669,9 +812,39 @@ export class ApiService {
     );
   }
   updateInvoice(id: any, data: any): Observable<any> {
-    const saveOfflineUpdate = () => {
+    const isCash = (data.termType === 'CASH SALE' || data.termType === 'Cash');
+    const newStatus = isCash ? 'Paid' : 'Unpaid';
+    const calculatedTotal = (data.items || []).reduce((sum: number, it: any) => sum + ((Number(it.unitPrice) || 0) * (Number(it.quantity) || 1)), 0);
+    const totalAmount = data.totalAmount != null ? Number(data.totalAmount) : (calculatedTotal > 0 ? calculatedTotal : undefined);
+
+    if (data.termType) {
+      const overrideObj: any = {
+        termType: data.termType,
+        status: newStatus,
+        invoiceNumber: data.invoiceNumber,
+        docNo: data.invoiceNumber,
+        customerId: data.customerId,
+        customerName: data.customerName
+      };
+      if (totalAmount !== undefined) {
+        overrideObj.totalAmount = Math.round((totalAmount + Number.EPSILON) * 100) / 100;
+        overrideObj.paidAmount = isCash ? overrideObj.totalAmount : 0;
+        overrideObj.balance = isCash ? 0 : overrideObj.totalAmount;
+      } else {
+        if (!isCash) {
+          overrideObj.paidAmount = 0;
+        }
+      }
+      this.saveInvoiceOverride(id, overrideObj);
+    }
+
+    const updateCachesLocally = () => {
       this.offlineStorage.getCache<any>('inv_detail_' + id).then(detail => {
         if (detail) {
+          if (data.invoiceNumber) {
+            detail.invoiceNumber = data.invoiceNumber;
+            detail.docNo = data.invoiceNumber;
+          }
           detail.items = data.items || detail.items;
           detail.remark = data.remark ?? detail.remark;
           detail.invoiceDate = data.invoiceDate ?? detail.invoiceDate;
@@ -682,8 +855,17 @@ export class ApiService {
           if (data.customerName !== undefined) {
             detail.customerName = data.customerName;
           }
-          const calculatedTotal = (detail.items || []).reduce((sum: number, it: any) => sum + ((Number(it.unitPrice) || 0) * (Number(it.quantity) || 1)), 0);
-          detail.totalAmount = Math.round((calculatedTotal + Number.EPSILON) * 100) / 100;
+          const calcTotal = (detail.items || []).reduce((sum: number, it: any) => sum + ((Number(it.unitPrice) || 0) * (Number(it.quantity) || 1)), 0);
+          detail.totalAmount = Math.round((calcTotal + Number.EPSILON) * 100) / 100;
+          if (data.termType === 'CASH SALE') {
+            detail.status = 'Paid';
+            detail.paidAmount = detail.totalAmount;
+            detail.balance = 0;
+          } else if (data.termType === 'On Credit' || data.termType === 'Net 30 Days') {
+            detail.status = 'Unpaid';
+            detail.paidAmount = 0;
+            detail.balance = detail.totalAmount;
+          }
           this.offlineStorage.setCache('inv_detail_' + id, detail);
         }
       });
@@ -691,17 +873,35 @@ export class ApiService {
         if (cached && cached.length > 0) {
           const item = cached.find((c: any) => String(c.id) === String(id));
           if (item) {
+            if (data.invoiceNumber) {
+              item.invoiceNumber = data.invoiceNumber;
+              item.docNo = data.invoiceNumber;
+            }
             if (data.customerId !== undefined) item.customerId = data.customerId;
             if (data.customerName !== undefined) item.customerName = data.customerName;
             if (data.items) {
-              const calculatedTotal = (data.items || []).reduce((sum: number, it: any) => sum + ((Number(it.unitPrice) || 0) * (Number(it.quantity) || 1)), 0);
-              item.totalAmount = Math.round((calculatedTotal + Number.EPSILON) * 100) / 100;
+              const calcTotal = (data.items || []).reduce((sum: number, it: any) => sum + ((Number(it.unitPrice) || 0) * (Number(it.quantity) || 1)), 0);
+              item.totalAmount = Math.round((calcTotal + Number.EPSILON) * 100) / 100;
               item.items = data.items;
+            }
+            if (data.termType) item.termType = data.termType;
+            if (data.termType === 'CASH SALE') {
+              item.status = 'Paid';
+              item.paidAmount = item.totalAmount;
+              item.balance = 0;
+            } else if (data.termType === 'On Credit' || data.termType === 'Net 30 Days') {
+              item.status = 'Unpaid';
+              item.paidAmount = 0;
+              item.balance = item.totalAmount;
             }
             this.offlineStorage.setCache('invoices_list', cached);
           }
         }
       });
+    };
+
+    const saveOfflineUpdate = () => {
+      updateCachesLocally();
       return from(
         this.offlineStorage.enqueue('UPDATE_INVOICE', { invoiceId: id, data }, 'upd_inv_' + id).then(() => ({
           message: 'Invoice updated offline (Queued for sync)',
@@ -711,17 +911,21 @@ export class ApiService {
       );
     };
 
-    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    const isOfflineId = String(id).startsWith('offline_') || String(id).startsWith('inv_');
+
+    if (!this.isOnline() || isOfflineId) {
       return saveOfflineUpdate();
     }
 
     return this.http.patch(this.baseUrl + '/Invoice/UpdateInvoice/invoices/' + id, data).pipe(
-      tap(() => this.clearCustomerCache()),
+      timeout(4000),
+      tap(() => {
+        this.clearCustomerCache();
+        updateCachesLocally();
+      }),
       catchError((err: any) => {
-        if (err instanceof HttpErrorResponse && err.status === 0) {
-          return saveOfflineUpdate();
-        }
-        return throwError(() => err);
+        console.warn('[Offline Fallback] Update invoice network failed, falling back to offline update:', err);
+        return saveOfflineUpdate();
       })
     );
   }
@@ -751,8 +955,50 @@ export class ApiService {
   }
 
   deleteInvoice(id: any): Observable<any> {
+    const isOfflineId = String(id).startsWith('offline_') || String(id).startsWith('inv_');
+
+    const executeOfflineDeleteInvoice = async () => {
+      if (isOfflineId) {
+        try {
+          await this.offlineStorage.removeQueueItem(String(id));
+          await this.offlineStorage.removeQueueItem('upd_inv_' + id);
+        } catch {}
+        try {
+          await this.localDb.deleteOrderByClientId(String(id));
+        } catch {}
+      } else {
+        await this.offlineStorage.enqueue('DELETE_INVOICE', { invoiceId: id }, 'del_inv_' + id);
+      }
+
+      // Remove from cached invoices_list
+      const cached = await this.offlineStorage.getCache<any[]>('invoices_list') || [];
+      const updated = cached.filter(inv => String(inv.id) !== String(id) && String(inv.offlineId) !== String(id));
+      await this.offlineStorage.setCache('invoices_list', updated);
+
+      // Remove cached detail
+      await this.offlineStorage.removeCache('inv_detail_' + id);
+
+      await this.offlineStorage.refreshQueueCount();
+      return { success: true, isOffline: true, message: 'Invoice deleted offline' };
+    };
+
+    if (!this.isOnline() || isOfflineId) {
+      return from(executeOfflineDeleteInvoice());
+    }
+
     return this.http.delete(this.baseUrl + '/Invoice/DeleteInvoice/invoices/' + id, { responseType: 'text' }).pipe(
-      tap(() => this.clearCustomerCache())
+      timeout(4000),
+      tap(() => {
+        this.clearCustomerCache();
+        this.offlineStorage.removeCache('inv_detail_' + id);
+        this.offlineStorage.getCache<any[]>('invoices_list').then(cached => {
+          if (cached) {
+            const updated = cached.filter(inv => String(inv.id) !== String(id));
+            this.offlineStorage.setCache('invoices_list', updated);
+          }
+        });
+      }),
+      catchError(() => from(executeOfflineDeleteInvoice()))
     );
   }
   deleteInvoiceDirect(id: any): Observable<any> {
@@ -771,42 +1017,410 @@ export class ApiService {
     );
   }
 
-  createPayment(data: any): Observable<any> {
-    return this.http.post(this.baseUrl + '/Payment/CreatePayment/payments', data).pipe(
-      tap(() => this.clearCustomerCache())
-    );
+  createPayment(data: any, extraInfo?: any): Observable<any> {
+    const bulkData = {
+      customerId: data.customerId,
+      method: data.method || data.paymentMethod || 'CASH',
+      referenceNo: data.referenceNo || '',
+      totalInputAmount: Number(data.amount || 0),
+      payments: [
+        {
+          invoiceId: data.invoiceId,
+          amount: Number(data.amount || 0)
+        }
+      ]
+    };
+    return this.createBulkPayment(bulkData, extraInfo);
   }
-  createBulkPayment(data: any): Observable<any> {
+
+  createBulkPayment(data: any, extraInfo?: any): Observable<any> {
+    const saveOfflineBulkPayment = async () => {
+      // Prevent rapid duplicate offline submissions
+      const pendingQueue = await this.offlineStorage.getPendingQueue();
+      const isDuplicate = pendingQueue.some(q =>
+        q.type === 'CREATE_BULK_PAYMENT' &&
+        Number(q.payload?.data?.customerId) === Number(data.customerId) &&
+        JSON.stringify(q.payload?.data?.payments) === JSON.stringify(data.payments) &&
+        Math.abs(Date.now() - new Date(q.createdAt).getTime()) < 6000
+      );
+      if (isDuplicate) {
+        console.warn('[ApiService] Duplicate offline bulk payment ignored.');
+        return {
+          message: 'Payment already recorded offline!',
+          isOffline: true,
+          groupId: 'pay_bulk_' + Date.now(),
+          payments: [],
+          lastPaymentDetail: null
+        };
+      }
+
+      const now = new Date();
+      const dateStr = now.toISOString();
+      const groupId = 'pay_bulk_' + Date.now();
+      const createdPayments: any[] = [];
+
+      const customer = extraInfo?.customer || {
+        id: data.customerId,
+        name: extraInfo?.customerName || ('Customer #' + data.customerId),
+        phone: extraInfo?.customerPhone || '',
+        email: extraInfo?.customerEmail || ''
+      };
+
+      const cachedPayments = await this.offlineStorage.getCache<any[]>('payments_list') || [];
+      const cachedInvoices = await this.offlineStorage.getCache<any[]>('invoices_list') || [];
+
+      for (let i = 0; i < (data.payments || []).length; i++) {
+        const item = data.payments[i];
+        const invInfo = (extraInfo?.invoices || []).find((inv: any) => String(inv.id) === String(item.invoiceId) || String(inv.invoiceId) === String(item.invoiceId)) || {};
+        const offlinePaymentId = 'pay_' + Date.now() + '_' + i;
+        const receiptNumber = 'RCPT-OFFLINE-' + String(Date.now()).slice(-6) + (data.payments.length > 1 ? `-${i + 1}` : '');
+
+        const invDocNo = invInfo.docNo || invInfo.invoiceNumber || ('INV-' + item.invoiceId);
+        const invTotal = Number(invInfo.totalAmount ?? item.amount ?? 0);
+        const prevBal = Number(invInfo.balance ?? invInfo.previousBalance ?? item.amount);
+        const newBal = Math.max(0, prevBal - Number(item.amount));
+
+        const detailPreview = {
+          id: offlinePaymentId,
+          receiptNumber: receiptNumber,
+          paymentDate: dateStr,
+          paymentMethod: data.method || 'CASH',
+          referenceNo: data.referenceNo || '',
+          customer: {
+            id: customer.id,
+            name: customer.name,
+            phone: customer.phone || '',
+            email: customer.email || ''
+          },
+          invoice: {
+            id: item.invoiceId,
+            invoiceNumber: invDocNo,
+            docNo: invDocNo,
+            invoiceDate: invInfo.invoiceDate || dateStr,
+            totalAmount: invTotal,
+            paidAmount: Number(item.amount),
+            balance: newBal,
+            items: invInfo.items || []
+          },
+          paymentAmount: Number(item.amount),
+          isOffline: true
+        };
+
+        // Cache detail preview for offline viewing and printing
+        await this.offlineStorage.setCache('payment_detail_' + offlinePaymentId, detailPreview);
+
+        const paymentListEntry = {
+          id: offlinePaymentId,
+          customerId: customer.id,
+          customerName: customer.name,
+          invoiceId: item.invoiceId,
+          invoiceNumber: invDocNo,
+          amount: Number(item.amount),
+          method: data.method || 'CASH',
+          paymentDate: dateStr,
+          referenceNo: data.referenceNo || '',
+          receiptNumber: receiptNumber,
+          isOffline: true
+        };
+
+        createdPayments.push({
+          paymentId: offlinePaymentId,
+          receiptNumber: receiptNumber,
+          invoiceId: item.invoiceId,
+          amount: Number(item.amount),
+          customerName: customer.name,
+          invoiceNumber: invDocNo,
+          paymentDate: dateStr,
+          detail: detailPreview,
+          listEntry: paymentListEntry
+        });
+
+        // Update cached invoice balance and status
+        const targetInv = cachedInvoices.find((ci: any) => String(ci.id) === String(item.invoiceId));
+        if (targetInv) {
+          targetInv.paidAmount = (Number(targetInv.paidAmount) || 0) + Number(item.amount);
+          targetInv.balance = Math.max(0, (Number(targetInv.totalAmount) || 0) - targetInv.paidAmount);
+          if (targetInv.balance <= 0.01) {
+            targetInv.status = 'Paid';
+          } else {
+            targetInv.status = 'Partial';
+          }
+        }
+      }
+
+      // Update payments_list cache with newly created offline payments at the front
+      const newPaymentListEntries = createdPayments.map(cp => cp.listEntry);
+      await this.offlineStorage.setCache('payments_list', [...newPaymentListEntries, ...cachedPayments]);
+
+      if (cachedInvoices.length > 0) {
+        await this.offlineStorage.setCache('invoices_list', cachedInvoices);
+      }
+
+      // If excess amount > 0, generate offline Change Credit Note
+      const excess = Number(extraInfo?.excess || 0);
+      if (excess > 0.01 && data.payments.length > 0) {
+        const cnNumber = 'CN-CHG-OFFLINE-' + String(Date.now()).slice(-6);
+        const offlineCnId = 'cn_' + Date.now();
+        const firstInvoiceId = data.payments[0]?.invoiceId;
+        const cachedCNs = await this.offlineStorage.getCache<any[]>('credit_notes_list') || [];
+        const changeCnEntry = {
+          id: offlineCnId,
+          cnNumber,
+          invoiceId: firstInvoiceId,
+          customerId: customer.id,
+          customerName: customer.name,
+          amount: excess,
+          createdAt: dateStr,
+          reason: `Change from bulk payment (excess RM ${excess.toFixed(2)})`,
+          createdAfterPayment: true,
+          isUsed: false,
+          isOffline: true
+        };
+        await this.offlineStorage.setCache('credit_notes_list', [changeCnEntry, ...cachedCNs]);
+      }
+
+      // Enqueue the task into offlineStorage
+      await this.offlineStorage.enqueue('CREATE_BULK_PAYMENT', {
+        data,
+        groupId,
+        createdPayments: createdPayments.map(cp => ({
+          paymentId: cp.paymentId,
+          receiptNumber: cp.receiptNumber,
+          invoiceId: cp.invoiceId,
+          amount: cp.amount,
+          customerName: cp.customerName,
+          invoiceNumber: cp.invoiceNumber,
+          paymentDate: cp.paymentDate
+        }))
+      }, groupId);
+
+      await this.offlineStorage.refreshQueueCount();
+
+      return {
+        message: 'Payment recorded offline! (Queued for sync)',
+        isOffline: true,
+        groupId,
+        payments: createdPayments.map(cp => cp.detail),
+        lastPaymentDetail: createdPayments[0]?.detail
+      };
+    };
+
+    if (!this.isOnline()) {
+      return from(saveOfflineBulkPayment());
+    }
+
     return this.http.post(this.baseUrl + '/Payment/CreateBulkPayment/bulk-payments', data).pipe(
-      tap(() => this.clearCustomerCache())
+      timeout(4000),
+      tap(() => this.clearCustomerCache()),
+      catchError(() => from(saveOfflineBulkPayment()))
     );
   }
   getPayInfo(customerId: any, invoiceId: any): Observable<any> { return this.http.get(this.baseUrl + '/Payment/GetPayInfo/customers/' + customerId + '/invoices/' + invoiceId + '/pay-info'); }
-  getPaymentPreview(id: any): Observable<any> { return this.http.get(this.baseUrl + '/Payment/GetPaymentPreview/payments/' + id + '/preview').pipe(timeout(3500), catchError(() => of(null))); }
-  getPayments(): Observable<any> {
-    const fetchOfflinePayments = async () => {
-      const cached = await this.offlineStorage.getCache<any[]>('payments_list') || [];
-      return cached;
+  getPaymentPreview(id: any): Observable<any> {
+    const fetchOfflinePaymentPreview = async () => {
+      let cached = await this.offlineStorage.getCache<any>('payment_detail_' + id);
+      if (cached) return cached;
+
+      const paymentList = await this.offlineStorage.getCache<any[]>('payments_list') || [];
+      const p = paymentList.find((item: any) => String(item.id) === String(id));
+      if (p) {
+        return {
+          id: p.id,
+          receiptNumber: p.receiptNumber || ('RCPT-' + (String(p.id).startsWith('pay_') ? String(p.id).slice(-6) : p.id)),
+          paymentDate: p.paymentDate || new Date().toISOString(),
+          paymentMethod: p.method || p.paymentMethod || 'CASH',
+          referenceNo: p.referenceNo || '',
+          customer: {
+            id: p.customerId,
+            name: p.customerName || ('Customer #' + p.customerId),
+            phone: p.customerPhone || '',
+            email: p.customerEmail || ''
+          },
+          invoice: {
+            id: p.invoiceId,
+            invoiceNumber: p.invoiceNumber || ('INV-' + (p.invoiceId || '')),
+            docNo: p.invoiceNumber || ('INV-' + (p.invoiceId || '')),
+            totalAmount: p.amount || 0,
+            paidAmount: p.amount || 0,
+            balance: 0,
+            items: []
+          },
+          paymentAmount: p.amount || 0,
+          isOffline: true
+        };
+      }
+      return null;
     };
 
-    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    if (!this.isOnline() || String(id).startsWith('pay_')) {
+      return from(fetchOfflinePaymentPreview());
+    }
+
+    return this.http.get(this.baseUrl + '/Payment/GetPaymentPreview/payments/' + id + '/preview').pipe(
+      timeout(3500),
+      tap((res: any) => {
+        if (res) {
+          this.offlineStorage.setCache('payment_detail_' + id, res);
+        }
+      }),
+      catchError(() => from(fetchOfflinePaymentPreview()))
+    );
+  }
+  getPayments(): Observable<any> {
+    const mapOfflinePayments = (queue: any[]) => {
+      const list: any[] = [];
+      const bulkTasks = queue.filter(q => q.type === 'CREATE_BULK_PAYMENT');
+      for (const task of bulkTasks) {
+        if (task.payload?.createdPayments) {
+          for (const cp of task.payload.createdPayments) {
+            list.push({
+              id: cp.paymentId,
+              customerName: cp.customerName || task.payload?.data?.customerName || ('Customer #' + task.payload?.data?.customerId),
+              invoiceNumber: cp.invoiceNumber || ('INV-' + cp.invoiceId),
+              amount: cp.amount,
+              method: task.payload?.data?.method || 'CASH',
+              paymentDate: cp.paymentDate || new Date(task.createdAt).toISOString(),
+              referenceNo: task.payload?.data?.referenceNo || '',
+              isOffline: true
+            });
+          }
+        }
+      }
+      return list;
+    };
+
+    const fetchOfflinePayments = async () => {
+      const cached = await this.offlineStorage.getCache<any[]>('payments_list') || [];
+      let queue: any[] = [];
+      try {
+        queue = await this.offlineStorage.getPendingQueue();
+      } catch { }
+      const deletedPaymentIds = queue
+        .filter(q => q.type === 'DELETE_PAYMENT')
+        .map(q => String(q.payload?.paymentId));
+
+      const offlineItems = mapOfflinePayments(queue);
+      const combined = [...offlineItems, ...cached].filter(p => !deletedPaymentIds.includes(String(p.id)));
+
+      const seen = new Set();
+      return combined.filter(p => {
+        const key = String(p.id);
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+    };
+
+    if (!this.isOnline()) {
       return from(fetchOfflinePayments());
     }
 
     return this.http.get(this.baseUrl + '/Payment/GetPayments/payments').pipe(
-      timeout(3500),
+      timeout(5000),
       tap((res: any) => {
         if (Array.isArray(res)) {
           this.offlineStorage.setCache('payments_list', res);
         }
       }),
-      catchError(() => from(fetchOfflinePayments()))
+      switchMap((serverList: any) => from((async () => {
+        let queue: any[] = [];
+        try {
+          queue = await this.offlineStorage.getPendingQueue();
+        } catch { }
+        const offlineItems = mapOfflinePayments(queue);
+        const deletedPaymentIds = queue
+          .filter(q => q.type === 'DELETE_PAYMENT')
+          .map(q => String(q.payload?.paymentId));
+        const combined = [...offlineItems, ...(Array.isArray(serverList) ? serverList : [])].filter(p => !deletedPaymentIds.includes(String(p.id)));
+        const seen = new Set();
+        return combined.filter(p => {
+          const key = String(p.id);
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+      })())),
+      catchError((err) => {
+        console.warn('[ApiService] getPayments request failed, using offline cache:', err);
+        return from(fetchOfflinePayments());
+      })
     );
   }
   getPaymentById(id: any): Observable<any> { return this.http.get(this.baseUrl + '/Payment/GetPaymentById/payments/' + id); }
   deletePayment(id: any): Observable<any> {
+    const isOfflinePayment = String(id).startsWith('pay_');
+
+    const executeOfflineDelete = async () => {
+      const cached = await this.offlineStorage.getCache<any[]>('payments_list') || [];
+      const targetPayment = cached.find(p => String(p.id) === String(id));
+      const deletedAmount = Number(targetPayment?.amount ?? 0);
+      const targetInvId = targetPayment?.invoiceId;
+      const targetInvDoc = targetPayment?.invoiceNumber;
+
+      if (isOfflinePayment) {
+        // 1. Remove from pending CREATE_BULK_PAYMENT tasks
+        const queue = await this.offlineStorage.getPendingQueue();
+        for (const q of queue) {
+          if (q.type === 'CREATE_BULK_PAYMENT') {
+            if (Array.isArray(q.payload?.createdPayments)) {
+              const matchedCp = q.payload.createdPayments.find((cp: any) => String(cp.paymentId) === String(id));
+              q.payload.createdPayments = q.payload.createdPayments.filter((cp: any) => String(cp.paymentId) !== String(id));
+              
+              if (Array.isArray(q.payload?.data?.payments) && matchedCp) {
+                q.payload.data.payments = q.payload.data.payments.filter((p: any) => String(p.invoiceId) !== String(matchedCp.invoiceId));
+              }
+
+              if (q.payload.createdPayments.length === 0) {
+                await this.offlineStorage.removeQueueItem(q.id);
+              } else {
+                await this.offlineStorage.updateQueueItem(q);
+              }
+            }
+          }
+        }
+
+        // 2. Remove payment detail cache
+        await this.offlineStorage.removeCache('payment_detail_' + id);
+      } else {
+        // Online payment deleted while offline: queue delete task for sync
+        await this.offlineStorage.enqueue('DELETE_PAYMENT', { paymentId: id }, 'del_pay_' + id);
+      }
+
+      // 3. Remove from payments_list cache
+      const updatedPayments = cached.filter(p => String(p.id) !== String(id));
+      await this.offlineStorage.setCache('payments_list', updatedPayments);
+
+      // 4. Restore invoice balance & status in invoices_list cache
+      if (deletedAmount > 0) {
+        const cachedInvoices = await this.offlineStorage.getCache<any[]>('invoices_list') || [];
+        const inv = cachedInvoices.find(ci => 
+          (targetInvId && String(ci.id) === String(targetInvId)) ||
+          (targetInvDoc && (ci.invoiceNumber === targetInvDoc || ci.docNo === targetInvDoc))
+        );
+        if (inv) {
+          inv.paidAmount = Math.max(0, (Number(inv.paidAmount) || 0) - deletedAmount);
+          inv.balance = Math.max(0, (Number(inv.totalAmount) || 0) - (Number(inv.creditUsed) || 0) - inv.paidAmount);
+          if (inv.paidAmount <= 0.01) {
+            inv.status = 'Unpaid';
+          } else {
+            inv.status = 'Partial';
+          }
+          await this.offlineStorage.setCache('invoices_list', cachedInvoices);
+        }
+      }
+
+      await this.offlineStorage.refreshQueueCount();
+      return { success: true, isOffline: true, message: 'Payment deleted offline' };
+    };
+
+    if (!this.isOnline() || isOfflinePayment) {
+      return from(executeOfflineDelete());
+    }
+
     return this.http.delete(this.baseUrl + '/Payment/DeletePayment/payments/' + id, { responseType: 'text' }).pipe(
-      tap(() => this.clearCustomerCache())
+      timeout(4000),
+      tap(() => this.clearCustomerCache()),
+      catchError(() => from(executeOfflineDelete()))
     );
   }
 
@@ -822,7 +1436,7 @@ export class ApiService {
       return cached;
     };
 
-    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    if (!this.isOnline()) {
       if (this.cachedProducts) return of(this.cachedProducts);
       return from(fetchOfflineProducts());
     }
@@ -835,7 +1449,7 @@ export class ApiService {
             this.offlineStorage.setCache('products', res);
           }
         },
-        error: () => {}
+        error: () => { }
       });
       return of(this.cachedProducts);
     }

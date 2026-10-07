@@ -75,8 +75,8 @@
         <ion-icon name="chevron-back-outline"></ion-icon> Back
       </ion-button>
       <span class="page-title">New Payment</span>
-      <ion-button fill="clear" class="icon-btn" (click)="savePayment()">
-        <ion-icon name="save-outline"></ion-icon>
+      <ion-button fill="clear" class="icon-btn" (click)="savePayment()" [disabled]="isSubmittingPayment">
+        <ion-icon [name]="isSubmittingPayment ? 'hourglass-outline' : 'save-outline'"></ion-icon>
       </ion-button>
     </div>
     <div class="form-card" style="background:#E8D5D0;">
@@ -162,10 +162,15 @@
           class="form-input" />
       </div>
     </div>
-    <button class="save-btn" [disabled]="getPaymentAmountValidationError() !== null"
-      [style.opacity]="getPaymentAmountValidationError() ? 0.5 : 1"
-      [style.cursor]="getPaymentAmountValidationError() ? 'not-allowed' : 'pointer'" (click)="savePayment()">CREATE
-      PAYMENT</button>
+    <button class="save-btn" [disabled]="getPaymentAmountValidationError() !== null || isSubmittingPayment"
+      [style.opacity]="(getPaymentAmountValidationError() || isSubmittingPayment) ? 0.5 : 1"
+      [style.cursor]="(getPaymentAmountValidationError() || isSubmittingPayment) ? 'not-allowed' : 'pointer'" (click)="savePayment()">
+      <span *ngIf="isSubmittingPayment" style="display:inline-flex;align-items:center;justify-content:center;gap:8px;">
+        <ion-spinner name="crescent" style="width:20px;height:20px;color:#fff;"></ion-spinner>
+        <span>RECORDING PAYMENT...</span>
+      </span>
+      <span *ngIf="!isSubmittingPayment">CREATE PAYMENT</span>
+    </button>
   </div>
 
   <div *ngIf="currentView==='newCN'" class="page-container">
@@ -174,8 +179,8 @@
         <ion-icon name="chevron-back-outline"></ion-icon> Back
       </ion-button>
       <span class="page-title">New Credit Note</span>
-      <ion-button fill="clear" class="icon-btn" (click)="saveCreditNote()">
-        <ion-icon name="save-outline"></ion-icon>
+      <ion-button fill="clear" class="icon-btn" (click)="saveCreditNote()" [disabled]="isSubmittingCN">
+        <ion-icon [name]="isSubmittingCN ? 'hourglass-outline' : 'save-outline'"></ion-icon>
       </ion-button>
     </div>
     <div class="form-card" style="background:#C5C8E0;">
@@ -352,9 +357,7 @@
           </div>
           <div style="display:flex; align-items:center; gap:16px; padding-top:12px; border-top:1px dashed #f1f2f6;">
             <div style="flex:1; position:relative;">
-              <input type="number" [(ngModel)]="item.returnQuantity" placeholder="0"
-                (focus)="item.returnQuantity = (item.returnQuantity === 0 ? null : item.returnQuantity)"
-                (blur)="item.returnQuantity = (item.returnQuantity == null ? 0 : item.returnQuantity)"
+              <input type="number" [(ngModel)]="item.returnQuantity" placeholder="0" (keydown)="noLeadingZero($event, item.returnQuantity)"
                 style="width:100%; border:none; border-bottom:2px solid #6c5ce7; padding:8px 0; outline:none; font-size:18px; font-weight:800; color:#6c5ce7; background:transparent;"
                 [max]="item.maxQuantity" min="0">
               <div
@@ -377,7 +380,13 @@
           class="form-textarea"></textarea>
       </div>
     </div>
-    <button class="save-btn" (click)="saveCreditNote()">CREATE CREDIT NOTE</button>
+    <button class="save-btn" [disabled]="isSubmittingCN" [style.opacity]="isSubmittingCN ? 0.5 : 1" (click)="saveCreditNote()">
+      <span *ngIf="isSubmittingCN" style="display:inline-flex;align-items:center;justify-content:center;gap:8px;">
+        <ion-spinner name="crescent" style="width:20px;height:20px;color:#fff;"></ion-spinner>
+        <span>CREATING CREDIT NOTE...</span>
+      </span>
+      <span *ngIf="!isSubmittingCN">CREATE CREDIT NOTE</span>
+    </button>
   </div>
 
   <div *ngIf="currentView==='paymentList'" class="page-container">
@@ -387,9 +396,15 @@
           <ion-icon name="chevron-back-outline"></ion-icon> Back
         </ion-button>
         <span class="page-title">Payment Report</span>
-        <ion-button fill="clear" class="icon-btn" (click)="openNewPayment()">
-          <ion-icon name="add-outline"></ion-icon>
-        </ion-button>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <ion-button *ngIf="pendingOfflineCount > 0" fill="outline" size="small" (click)="manualSync()" [disabled]="isSyncing" style="--border-radius:12px;font-size:11px;font-weight:700;height:30px;--color:#d35400;--border-color:#e67e22;">
+            <ion-icon [name]="isSyncing ? 'sync-outline' : 'cloud-upload-outline'" slot="start" [class.spin-animation]="isSyncing"></ion-icon>
+            {{ isSyncing ? 'Syncing...' : 'Sync (' + pendingOfflineCount + ')' }}
+          </ion-button>
+          <ion-button fill="clear" class="icon-btn" (click)="openNewPayment()">
+            <ion-icon name="add-outline"></ion-icon>
+          </ion-button>
+        </div>
       </div>
       <ion-searchbar [(ngModel)]="paymentSearchTerm" (ionInput)="filterPayments()"
         placeholder="Search customer / invoice / ref..."
@@ -403,16 +418,25 @@
         <div class="item-info" (click)="viewPaymentDetails(payment)" style="cursor: pointer;">
           <div class="item-avatar"><ion-icon name="wallet-outline"></ion-icon></div>
           <div>
-            <div class="item-name">{{ payment.customerName }}</div>
+            <div class="item-name" style="display:flex;align-items:center;gap:6px;">
+              <span>{{ payment.customerName }}</span>
+              <span *ngIf="payment.isOffline || (payment.id && payment.id.toString().startsWith('pay_'))" style="font-size:10px;background:#fff3cd;color:#d35400;padding:2px 6px;border-radius:4px;font-weight:700;">OFFLINE</span>
+            </div>
             <div class="item-sub">{{ getDocNo(payment.invoiceNumber || payment) }}</div>
             <div class="item-sub">RM {{ payment.amount | number:'1.2-2' }} | {{ payment.method }}</div>
             <div class="item-sub">{{ payment.paymentDate | date:'dd/MM/yyyy HH:mm' }}</div>
             <div class="item-sub" *ngIf="payment.referenceNo">Ref: {{ payment.referenceNo }}</div>
           </div>
         </div>
-        <ion-button fill="clear" style="--color:#e57373;" (click)="confirmDeletePayment(payment)">
-          <ion-icon name="trash-outline"></ion-icon>
-        </ion-button>
+        <div style="display:flex;align-items:center;">
+          <ion-button fill="clear" style="--color:#5c85d6;" (click)="viewPaymentDetails(payment); showPaymentPreview = true;" title="Print Receipt">
+            <ion-icon name="print-outline"></ion-icon>
+          </ion-button>
+          <ion-button fill="clear" style="--color:#e57373;" (click)="confirmDeletePayment(payment)" [disabled]="isDeletingPayment">
+            <ion-spinner *ngIf="isDeletingPayment && selectedPayment?.id === payment.id" name="crescent" style="width:16px;height:16px;"></ion-spinner>
+            <ion-icon *ngIf="!isDeletingPayment || selectedPayment?.id !== payment.id" name="trash-outline"></ion-icon>
+          </ion-button>
+        </div>
       </div>
       <div *ngIf="filteredPayments.length===0" class="empty-state">
         <ion-icon name="wallet-outline"></ion-icon>
@@ -471,8 +495,9 @@
             </div>
           </div>
         </div>
-        <ion-button fill="clear" style="--color:#e57373;" (click)="confirmDeleteCN(cn); $event.stopPropagation()">
-          <ion-icon name="trash-outline"></ion-icon>
+        <ion-button fill="clear" style="--color:#e57373;" (click)="confirmDeleteCN(cn); $event.stopPropagation()" [disabled]="isDeletingCN">
+          <ion-spinner *ngIf="isDeletingCN && (selectedCN?.id === cn.id || selectedCNDetail?.id === cn.id)" name="crescent" style="width:16px;height:16px;"></ion-spinner>
+          <ion-icon *ngIf="!isDeletingCN || (selectedCN?.id !== cn.id && selectedCNDetail?.id !== cn.id)" name="trash-outline"></ion-icon>
         </ion-button>
       </div>
       <div *ngIf="filteredCreditNotes.length===0" class="empty-state">
@@ -508,8 +533,9 @@
           <button class="dropdown-item" *ngIf="selectedCNDetail && !selectedCNDetail.isUsed && selectedCNDetail.createdAfterPayment" (click)="showCNActionsDropdown=false; useCreditNote(selectedCNDetail)" style="color:#27ae60;display:flex;align-items:center;gap:8px;width:100%;padding:10px;border:none;background:transparent;font-weight:700;">
             <ion-icon name="wallet-outline"></ion-icon><span>Use Credit</span>
           </button>
-          <button class="dropdown-item" (click)="showCNActionsDropdown=false; confirmDeleteCN(selectedCNDetail)" style="color:#e57373;border-top:1px solid rgba(0,0,0,0.08);display:flex;align-items:center;gap:8px;width:100%;padding:10px;border:none;background:transparent;font-weight:700;">
-            <ion-icon name="trash-outline"></ion-icon><span>Delete CN</span>
+          <button class="dropdown-item" (click)="showCNActionsDropdown=false; confirmDeleteCN(selectedCNDetail)" [disabled]="isDeletingCN" style="color:#e57373;border-top:1px solid rgba(0,0,0,0.08);display:flex;align-items:center;gap:8px;width:100%;padding:10px;border:none;background:transparent;font-weight:700;">
+            <ion-spinner *ngIf="isDeletingCN" name="crescent" style="width:16px;height:16px;"></ion-spinner>
+            <ion-icon *ngIf="!isDeletingCN" name="trash-outline"></ion-icon><span>{{ isDeletingCN ? 'Deleting...' : 'Delete CN' }}</span>
           </button>
         </div>
       </div>
@@ -586,9 +612,10 @@
           <ion-icon name="create-outline"></ion-icon>
           <span>EDIT CN</span>
         </button>
-        <button class="cn-detail-action-btn delete-btn" (click)="confirmDeleteCN(selectedCNDetail)">
-          <ion-icon name="trash-outline"></ion-icon>
-          <span>DELETE</span>
+        <button class="cn-detail-action-btn delete-btn" (click)="confirmDeleteCN(selectedCNDetail)" [disabled]="isDeletingCN">
+          <ion-spinner *ngIf="isDeletingCN" name="crescent" style="width:16px;height:16px;"></ion-spinner>
+          <ion-icon *ngIf="!isDeletingCN" name="trash-outline"></ion-icon>
+          <span>{{ isDeletingCN ? 'DELETING...' : 'DELETE' }}</span>
         </button>
       </div>
     </div>
@@ -666,7 +693,13 @@
       <!-- Edit Actions -->
       <div style="display:flex;gap:12px;margin-bottom:16px;">
         <button class="save-btn" style="background:#888;flex:1;" (click)="cancelEditCN()">CANCEL</button>
-        <button class="save-btn" style="background:#27ae60;flex:1;" (click)="saveEditCN()">SAVE CHANGES</button>
+        <button class="save-btn" style="background:#27ae60;flex:1;" [disabled]="isCNLoading" [style.opacity]="isCNLoading ? 0.5 : 1" (click)="saveEditCN()">
+          <span *ngIf="isCNLoading" style="display:inline-flex;align-items:center;justify-content:center;gap:8px;">
+            <ion-spinner name="crescent" style="width:20px;height:20px;color:#fff;"></ion-spinner>
+            <span>SAVING...</span>
+          </span>
+          <span *ngIf="!isCNLoading">SAVE CHANGES</span>
+        </button>
       </div>
     </div>
   </div>
@@ -791,32 +824,6 @@
         <ion-icon name="chevron-forward-outline" class="billing-cust-arrow"></ion-icon>
       </div>
 
-      <!-- Customer List (card design) -->
-      <div *ngIf="customerModalTarget === 'cn' && (!customerSearchTerm || 'all customers'.includes(customerSearchTerm.toLowerCase()))"
-        (click)="selectCustomerFromModal({ id: 0, name: 'All Customers' })"
-        class="cust-card-item"
-        [style.background]="cnForm.customerId == 0 ? '#f7f6ff' : '#fff'"
-        [style.border-color]="cnForm.customerId == 0 ? '#6c5ce7' : '#f1f2f6'"
-        style="border-radius:18px;padding:14px 16px;margin-bottom:12px;border-width:1.5px;border-style:solid;transition:all 0.2s ease;cursor:pointer;display:flex;align-items:center;gap:14px;box-shadow:0 2px 8px rgba(0,0,0,0.02);position:relative;">
-        <div class="cust-card-avatar"
-          [style.background]="cnForm.customerId == 0 ? 'linear-gradient(135deg, #6c5ce7 0%, #8c7ae6 100%)' : '#eef0f8'"
-          [style.color]="cnForm.customerId == 0 ? '#fff' : '#5c6ac4'"
-          style="width:46px;height:46px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:18px;flex-shrink:0;">
-          <ion-icon name="people-outline"></ion-icon>
-        </div>
-        <div style="flex:1;min-width:0;">
-          <div style="font-size:16px;font-weight:800;color:#2f3542;">All Customers</div>
-          <div style="font-size:12px;color:#747d8c;margin-top:2px;">View all invoices across all customers</div>
-        </div>
-        <div style="flex-shrink:0;">
-          <div *ngIf="cnForm.customerId == 0"
-            style="width:28px;height:28px;border-radius:50%;background:#6c5ce7;color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(108,92,231,0.4);">
-            <ion-icon name="checkmark-outline" style="font-size:18px;"></ion-icon>
-          </div>
-          <ion-icon *ngIf="cnForm.customerId != 0" name="chevron-forward-outline"
-            style="color:#cfd8dc;font-size:20px;"></ion-icon>
-        </div>
-      </div>
 
       <div *ngFor="let c of filteredCustomers" class="billing-cust-item" [class.selected]="isCustomerModalSelected(c)" (click)="selectCustomerFromModal(c)">
         <div class="billing-cust-item-icon">
@@ -1014,8 +1021,15 @@
       <!-- Empty State -->
       <div *ngIf="filteredPaymentInvoices?.length === 0" style="text-align:center; padding:60px 20px; color:#888;">
         <ion-icon name="document-text-outline" style="font-size:56px; color:#ccc; margin-bottom:16px;"></ion-icon>
-        <div style="font-size:16px; font-weight:600; color:#666;">No invoices found.</div>
-        <div style="font-size:13px; color:#999; margin-top:4px;">(Try checking another number or customer)</div>
+        <div style="font-size:16px; font-weight:600; color:#666;">No unpaid invoices found.</div>
+        <div style="font-size:13px; color:#999; margin-top:4px;" *ngIf="paymentForm.customerId">
+          Filtered for {{ getSelectedCustomerName() }}
+        </div>
+        <div style="margin-top:16px;" *ngIf="paymentForm.customerId">
+          <button type="button" (click)="loadInvoicesByCustomer(0)" style="background:#6c5ce7; color:#fff; border:none; border-radius:10px; padding:8px 18px; font-size:13px; font-weight:700; cursor:pointer;">
+            Show Invoices For All Customers
+          </button>
+        </div>
       </div>
 
       <!-- Cards List -->
@@ -1036,11 +1050,15 @@
 
         <!-- Invoice Details -->
         <div style="flex:1;">
-          <div style="display:flex; justify-content:space-between; margin-bottom:6px; align-items:center;">
+          <div style="display:flex; justify-content:space-between; margin-bottom:4px; align-items:center;">
             <span style="font-size:15px; font-weight:800; color:#2f3542;" class="invoice-num">{{ getDocNo(inv) }}</span>
             <span class="invoice-status-badge"
-              style="font-size:11px; padding:4px 10px; border-radius:8px;  color:#d35400; font-weight:700; text-transform:uppercase; letter-spacing:0.5px;">{{
-              inv.status }}</span>
+              style="font-size:11px; padding:4px 10px; border-radius:8px; background:#fff3cd; color:#d35400; font-weight:700; text-transform:uppercase; letter-spacing:0.5px;">{{
+              inv.status || 'UNPAID' }}</span>
+          </div>
+          <div *ngIf="inv.customerName || inv.CustomerName" style="font-size:12px; font-weight:700; color:#6c5ce7; margin-bottom:6px;">
+            <ion-icon name="person-outline" style="vertical-align:middle; margin-right:3px;"></ion-icon>
+            {{ inv.customerName || inv.CustomerName }}
           </div>
           <div style="display:flex; justify-content:space-between; font-size:13px; color:#747d8c; font-weight:600;"
             class="invoice-meta-row">
@@ -1093,9 +1111,14 @@
         <ion-icon name="chevron-back-outline"></ion-icon> Back
       </ion-button>
       <span class="page-title">Payment Details</span>
-      <ion-button fill="clear" class="icon-btn" (click)="showPaymentPreview = true" style="--color: #5c85d6;">
-        <ion-icon name="document-text-outline"></ion-icon>
-      </ion-button>
+      <div style="display:flex;gap:4px;">
+        <ion-button fill="clear" class="icon-btn" (click)="printPaymentReceipt()" style="--color: #27ae60;" title="Print Receipt">
+          <ion-icon name="print-outline"></ion-icon>
+        </ion-button>
+        <ion-button fill="clear" class="icon-btn" (click)="showPaymentPreview = true" style="--color: #5c85d6;" title="Preview Receipt">
+          <ion-icon name="document-text-outline"></ion-icon>
+        </ion-button>
+      </div>
     </div>
 
     <!-- Main Payment Card -->
@@ -1197,6 +1220,18 @@
           <div style="font-size:14px; font-weight:900; color:#2f3542;">RM {{ item.total | number:'1.2-2' }}</div>
         </div>
       </div>
+    </div>
+
+    <!-- Bottom Action Buttons -->
+    <div style="margin-top:16px; margin-bottom:24px; display:flex; gap:12px;">
+      <button class="save-btn" style="flex:1; background:#27ae60; display:flex; align-items:center; justify-content:center; gap:8px;" (click)="printPaymentReceipt()">
+        <ion-icon name="print-outline" style="font-size:18px;"></ion-icon>
+        Print Receipt
+      </button>
+      <button class="save-btn" style="flex:1; background:#5c85d6; display:flex; align-items:center; justify-content:center; gap:8px;" (click)="showPaymentPreview = true">
+        <ion-icon name="document-text-outline" style="font-size:18px;"></ion-icon>
+        Preview Receipt
+      </button>
     </div>
   </div>
 
@@ -1320,3 +1355,24 @@
       </div>
     </div>
   </div>
+
+  <!-- Full-Screen Blocking Loading Modal Overlay -->
+  <div *ngIf="isSubmittingPayment || isSubmittingCN" class="fullscreen-loading-overlay">
+    <div class="loading-modal-card">
+      <div class="spinner-wrapper">
+        <ion-spinner name="crescent" color="primary"></ion-spinner>
+      </div>
+      <div class="loading-title">
+        {{ isSubmittingPayment ? 'Processing Payment...' : 'Processing Credit Note...' }}
+      </div>
+      <div class="loading-subtitle">
+        {{ isSubmittingPayment ? 'Recording transaction securely, please wait...' : 'Generating credit note, please wait...' }}
+      </div>
+      <div class="loading-badge">
+        <ion-icon name="shield-checkmark-outline"></ion-icon>
+        <span>Transaction in progress</span>
+      </div>
+    </div>
+  </div>
+
+</ion-content>

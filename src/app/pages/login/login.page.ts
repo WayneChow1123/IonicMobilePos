@@ -25,7 +25,7 @@ export class LoginPage {
 
   ionViewWillEnter() {
     if (this.authService.isLoggedIn()) {
-      this.navCtrl.navigateRoot('/pages/home');
+      this.navCtrl.navigateRoot('/pages/billing');
     }
   }
 
@@ -33,7 +33,7 @@ export class LoginPage {
     if (this.authService.login(this.username, this.password)) {
       this.errorMessage = '';
       this.alertService.toast('Login successful!', 'success');
-      this.navCtrl.navigateRoot('/pages/home');
+      this.navCtrl.navigateRoot('/pages/billing');
     } else {
       this.errorMessage = 'INVALID USERNAME OR PASSWORD';
     }

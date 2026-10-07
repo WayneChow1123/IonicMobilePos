@@ -294,7 +294,7 @@ export class PreferencesPage implements OnInit {
   showToastMsg(msg: string) { const isWarn = msg.toLowerCase().includes('please') || msg.toLowerCase().includes('must') || msg.toLowerCase().includes('cannot') || msg.toLowerCase().includes('required') || msg.toLowerCase().includes('no '); const isErr = msg.toLowerCase().includes('fail') || msg.toLowerCase().includes('error'); this.alertService.toast(msg, isErr ? 'error' : (isWarn ? 'warning' : 'success')); }
   goTo(path: string) { this.navCtrl.navigateRoot(path); }
 
-  goBack() { this.navCtrl.navigateRoot('pages/home'); }
+  goBack() { this.navCtrl.navigateRoot('pages/billing'); }
 }
 
 
