@@ -364,15 +364,108 @@ export class ApiService {
   }
 
   createCustomer(data: any): Observable<any> {
+    const saveOfflineCustomer = () => {
+      const offlineId = 'cust_off_' + Date.now();
+      const newCustomer = {
+        id: offlineId,
+        customerCode: data.customerCode || ('CUST-OFFLINE-' + String(Date.now()).slice(-6)),
+        name: data.name || '',
+        customerCategory: data.customerCategory || 'DEFAULT',
+        term: data.term || 'Cash Sale',
+        sequence: Number(data.sequence) || 0,
+        description: data.description || '',
+        processCompany: data.processCompany || 'ALL COMPANY',
+        taxStatus: data.taxStatus || 'Un-Defined',
+        taxDocNo: data.taxDocNo || '',
+        discountPercent: Number(data.discountPercent) || 0,
+        enableDiscount: data.enableDiscount != null ? !!data.enableDiscount : true,
+        requireDigitSign: !!data.requireDigitSign,
+        phone: data.phone || '',
+        email: data.email || '',
+        address: data.address || '',
+        branches: data.branches || [],
+        isOffline: true,
+        createdAt: new Date().toISOString()
+      };
+
+      this.offlineStorage.getCache<any[]>('customers').then(cached => {
+        const list = cached || [];
+        this.offlineStorage.setCache('customers', [newCustomer, ...list]);
+      });
+
+      if (this.cachedCustomers) {
+        this.cachedCustomers = [newCustomer, ...this.cachedCustomers];
+      }
+
+      return from(
+        this.offlineStorage.enqueue('CREATE_CUSTOMER', data, offlineId).then(() => ({
+          message: 'Customer created offline (Queued for sync)',
+          id: offlineId,
+          data: newCustomer,
+          isOffline: true
+        }))
+      );
+    };
+
+    if (!this.isOnline()) {
+      return saveOfflineCustomer();
+    }
+
     return this.http.post(this.baseUrl + '/Customer/CreateCustomers/createcustomers', data).pipe(
-      tap(() => this.clearCustomerCache())
+      timeout(4000),
+      tap(() => this.clearCustomerCache()),
+      catchError(() => saveOfflineCustomer())
     );
   }
   getAllCustomers(forceRefresh = false): Observable<any> {
+    const mapOfflineCustomers = (queue: any[]) => {
+      return queue
+        .filter(q => q.type === 'CREATE_CUSTOMER')
+        .map(q => {
+          const p = q.payload?.data || q.payload || {};
+          return {
+            id: q.id,
+            customerCode: p.customerCode || ('CUST-OFFLINE-' + String(q.id).slice(-6)),
+            name: p.name || '',
+            customerCategory: p.customerCategory || 'DEFAULT',
+            term: p.term || 'Cash Sale',
+            sequence: Number(p.sequence) || 0,
+            description: p.description || '',
+            processCompany: p.processCompany || 'ALL COMPANY',
+            taxStatus: p.taxStatus || 'Un-Defined',
+            taxDocNo: p.taxDocNo || '',
+            discountPercent: Number(p.discountPercent) || 0,
+            enableDiscount: p.enableDiscount != null ? !!p.enableDiscount : true,
+            requireDigitSign: !!p.requireDigitSign,
+            phone: p.phone || '',
+            email: p.email || '',
+            address: p.address || '',
+            branches: p.branches || [],
+            isOffline: true,
+            createdAt: new Date(q.createdAt).toISOString()
+          };
+        });
+    };
+
     const fetchOfflineCustomers = async () => {
       const cached = await this.offlineStorage.getCache<any[]>('customers') || [];
-      this.cachedCustomers = cached;
-      return cached;
+      const queue = await this.offlineStorage.getPendingQueue();
+      const offlineCusts = mapOfflineCustomers(queue);
+      const deletedIds = new Set(
+        queue.filter(q => q.type === 'DELETE_CUSTOMER').map(q => String(q.payload?.id || q.id))
+      );
+      const seen = new Set<string>();
+      const result: any[] = [];
+      for (const c of [...offlineCusts, ...cached]) {
+        const idKey = String(c.id || '');
+        if (idKey && deletedIds.has(idKey)) continue;
+        if (!idKey || !seen.has(idKey)) {
+          if (idKey) seen.add(idKey);
+          result.push(c);
+        }
+      }
+      this.cachedCustomers = result;
+      return result;
     };
 
     if (!this.isOnline()) {
@@ -382,11 +475,26 @@ export class ApiService {
 
     if (!forceRefresh && this.cachedCustomers) {
       this.http.get(this.baseUrl + '/Customer/GetAllCustomer/getallcustomer').subscribe({
-        next: (res: any) => {
+        next: async (res: any) => {
           if (Array.isArray(res)) {
-            this.cachedCustomers = res;
-            this.offlineStorage.setCache('customers', res);
-            this.preloadAllCustomerPrices(res);
+            const queue = await this.offlineStorage.getPendingQueue();
+            const offlineCusts = mapOfflineCustomers(queue);
+            const deletedIds = new Set(
+              queue.filter(q => q.type === 'DELETE_CUSTOMER').map(q => String(q.payload?.id || q.id))
+            );
+            const seen = new Set<string>();
+            const result: any[] = [];
+            for (const c of [...offlineCusts, ...res]) {
+              const idKey = String(c.id || '');
+              if (idKey && deletedIds.has(idKey)) continue;
+              if (!idKey || !seen.has(idKey)) {
+                if (idKey) seen.add(idKey);
+                result.push(c);
+              }
+            }
+            this.cachedCustomers = result;
+            this.offlineStorage.setCache('customers', result);
+            this.preloadAllCustomerPrices(result);
           }
         },
         error: () => { }
@@ -395,13 +503,26 @@ export class ApiService {
     }
     return this.http.get(this.baseUrl + '/Customer/GetAllCustomer/getallcustomer').pipe(
       timeout(3500),
-      tap((res: any) => {
+      switchMap((res: any) => from((async () => {
         if (Array.isArray(res)) {
-          this.cachedCustomers = res;
-          this.offlineStorage.setCache('customers', res);
-          this.preloadAllCustomerPrices(res);
+          const queue = await this.offlineStorage.getPendingQueue();
+          const offlineCusts = mapOfflineCustomers(queue);
+          const seen = new Set<string>();
+          const result: any[] = [];
+          for (const c of [...offlineCusts, ...res]) {
+            const idKey = String(c.id || '');
+            if (!idKey || !seen.has(idKey)) {
+              if (idKey) seen.add(idKey);
+              result.push(c);
+            }
+          }
+          this.cachedCustomers = result;
+          this.offlineStorage.setCache('customers', result);
+          this.preloadAllCustomerPrices(result);
+          return result;
         }
-      }),
+        return res;
+      })())),
       catchError(() => from(fetchOfflineCustomers()))
     );
   }
@@ -449,7 +570,7 @@ export class ApiService {
       return customers.find((c: any) => c.id == id) || null;
     };
 
-    if (!this.isOnline()) {
+    if (!this.isOnline() || String(id).startsWith('cust_')) {
       return from(fetchOffline());
     }
 
@@ -469,27 +590,105 @@ export class ApiService {
   }
 
   editCustomer(id: any, data: any): Observable<any> {
+    const saveOfflineEdit = async () => {
+      if (String(id).startsWith('cust_')) {
+        const item = await this.offlineStorage.getQueueItemById(String(id));
+        if (item && item.payload) {
+          const currentData = item.payload.data || item.payload;
+          item.payload = {
+            ...item.payload,
+            ...(item.payload.data ? { data: { ...currentData, ...data } } : data)
+          };
+          await this.offlineStorage.updateQueueItem(item);
+        }
+      } else {
+        await this.offlineStorage.enqueue('UPDATE_CUSTOMER', { id, data }, 'upd_cust_' + id);
+      }
+
+      const cachedList = await this.offlineStorage.getCache<any[]>('customers') || [];
+      const updatedList = cachedList.map(c => {
+        if (String(c.id) === String(id)) {
+          return { ...c, ...data };
+        }
+        return c;
+      });
+      await this.offlineStorage.setCache('customers', updatedList);
+      this.cachedCustomers = updatedList;
+
+      const existingDetail = await this.offlineStorage.getCache<any>('customer_detail_' + id);
+      if (existingDetail) {
+        await this.offlineStorage.setCache('customer_detail_' + id, { ...existingDetail, ...data });
+      }
+
+      return {
+        message: 'Customer updated offline (Queued for sync)',
+        id,
+        isOffline: true
+      };
+    };
+
+    if (!this.isOnline() || String(id).startsWith('cust_')) {
+      return from(saveOfflineEdit());
+    }
+
     return this.http.put(this.baseUrl + '/Customer/EditCustomer/editcustomers/' + id, data).pipe(
+      timeout(4000),
       tap((res: any) => {
         this.clearCustomerCache();
-        // Update customer detail cache
         this.offlineStorage.getCache<any>('customer_detail_' + id).then(existing => {
           if (existing) {
             const updated = { ...existing, ...data };
             this.offlineStorage.setCache('customer_detail_' + id, updated);
           }
         });
-      })
+      }),
+      catchError(() => from(saveOfflineEdit()))
     );
   }
 
   deleteCustomer(id: any): Observable<any> {
+    const saveOfflineDelete = async () => {
+      if (String(id).startsWith('cust_')) {
+        await this.offlineStorage.removeQueueItem(String(id));
+        await this.offlineStorage.removeQueueItem('upd_cust_' + id);
+        const pending = await this.offlineStorage.getPendingQueue();
+        for (const q of pending) {
+          if ((q.type === 'CREATE_CUSTOMER_PRICE' || q.type === 'UPDATE_CUSTOMER_PRICE' || q.type === 'DELETE_CUSTOMER_PRICE') && String(q.payload?.customerId) === String(id)) {
+            await this.offlineStorage.removeQueueItem(q.id);
+          }
+        }
+      } else {
+        await this.offlineStorage.removeQueueItem('upd_cust_' + id);
+        await this.offlineStorage.enqueue('DELETE_CUSTOMER', { id }, 'del_cust_' + id);
+      }
+
+      const cachedList = await this.offlineStorage.getCache<any[]>('customers') || [];
+      const filteredList = cachedList.filter(c => String(c.id) !== String(id));
+      await this.offlineStorage.setCache('customers', filteredList);
+      this.cachedCustomers = filteredList;
+
+      await this.offlineStorage.removeCache('customer_detail_' + id);
+      await this.offlineStorage.removeCache('customer_prices_' + id);
+
+      return {
+        message: 'Customer deleted offline (Queued for sync)',
+        id,
+        isOffline: true
+      };
+    };
+
+    if (!this.isOnline() || String(id).startsWith('cust_')) {
+      return from(saveOfflineDelete());
+    }
+
     return this.http.delete(this.baseUrl + '/Customer/DeleteCustomer/deletecustomer/' + id, { responseType: 'text' }).pipe(
+      timeout(4000),
       tap(() => {
         this.clearCustomerCache();
         this.offlineStorage.removeCache('customer_detail_' + id);
         this.offlineStorage.removeCache('customer_prices_' + id);
-      })
+      }),
+      catchError(() => from(saveOfflineDelete()))
     );
   }
 
@@ -620,17 +819,71 @@ export class ApiService {
   }
 
   createCustomerProductPrice(customerId: any, data: any): Observable<any> {
+    const saveOfflinePrice = async () => {
+      const prices = await this.offlineStorage.getCache<any[]>('customer_prices_' + customerId) || [];
+      const newEntity = { customerId, productId: data.productId, specialPrice: data.specialPrice, isOffline: true };
+      const updated = prices.filter((p: any) => p.productId != data.productId);
+      updated.push(newEntity);
+      await this.offlineStorage.setCache('customer_prices_' + customerId, updated);
+      await this.offlineStorage.setCache('customer_prices_' + String(customerId), updated);
+
+      const allPrices = await this.offlineStorage.getCache<any[]>('all_customer_prices') || [];
+      const filteredAll = allPrices.filter((p: any) => !(String(p.customerId ?? p.CustomerId) === String(customerId) && p.productId == data.productId));
+      filteredAll.push(newEntity);
+      await this.offlineStorage.setCache('all_customer_prices', filteredAll);
+
+      await this.offlineStorage.enqueue('CREATE_CUSTOMER_PRICE', { customerId, data });
+      return { message: 'Special price saved offline', data: newEntity, isOffline: true };
+    };
+
+    if (!this.isOnline() || String(customerId).startsWith('cust_')) {
+      return from(saveOfflinePrice());
+    }
+
     return this.http.post(this.baseUrl + '/Customer/CreateCustomerProductPrice/customers/' + customerId + '/product-prices', data).pipe(
+      timeout(4000),
       tap(async (res: any) => {
         const prices = await this.offlineStorage.getCache<any[]>('customer_prices_' + customerId) || [];
         const newEntity = res?.data || { customerId, productId: data.productId, specialPrice: data.specialPrice };
         this.offlineStorage.setCache('customer_prices_' + customerId, [...prices, newEntity]);
-      })
+      }),
+      catchError(() => from(saveOfflinePrice()))
     );
   }
 
   updateCustomerProductPrice(customerId: any, productId: any, data: any): Observable<any> {
+    const saveOfflineUpdatePrice = async () => {
+      const prices = await this.offlineStorage.getCache<any[]>('customer_prices_' + customerId) || [];
+      const idx = prices.findIndex((p: any) => p.productId == productId);
+      if (idx !== -1) {
+        prices[idx] = { ...prices[idx], specialPrice: data.specialPrice };
+        await this.offlineStorage.setCache('customer_prices_' + customerId, prices);
+      }
+      const allPrices = await this.offlineStorage.getCache<any[]>('all_customer_prices') || [];
+      const aIdx = allPrices.findIndex((p: any) => (String(p.customerId ?? p.CustomerId) === String(customerId)) && p.productId == productId);
+      if (aIdx !== -1) {
+        allPrices[aIdx] = { ...allPrices[aIdx], specialPrice: data.specialPrice };
+        await this.offlineStorage.setCache('all_customer_prices', allPrices);
+      }
+
+      const pending = await this.offlineStorage.getPendingQueue();
+      const existingCreate = pending.find(q => q.type === 'CREATE_CUSTOMER_PRICE' && String(q.payload?.customerId) === String(customerId) && (q.payload?.data?.productId == productId || q.payload?.productId == productId));
+      if (existingCreate) {
+        if (existingCreate.payload?.data) existingCreate.payload.data.specialPrice = data.specialPrice;
+        else existingCreate.payload.specialPrice = data.specialPrice;
+        await this.offlineStorage.updateQueueItem(existingCreate);
+      } else {
+        await this.offlineStorage.enqueue('UPDATE_CUSTOMER_PRICE', { customerId, productId, data }, `upd_cp_${customerId}_${productId}`);
+      }
+      return { message: 'Special price updated offline', isOffline: true };
+    };
+
+    if (!this.isOnline() || String(customerId).startsWith('cust_')) {
+      return from(saveOfflineUpdatePrice());
+    }
+
     return this.http.patch(this.baseUrl + '/Customer/UpdateCustomerProductPrice/customers/' + customerId + '/product-prices/' + productId, data).pipe(
+      timeout(4000),
       tap(async () => {
         const prices = await this.offlineStorage.getCache<any[]>('customer_prices_' + customerId) || [];
         const idx = prices.findIndex((p: any) => p.productId == productId);
@@ -638,17 +891,43 @@ export class ApiService {
           prices[idx] = { ...prices[idx], specialPrice: data.specialPrice };
           this.offlineStorage.setCache('customer_prices_' + customerId, prices);
         }
-      })
+      }),
+      catchError(() => from(saveOfflineUpdatePrice()))
     );
   }
 
   deleteCustomerProductPrice(customerId: any, productId: any): Observable<any> {
+    const saveOfflineDeletePrice = async () => {
+      const prices = await this.offlineStorage.getCache<any[]>('customer_prices_' + customerId) || [];
+      const filtered = prices.filter((p: any) => p.productId != productId);
+      await this.offlineStorage.setCache('customer_prices_' + customerId, filtered);
+
+      const allPrices = await this.offlineStorage.getCache<any[]>('all_customer_prices') || [];
+      const filteredAll = allPrices.filter((p: any) => !(String(p.customerId ?? p.CustomerId) === String(customerId) && p.productId == productId));
+      await this.offlineStorage.setCache('all_customer_prices', filteredAll);
+
+      const pending = await this.offlineStorage.getPendingQueue();
+      const existingCreate = pending.find(q => q.type === 'CREATE_CUSTOMER_PRICE' && String(q.payload?.customerId) === String(customerId) && (q.payload?.data?.productId == productId || q.payload?.productId == productId));
+      if (existingCreate) {
+        await this.offlineStorage.removeQueueItem(existingCreate.id);
+      } else if (!String(customerId).startsWith('cust_')) {
+        await this.offlineStorage.enqueue('DELETE_CUSTOMER_PRICE', { customerId, productId }, `del_cp_${customerId}_${productId}`);
+      }
+      return { message: 'Special price deleted offline', isOffline: true };
+    };
+
+    if (!this.isOnline() || String(customerId).startsWith('cust_')) {
+      return from(saveOfflineDeletePrice());
+    }
+
     return this.http.delete(this.baseUrl + '/Customer/DeleteCustomerProductPrice/customers/' + customerId + '/product-prices/' + productId, { responseType: 'text' }).pipe(
+      timeout(4000),
       tap(async () => {
         const prices = await this.offlineStorage.getCache<any[]>('customer_prices_' + customerId) || [];
         const filtered = prices.filter((p: any) => p.productId != productId);
         this.offlineStorage.setCache('customer_prices_' + customerId, filtered);
-      })
+      }),
+      catchError(() => from(saveOfflineDeletePrice()))
     );
   }
   getCustomerPurchaseHistory(customerId: any): Observable<any> {
@@ -1179,6 +1458,12 @@ export class ApiService {
 
   putDirect(url: string, data: any): Observable<any> {
     return this.http.put(url, data).pipe(
+      tap(() => this.clearCustomerCache())
+    );
+  }
+
+  patchDirect(url: string, data: any): Observable<any> {
+    return this.http.patch(url, data).pipe(
       tap(() => this.clearCustomerCache())
     );
   }

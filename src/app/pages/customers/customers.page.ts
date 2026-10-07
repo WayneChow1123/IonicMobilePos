@@ -6,6 +6,8 @@ import { CommonModule } from '@angular/common';
 import { IonicModule } from '@ionic/angular';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../services/api.service';
+import { OfflineStorageService } from '../../services/offline-storage.service';
+import { SyncService } from '../../services/sync.service';
 import { Subscription } from 'rxjs';
 import Swal from 'sweetalert2';
 
@@ -70,7 +72,11 @@ export class CustomersPage implements OnInit, OnDestroy {
     { text: 'Delete', role: 'destructive', handler: () => this.deleteCustomer() }
   ];
 
+  pendingOfflineCount: number = 0;
+  isSyncing: boolean = false;
   private backButtonSub?: Subscription;
+  private queueCountSub?: Subscription;
+  private syncingSub?: Subscription;
 
   constructor(
     private router: Router,
@@ -78,7 +84,9 @@ export class CustomersPage implements OnInit, OnDestroy {
     private api: ApiService,
     private cdr: ChangeDetectorRef,
     private alertService: AlertService,
-    private platform: Platform
+    private platform: Platform,
+    private offlineStorage: OfflineStorageService,
+    private syncService: SyncService
   ) { }
 
   ionViewWillEnter() {
@@ -90,6 +98,19 @@ export class CustomersPage implements OnInit, OnDestroy {
     this.searchTerm = '';
     this.activeSubTab = 'MASTER';
     this.activeReport = null;
+
+    this.queueCountSub?.unsubscribe();
+    this.queueCountSub = this.offlineStorage.queueCount$.subscribe(count => {
+      this.pendingOfflineCount = count;
+      this.cdr.detectChanges();
+    });
+
+    this.syncingSub?.unsubscribe();
+    this.syncingSub = this.syncService.isSyncing$.subscribe(syncing => {
+      this.isSyncing = syncing;
+      this.cdr.detectChanges();
+    });
+
     this.loadCustomers();
     this.cdr.detectChanges();
 
@@ -269,18 +290,21 @@ export class CustomersPage implements OnInit, OnDestroy {
   }
 
   getProductName(productId: number): string {
-    const p = this.allProducts.find(x => x.id === productId);
-    return p ? p.name : 'Unknown Product';
+    const p = this.allProducts.find(x => (x.id ?? x.Id) == productId);
+    return p ? (p.name || p.Name || p.productName || p.ProductName || 'Unknown Product') : 'Unknown Product';
   }
 
   getProductPrice(productId: number): number {
-    const p = this.allProducts.find(x => x.id === productId);
-    return p ? p.price : 0;
+    const p = this.allProducts.find(x => (x.id ?? x.Id) == productId);
+    return p ? Number(p.price ?? p.Price ?? 0) : 0;
   }
 
   openProductSelectModal() {
     this.searchText = '';
-    this.selectedTempProduct = this.allProducts.find(p => p.id === this.newPriceForm.productId) || null;
+    this.selectedTempProduct = this.allProducts.find(p => (p.id ?? p.Id) === this.newPriceForm.productId) || null;
+    if (!this.allProducts || this.allProducts.length === 0) {
+      this.loadPriceProducts();
+    }
     this.onSearch();
     this.showProductSelectModal = true;
     this.cdr.detectChanges();
@@ -294,7 +318,7 @@ export class CustomersPage implements OnInit, OnDestroy {
   selectProductDirectly(product: any) {
     if (!product) return;
     this.selectedTempProduct = product;
-    this.newPriceForm.productId = product.id;
+    this.newPriceForm.productId = product.id ?? product.Id;
     this.showProductSelectModal = false;
     this.cdr.detectChanges();
   }
@@ -306,55 +330,82 @@ export class CustomersPage implements OnInit, OnDestroy {
 
   confirmProductSelection() {
     if (this.selectedTempProduct) {
-      this.newPriceForm.productId = this.selectedTempProduct.id;
+      this.newPriceForm.productId = this.selectedTempProduct.id ?? this.selectedTempProduct.Id;
     }
     this.showProductSelectModal = false;
     this.cdr.detectChanges();
   }
 
   // =========================
-  // SEARCH
+  // SEARCH (Case-Insensitive & Multi-Token & Flexible Key)
   // =========================
-  onSearch() {
-    const keyword = this.searchText
-      .trim()
-      .toLowerCase();
+  onSearch(event?: any) {
+    if (event?.target && event.target.value !== undefined) {
+      this.searchText = event.target.value;
+    }
+    const raw = (this.searchText || '').trim().toLowerCase();
+    const tokens = raw.split(/\s+/).filter(t => t.length > 0);
 
     // =========================
     // NO SEARCH
     // =========================
-    if (!keyword) {
+    if (tokens.length === 0) {
       this.matchedProducts = [];
-      // IMPORTANT: Show ALL products
       this.otherProducts = [...this.allProducts];
+      this.cdr.detectChanges();
       return;
     }
 
     // =========================
     // FIND MATCHING PRODUCTS
     // =========================
-    this.matchedProducts = this.allProducts.filter(product =>
-      product.name
-        .toLowerCase()
-        .includes(keyword)
-    );
+    this.matchedProducts = this.allProducts.filter(p => {
+      const name = String(p.name || p.Name || p.productName || p.ProductName || '').toLowerCase();
+      const code = String(p.code || p.Code || p.productCode || p.ProductCode || '').toLowerCase();
+      const barcode = String(p.barcode || p.Barcode || '').toLowerCase();
+      const sku = String(p.sku || p.Sku || '').toLowerCase();
+      const category = String(p.category || p.Category || p.categoryName || p.CategoryName || '').toLowerCase();
+      const desc = String(p.description || p.Description || '').toLowerCase();
 
-    // =========================
-    // OTHER PRODUCTS
-    // =========================
-    this.otherProducts = this.allProducts.filter(product =>
-      !product.name
-        .toLowerCase()
-        .includes(keyword)
-    );
+      const combined = `${name} ${code} ${barcode} ${sku} ${category} ${desc}`;
+      const cleanCode = code.replace(/[-_\s]/g, '');
+      const cleanBarcode = barcode.replace(/[-_\s]/g, '');
+
+      return tokens.every(token => {
+        const cleanToken = token.replace(/[-_\s]/g, '');
+        return combined.includes(token) || 
+               (cleanCode.length > 0 && cleanCode.includes(cleanToken)) ||
+               (cleanBarcode.length > 0 && cleanBarcode.includes(cleanToken));
+      });
+    });
+
+    this.otherProducts = [];
+    this.cdr.detectChanges();
   }
 
-  getHighlightedName(name: string): string {
-    if (!this.searchText || !name) return name;
-    const keyword = this.searchText.trim();
-    if (!keyword) return name;
-    const regex = new RegExp(`(${keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
-    return name.replace(regex, '<span class="search-highlight">$1</span>');
+  clearSearch() {
+    this.searchText = '';
+    this.onSearch();
+  }
+
+  getHighlightedText(text: any): string {
+    const str = String(text ?? '');
+    if (!this.searchText || !str) return str;
+    const raw = this.searchText.trim();
+    if (!raw) return str;
+    const tokens = raw.split(/\s+/).filter(t => t.length > 0);
+    if (tokens.length === 0) return str;
+
+    const escaped = tokens
+      .map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+      .sort((a, b) => b.length - a.length)
+      .join('|');
+    const regex = new RegExp(`(${escaped})`, 'gi');
+    return str.replace(regex, '<span class="search-highlight" style="background:#fef08a;color:#854d0e;padding:0 2px;border-radius:2px;font-weight:700;">$1</span>');
+  }
+
+  getHighlightedName(name: any): string {
+    return this.getHighlightedText(name);
   }
 
   toggleAddPriceForm() {
@@ -664,21 +715,26 @@ export class CustomersPage implements OnInit, OnDestroy {
 
     if (this.isEditing && this.selectedCustomer) {
       this.api.editCustomer(this.selectedCustomer.id, payload).subscribe({
-        next: () => { this.showToastMsg('Customer updated!'); this.closeModal(); this.loadCustomers(); },
+        next: (res: any) => {
+          this.showToastMsg(res?.isOffline ? 'Customer updated offline! (Queued for sync)' : 'Customer updated!');
+          this.closeModal();
+          this.loadCustomers();
+        },
         error: (err: any) => this.showToastMsg('Failed: ' + (err.error?.message || JSON.stringify(err.error) || err.message || 'error'))
       });
     } else {
       this.api.createCustomer(payload).subscribe({
         next: (res: any) => {
+          const isOffline = !!res?.isOffline;
           const newCustomerId = res?.data?.id || res?.id;
           if (newCustomerId && this.customerPrices.length > 0) {
             let hasError = false;
             const saveNext = (index: number) => {
               if (index >= this.customerPrices.length) {
                 if (hasError) {
-                  this.showToastMsg('Customer created, but failed to save some special prices.');
+                  this.showToastMsg(isOffline ? 'Customer saved offline, but failed to save some special prices.' : 'Customer created, but failed to save some special prices.');
                 } else {
-                  this.showToastMsg('Customer created with special prices!');
+                  this.showToastMsg(isOffline ? 'Customer saved offline with special prices! (Queued for sync)' : 'Customer created with special prices!');
                 }
                 this.closeModal();
                 this.loadCustomers();
@@ -700,7 +756,7 @@ export class CustomersPage implements OnInit, OnDestroy {
             };
             saveNext(0);
           } else {
-            this.showToastMsg('Customer created!');
+            this.showToastMsg(isOffline ? 'Customer saved offline! (Queued for sync)' : 'Customer created!');
             this.closeModal();
             this.loadCustomers();
           }
@@ -715,7 +771,10 @@ export class CustomersPage implements OnInit, OnDestroy {
   deleteCustomer() {
     if (!this.selectedCustomer) return;
     this.api.deleteCustomer(this.selectedCustomer.id).subscribe({
-      next: () => { this.showToastMsg('Customer deleted!'); this.loadCustomers(); },
+      next: (res: any) => {
+        this.showToastMsg(res?.isOffline ? 'Customer deleted offline! (Queued for sync)' : 'Customer deleted!');
+        this.loadCustomers();
+      },
       error: (err: any) => this.showToastMsg('Failed: ' + (err.error?.message || err.message || 'error'))
     });
   }
@@ -785,12 +844,48 @@ export class CustomersPage implements OnInit, OnDestroy {
     this.navCtrl.navigateRoot('pages/home');
   }
 
+  isOfflineCustomer(id: any): boolean {
+    return typeof id === 'string' && id.startsWith('cust_off_');
+  }
+
+  async manualSync() {
+    if (this.isSyncing) return;
+    this.showToastMsg('Syncing offline data...');
+    const res = await this.syncService.syncPendingInvoices(true);
+    if (res.successCount > 0) {
+      this.showToastMsg(`Synced ${res.successCount} item(s) successfully!`);
+      this.loadCustomers();
+    } else if (res.failCount > 0) {
+      this.alertService.confirm(
+        'Sync Failed',
+        `Server temporarily returned an error while syncing ${res.failCount} task(s). Your offline data is safely preserved. Clear from queue only if you want to permanently discard it.`,
+        'Retry Sync',
+        'Clear Queue'
+      ).then(retry => {
+        if (retry) {
+          this.manualSync();
+        } else {
+          this.offlineStorage.clearQueue().then(() => {
+            this.showToastMsg('Queue cleared.');
+            this.loadCustomers();
+          });
+        }
+      });
+    } else {
+      this.showToastMsg('All offline items are already synchronized.');
+    }
+  }
+
   ionViewWillLeave() {
     this.unregisterBackButton();
+    this.queueCountSub?.unsubscribe();
+    this.syncingSub?.unsubscribe();
   }
 
   ngOnDestroy() {
     this.unregisterBackButton();
+    this.queueCountSub?.unsubscribe();
+    this.syncingSub?.unsubscribe();
   }
 
   registerBackButton() {

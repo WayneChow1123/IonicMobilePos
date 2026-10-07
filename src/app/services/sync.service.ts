@@ -273,13 +273,87 @@ export class SyncService {
       const pending = await this.offlineStorage.getPendingQueue();
       const baseUrl = (this.api as any).baseUrl;
 
-      for (const task of pending) {
+      // 客户创建优先同步，以便后续关联发票获取真实服务端 customerId
+      const customerTasks = pending.filter(t => t.type === 'CREATE_CUSTOMER');
+      const otherTasks = pending.filter(t => t.type !== 'CREATE_CUSTOMER');
+      const sortedPending = [...customerTasks, ...otherTasks];
+
+      for (const task of sortedPending) {
         if (!forceRetry && (task.status === 'failed' || task.retryCount >= this.MAX_RETRY_LIMIT)) {
           continue;
         }
 
         try {
-          if (task.type === 'CREATE_INVOICE') {
+          if (task.type === 'CREATE_CUSTOMER') {
+            const url = `${baseUrl}/Customer/CreateCustomers/createcustomers`;
+            const payload = task.payload?.data || task.payload;
+            const res: any = await firstValueFrom(this.api.postDirect(url, payload));
+            const serverId = res?.data?.id || res?.id || 0;
+            if (serverId) {
+              const cachedCustomers = await this.offlineStorage.getCache<any[]>('customers') || [];
+              const matched = cachedCustomers.find(c => String(c.id) === String(task.id) || c.offlineId === task.id);
+              if (matched) {
+                matched.id = serverId;
+                matched.isOffline = false;
+                await this.offlineStorage.setCache('customers', cachedCustomers);
+              }
+
+              // 同步更新队列中依赖该离线 customerId 的发票和特价任务
+              const pendingQueue = await this.offlineStorage.getPendingQueue();
+              for (const q of pendingQueue) {
+                if (q.type === 'CREATE_INVOICE' && q.payload && String(q.payload.customerId) === String(task.id)) {
+                  q.payload.customerId = serverId;
+                  await this.offlineStorage.updateQueueItem(q);
+                }
+                if ((q.type === 'CREATE_CUSTOMER_PRICE' || q.type === 'UPDATE_CUSTOMER_PRICE' || q.type === 'DELETE_CUSTOMER_PRICE') && q.payload && String(q.payload.customerId) === String(task.id)) {
+                  q.payload.customerId = serverId;
+                  await this.offlineStorage.updateQueueItem(q);
+                }
+              }
+            }
+            await this.offlineStorage.removeQueueItem(task.id);
+            successCount++;
+          } else if (task.type === 'CREATE_CUSTOMER_PRICE') {
+            const cid = task.payload?.customerId;
+            const url = `${baseUrl}/Customer/CreateCustomerProductPrice/customers/${cid}/product-prices`;
+            await firstValueFrom(this.api.postDirect(url, task.payload?.data || task.payload));
+            await this.offlineStorage.removeQueueItem(task.id);
+            successCount++;
+          } else if (task.type === 'UPDATE_CUSTOMER_PRICE') {
+            const cid = task.payload?.customerId;
+            const pid = task.payload?.productId;
+            const url = `${baseUrl}/Customer/UpdateCustomerProductPrice/customers/${cid}/product-prices/${pid}`;
+            await firstValueFrom(this.api.patchDirect(url, task.payload?.data || task.payload));
+            await this.offlineStorage.removeQueueItem(task.id);
+            successCount++;
+          } else if (task.type === 'DELETE_CUSTOMER_PRICE') {
+            const cid = task.payload?.customerId;
+            const pid = task.payload?.productId;
+            const url = `${baseUrl}/Customer/DeleteCustomerProductPrice/customers/${cid}/product-prices/${pid}`;
+            await firstValueFrom(this.api.deleteDirect(url));
+            await this.offlineStorage.removeQueueItem(task.id);
+            successCount++;
+          } else if (task.type === 'UPDATE_CUSTOMER') {
+            const cid = task.payload?.id;
+            const url = `${baseUrl}/Customer/EditCustomer/editcustomers/${cid}`;
+            await firstValueFrom(this.api.putDirect(url, task.payload?.data || task.payload));
+            await this.offlineStorage.removeQueueItem(task.id);
+            successCount++;
+          } else if (task.type === 'DELETE_CUSTOMER') {
+            const cid = task.payload?.id;
+            const url = `${baseUrl}/Customer/DeleteCustomer/deletecustomer/${cid}`;
+            await firstValueFrom(this.api.deleteDirect(url));
+            await this.offlineStorage.removeQueueItem(task.id);
+            successCount++;
+          } else if (task.type === 'CREATE_INVOICE') {
+            // 如果发票使用的是离线 customerId，先从已同步客户中查找映射
+            if (typeof task.payload?.customerId === 'string' && task.payload.customerId.startsWith('cust_')) {
+              const cachedCustomers = await this.offlineStorage.getCache<any[]>('customers') || [];
+              const matched = cachedCustomers.find(c => String(c.id) === String(task.payload.customerId) || c.offlineId === task.payload.customerId);
+              if (matched && typeof matched.id === 'number') {
+                task.payload.customerId = matched.id;
+              }
+            }
             const res = await firstValueFrom(this.api.postInvoiceDirect(task.payload));
             const serverId = res?.invoiceId || res?.id || 0;
             try { await this.localDb.markAsSynced(task.id, serverId); } catch { }

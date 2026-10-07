@@ -260,6 +260,25 @@ export class OfflineStorageService {
   }
 
   /**
+   * 清空待处理队列
+   */
+  public async clearQueue(): Promise<void> {
+    try {
+      const db = await this.getDB();
+      await new Promise<void>((resolve, reject) => {
+        const tx = db.transaction(this.STORE_QUEUE, 'readwrite');
+        const store = tx.objectStore(this.STORE_QUEUE);
+        const req = store.clear();
+        req.onsuccess = () => resolve();
+        req.onerror = () => reject(req.error);
+      });
+    } catch {
+      localStorage.removeItem('td_offline_sync_queue');
+    }
+    await this.refreshQueueCount();
+  }
+
+  /**
    * 刷新并推送待处理队列数量
    */
   public async refreshQueueCount(): Promise<number> {

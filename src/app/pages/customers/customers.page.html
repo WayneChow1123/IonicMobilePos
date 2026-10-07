@@ -8,7 +8,11 @@
           <ion-icon name="chevron-back-outline"></ion-icon> Back
         </ion-button>
         <span class="page-title">Customers</span>
-        <div class="top-right">
+        <div class="top-right" style="display:flex;align-items:center;">
+          <ion-button *ngIf="pendingOfflineCount > 0" fill="outline" size="small" (click)="manualSync()" [disabled]="isSyncing" style="--border-radius:12px;font-size:11px;font-weight:700;height:30px;--color:#d35400;--border-color:#e67e22;margin-right:4px;">
+            <ion-icon [name]="isSyncing ? 'sync-outline' : 'cloud-upload-outline'" slot="start" [class.spin-animation]="isSyncing"></ion-icon>
+            {{ isSyncing ? 'Syncing...' : 'Sync (' + pendingOfflineCount + ')' }}
+          </ion-button>
           <ion-button fill="clear" class="icon-btn" (click)="toggleSearch()">
             <ion-icon name="search-outline"></ion-icon>
           </ion-button>
@@ -36,7 +40,10 @@
         <div class="item-info" (click)="openEditModal(customer)">
           <div class="item-avatar"><ion-icon name="person-outline"></ion-icon></div>
           <div>
-            <div class="item-name">{{ customer.name }}</div>
+            <div class="item-name" style="display:flex;align-items:center;gap:6px;">
+              <span>{{ customer.name }}</span>
+              <span *ngIf="customer.isOffline || isOfflineCustomer(customer.id)" class="offline-badge">Offline</span>
+            </div>
             <div class="item-sub-row">
               <span class="item-code">{{ customer.customerCode || '---' }}</span>
               <span class="item-credit" [class.credit-neg]="getCustomerCredit(customer.id) < 0"
@@ -452,126 +459,119 @@
 
       <!-- SEARCH BOX (FIXED TOP) -->
       <div style="padding: 16px 20px 0; background: #ffffff; flex-shrink: 0;">
-        <div class="product-search-box" style="margin-bottom: 12px;">
+        <div class="product-search-box" style="margin-bottom: 8px;">
           <ion-icon name="search-outline"></ion-icon>
 
           <input 
             type="text"
             [(ngModel)]="searchText"
-            (input)="onSearch()"
-            placeholder="Search by name..."
+            [value]="searchText"
+            (input)="onSearch($event)"
+            (keyup)="onSearch($event)"
+            autocapitalize="none"
+            autocorrect="off"
+            autocomplete="off"
+            spellcheck="false"
+            placeholder="Search by name, code or barcode..."
           />
 
           <ion-icon
             *ngIf="searchText"
             name="close-circle"
-            (click)="searchText = ''; onSearch()"
+            (click)="clearSearch()"
             class="search-clear">
           </ion-icon>
+        </div>
+
+        <!-- SEARCH STATUS / COUNT BADGE -->
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 0 4px 10px; font-size: 12px; font-weight: 700; color: #888;">
+          <span *ngIf="searchText.trim()">SEARCH RESULTS ({{ matchedProducts.length }})</span>
+          <span *ngIf="!searchText.trim()">ALL PRODUCTS ({{ otherProducts.length }})</span>
+          <span *ngIf="searchText.trim() && matchedProducts.length > 0" style="color: #5c85d6; font-size: 11px;">Tap product to select</span>
         </div>
       </div>
 
       <!-- SCROLLABLE LIST CONTAINER (FLEX 1 AUTO SCROLL, HIDDEN SCROLLBAR) -->
       <div class="product-list hide-scrollbar" style="flex: 1 1 0; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 0 20px; box-sizing: border-box;">
 
-        <!-- TOP MATCH -->
-        <div *ngIf="matchedProducts.length > 0">
-          <div class="product-section-title top-match">
-            TOP MATCH
-          </div>
-
+        <!-- MATCHED SEARCH RESULTS -->
+        <div *ngIf="searchText.trim() && matchedProducts.length > 0">
           <div
             *ngFor="let product of matchedProducts"
-            (click)="selectTempProduct(product)"
+            (click)="selectProductDirectly(product)"
             class="product-item"
-            [class.selected]="selectedTempProduct?.id === product.id">
+            [class.selected]="(selectedTempProduct?.id ?? selectedTempProduct?.Id) === (product.id ?? product.Id)">
 
             <div class="product-item-left">
-
               <div class="product-image">
-                <img
-                  *ngIf="product.image"
-                  [src]="product.image"
-                  alt="product">
-
-                <span *ngIf="!product.image">📦</span>
+                <img *ngIf="product.image || product.Image" [src]="product.image || product.Image" alt="product">
+                <span *ngIf="!product.image && !product.Image">📦</span>
               </div>
 
               <div class="product-info">
-                <div
-                  class="product-name"
-                  [innerHTML]="getHighlightedName(product.name)">
-                </div>
-
-                <div class="product-price">
-                  Original: RM {{ product.price | number:'1.2-2' }}
+                <div class="product-name" [innerHTML]="getHighlightedText(product.name || product.Name || product.productName || product.ProductName)"></div>
+                <div style="display: flex; align-items: center; gap: 6px; font-size: 12px; margin-top: 3px; flex-wrap: wrap;">
+                  <span *ngIf="product.code || product.Code || product.productCode || product.ProductCode" style="background:#f1f5f9;color:#475569;padding:1px 6px;border-radius:4px;font-size:11px;font-family:monospace;" [innerHTML]="getHighlightedText(product.code || product.Code || product.productCode || product.ProductCode)"></span>
+                  <span *ngIf="product.barcode || product.Barcode" style="background:#eef2f7;color:#64748b;padding:1px 6px;border-radius:4px;font-size:11px;" [innerHTML]="getHighlightedText(product.barcode || product.Barcode)"></span>
+                  <span class="product-price" style="font-weight:700;color:#5c85d6;">Original: RM {{ (product.price ?? product.Price ?? 0) | number:'1.2-2' }}</span>
                 </div>
               </div>
-
             </div>
 
             <div class="product-radio">
-              <div class="radio-dot"
-                *ngIf="selectedTempProduct?.id === product.id">
-              </div>
+              <div class="radio-dot" *ngIf="(selectedTempProduct?.id ?? selectedTempProduct?.Id) === (product.id ?? product.Id)"></div>
             </div>
-
           </div>
         </div>
 
-
-        <!-- ALL PRODUCTS -->
-        <div *ngIf="otherProducts.length > 0">
-
-          <div class="product-section-title">
-            {{ matchedProducts.length > 0 ? 'ALL PRODUCTS' : 'PRODUCTS' }}
-          </div>
-
+        <!-- ALL PRODUCTS (WHEN NOT SEARCHING) -->
+        <div *ngIf="!searchText.trim() && otherProducts.length > 0">
           <div
             *ngFor="let product of otherProducts"
-            (click)="selectTempProduct(product)"
+            (click)="selectProductDirectly(product)"
             class="product-item"
-            [class.selected]="selectedTempProduct?.id === product.id">
+            [class.selected]="(selectedTempProduct?.id ?? selectedTempProduct?.Id) === (product.id ?? product.Id)">
 
             <div class="product-item-left">
-
               <div class="product-image">
-                <img
-                  *ngIf="product.image"
-                  [src]="product.image"
-                  alt="product">
-
-                <span *ngIf="!product.image">📦</span>
+                <img *ngIf="product.image || product.Image" [src]="product.image || product.Image" alt="product">
+                <span *ngIf="!product.image && !product.Image">📦</span>
               </div>
 
               <div class="product-info">
-
-                <div class="product-name">
-                  {{ product.name }}
+                <div class="product-name">{{ product.name || product.Name || product.productName || product.ProductName }}</div>
+                <div style="display: flex; align-items: center; gap: 6px; font-size: 12px; margin-top: 3px; flex-wrap: wrap;">
+                  <span *ngIf="product.code || product.Code || product.productCode || product.ProductCode" style="background:#f1f5f9;color:#475569;padding:1px 6px;border-radius:4px;font-size:11px;font-family:monospace;">
+                    {{ product.code || product.Code || product.productCode || product.ProductCode }}
+                  </span>
+                  <span *ngIf="product.barcode" style="background:#eef2f7;color:#64748b;padding:1px 6px;border-radius:4px;font-size:11px;">
+                    {{ product.barcode }}
+                  </span>
+                  <span class="product-price" style="font-weight:700;color:#5c85d6;">Original: RM {{ product.price | number:'1.2-2' }}</span>
                 </div>
-
-                <div class="product-price">
-                  Original: RM {{ product.price | number:'1.2-2' }}
-                </div>
-
               </div>
-
             </div>
 
             <div class="product-radio">
-              <div class="radio-dot"
-                *ngIf="selectedTempProduct?.id === product.id">
-              </div>
+              <div class="radio-dot" *ngIf="selectedTempProduct?.id === product.id"></div>
             </div>
-
           </div>
-
         </div>
 
-        <!-- EMPTY STATE -->
-        <div *ngIf="matchedProducts.length === 0 && otherProducts.length === 0" style="text-align: center; color: #a4b0be; padding: 50px 20px;">
+        <!-- SEARCH EMPTY STATE -->
+        <div *ngIf="searchText.trim() && matchedProducts.length === 0" style="text-align: center; color: #64748b; padding: 48px 20px;">
+          <ion-icon name="search-outline" style="font-size: 48px; display: block; margin: 0 auto 12px; color: #94a3b8;"></ion-icon>
+          <div style="font-size: 16px; font-weight: 800; color: #1e293b; margin-bottom: 6px;">No products found</div>
+          <div style="font-size: 13px; color: #64748b; margin-bottom: 16px;">No products matching "{{ searchText }}"</div>
+          <button (click)="clearSearch()" style="background: #eef2ff; color: #4f46e5; border: 1px solid #c7d2fe; padding: 8px 18px; border-radius: 20px; font-weight: 700; font-size: 13px; cursor: pointer;">
+            Clear Search
+          </button>
+        </div>
+
+        <!-- STORE EMPTY STATE -->
+        <div *ngIf="!searchText.trim() && otherProducts.length === 0" style="text-align: center; color: #a4b0be; padding: 50px 20px;">
           <ion-icon name="cube-outline" style="font-size: 48px; display: block; margin: 0 auto 12px; opacity: 0.3;"></ion-icon>
-          No products found.
+          No products available.
         </div>
 
       </div>
