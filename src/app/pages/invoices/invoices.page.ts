@@ -563,11 +563,15 @@ export class InvoicesPage implements OnInit, OnDestroy {
       next: (res) => {
         this.customers = Array.isArray(res) ? res : [];
         this.filteredCustomers = [...this.customers];
+        this.api.getAllCustomerProductPrices().subscribe({ error: () => {} });
         // If we are currently in New Invoice mode and have a customer selected (e.g. from draft), sync customer details
         if (this.showModal && !this.isEditing && this.form?.customerId > 0) {
           const match = this.customers.find(c => c.id == this.form.customerId);
           if (match) {
             this.selectedCustomerDetail = match;
+            if (Array.isArray(match.productPrices) && match.productPrices.length > 0) {
+              this.customerProductPrices = match.productPrices;
+            }
             this.loadAvailableCredits(Number(this.form.customerId));
             this.loadCustomerProductPrices(Number(this.form.customerId));
           }
@@ -811,16 +815,20 @@ export class InvoicesPage implements OnInit, OnDestroy {
     this.loadedCustomerId = 0;
     this.api.getCustomerProductPrices(customerId).subscribe({
       next: (res) => {
-        this.customerProductPrices = Array.isArray(res) ? res : [];
+        if (Array.isArray(res) && res.length > 0) {
+          this.customerProductPrices = res;
+        } else if (!this.customerProductPrices || this.customerProductPrices.length === 0) {
+          this.customerProductPrices = [];
+        }
         this.loadedCustomerId = customerId;
         // Edit模式(Invoice Details)不要整批覆蓋 editForm.items，
         // 否則剛從DB讀回來 / 剛手改好的 unitPrice 會被原價*折扣洗掉
         if (!this.isEditing) {
           this.applyCustomerDiscount();
         }
+        this.cdr.detectChanges();
       },
       error: () => {
-        this.customerProductPrices = [];
         this.loadedCustomerId = customerId;
       }
     });
@@ -833,7 +841,10 @@ export class InvoicesPage implements OnInit, OnDestroy {
       this.form.useCreditBalance = false;
       this.selectedCreditNoteId = null;
       this.availableCredits = [];
-      this.customerProductPrices = [];
+      const cachedPrices = customer?.productPrices || customer?.ProductPrices;
+      if (Array.isArray(cachedPrices) && cachedPrices.length > 0) {
+        this.customerProductPrices = cachedPrices;
+      }
       this.loadAvailableCredits(Number(this.form.customerId));
       this.loadCustomerProductPrices(Number(this.form.customerId));
     }
@@ -846,8 +857,8 @@ export class InvoicesPage implements OnInit, OnDestroy {
     (items || []).forEach((item: any) => {
       const product = this.allProducts.find(p => p.id == item.productId);
       if (product) {
-        const specialPrice = this.customerProductPrices.find(p => p.productId == item.productId);
-        const basePrice = specialPrice ? specialPrice.specialPrice : product.price;
+        const specialPrice = this.getCustomerSpecialPrice(item.productId);
+        const basePrice = specialPrice !== null ? specialPrice : (product.price || 0);
         item.unitPrice = basePrice * (1 - (discount / 100));
       }
     });
@@ -908,9 +919,12 @@ export class InvoicesPage implements OnInit, OnDestroy {
       this.cdr.detectChanges();
       return;
     }
-    this.form.customerId = customer.id;
-    this.selectedCustomerDetail = customer;
-    this.customerProductPrices = [];
+    this.form.customerId = customer ? customer.id : null;
+    this.selectedCustomerDetail = customer || null;
+    const initialPrices = customer?.productPrices || customer?.ProductPrices;
+    if (Array.isArray(initialPrices) && initialPrices.length > 0) {
+      this.customerProductPrices = initialPrices;
+    }
     this.onCustomerChange();
     this.showCustomerSelector = false;
   }
@@ -933,8 +947,8 @@ export class InvoicesPage implements OnInit, OnDestroy {
   selectProduct(product: any) {
     // 同產品重複選直接加新卡（數量空白、單價自動帶，不再數量+1）
     const discount = this.selectedCustomerDetail?.discountPercent || this.selectedCustomerDetail?.discount || 0;
-    const specialPrice = this.customerProductPrices.find(p => p.productId == product.id);
-    const basePrice = specialPrice ? specialPrice.specialPrice : product.price;
+    const specialPrice = this.getCustomerSpecialPrice(product.id);
+    const basePrice = specialPrice !== null ? specialPrice : (product.price || 0);
     const finalPrice = basePrice * (1 - (discount / 100));
     const newItem = {
       productId: product.id,
@@ -953,8 +967,8 @@ export class InvoicesPage implements OnInit, OnDestroy {
     const product = this.products.find((p: any) => p.id == item.productId);
     if (!product) return;
     const discount = this.selectedCustomerDetail?.discountPercent || this.selectedCustomerDetail?.discount || 0;
-    const specialPrice = this.customerProductPrices.find(p => p.productId == product.id);
-    const basePrice = specialPrice ? specialPrice.specialPrice : product.price;
+    const specialPrice = this.getCustomerSpecialPrice(item.productId);
+    const basePrice = specialPrice !== null ? specialPrice : (product.price || 0);
     item.unitPrice = basePrice * (1 - (discount / 100));
   }
 
@@ -1504,8 +1518,8 @@ export class InvoicesPage implements OnInit, OnDestroy {
         this.editItemForm.productId = this.selectedTempProduct.id;
         // 跟 onProductChange 一致：特價優先，其次原價，再套客戶折扣，不要直接用原價蓋掉
         const discount = this.selectedCustomerDetail?.discountPercent || this.selectedCustomerDetail?.discount || 0;
-        const special = this.customerProductPrices.find((p: any) => p.productId == this.selectedTempProduct.id);
-        const basePrice = special ? special.specialPrice : this.selectedTempProduct.price;
+        const specialPrice = this.getCustomerSpecialPrice(this.selectedTempProduct.id);
+        const basePrice = specialPrice !== null ? specialPrice : (this.selectedTempProduct.price || 0);
         this.editItemForm.unitPrice = basePrice * (1 - (discount / 100));
       } else if (this.editingItemIndex >= 0 && this.editForm.items[this.editingItemIndex]) {
         const item = this.editForm.items[this.editingItemIndex];
@@ -2364,8 +2378,11 @@ export class InvoicesPage implements OnInit, OnDestroy {
 
   getCustomerSpecialPrice(productId: any): number | null {
     if (!this.customerProductPrices || this.customerProductPrices.length === 0) return null;
-    const special = this.customerProductPrices.find(p => p.productId == productId);
-    return special ? special.specialPrice : null;
+    const pId = Number(productId);
+    const special = this.customerProductPrices.find((p: any) => Number(p.productId ?? p.ProductId) === pId);
+    if (!special) return null;
+    const priceVal = special.specialPrice !== undefined ? special.specialPrice : special.SpecialPrice;
+    return (priceVal != null && !isNaN(Number(priceVal))) ? Number(priceVal) : null;
   }
 
   getOriginalTotal(): number {
@@ -2381,8 +2398,8 @@ export class InvoicesPage implements OnInit, OnDestroy {
     const total = this.form.items.reduce((sum: number, item: any) => {
       const product = this.allProducts.find(p => p.id == item.productId);
       if (!product) return sum;
-      const specialPrice = this.customerProductPrices.find(p => p.productId == item.productId);
-      const basePrice = specialPrice ? specialPrice.specialPrice : product.price;
+      const specialPrice = this.getCustomerSpecialPrice(item.productId);
+      const basePrice = specialPrice !== null ? specialPrice : (product.price || 0);
       return sum + (basePrice * (item.quantity || 0));
     }, 0);
     return Math.round((total + Number.EPSILON) * 100) / 100;

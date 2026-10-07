@@ -49,6 +49,9 @@ export class ApiService {
   }
 
   public isOnline(): boolean {
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      return false;
+    }
     return this.isNetworkOnline;
   }
 
@@ -383,6 +386,7 @@ export class ApiService {
           if (Array.isArray(res)) {
             this.cachedCustomers = res;
             this.offlineStorage.setCache('customers', res);
+            this.preloadAllCustomerPrices(res);
           }
         },
         error: () => { }
@@ -395,26 +399,258 @@ export class ApiService {
         if (Array.isArray(res)) {
           this.cachedCustomers = res;
           this.offlineStorage.setCache('customers', res);
+          this.preloadAllCustomerPrices(res);
         }
       }),
       catchError(() => from(fetchOfflineCustomers()))
     );
   }
-  getCustomerById(id: any): Observable<any> { return this.http.get(this.baseUrl + '/Customer/GetCustomerById/getcustomersby/' + id); }
+
+  private preloadAllCustomerPrices(customers: any[]) {
+    if (!Array.isArray(customers) || customers.length === 0 || !this.isOnline()) return;
+
+    customers.forEach((c, index) => {
+      const cid = c.id ?? c.Id;
+      if (!cid) return;
+      setTimeout(() => {
+        if (!this.isOnline()) return;
+        this.http.get(this.baseUrl + '/Customer/GetCustomerProductPrices/customers/' + cid + '/product-prices').pipe(
+          timeout(5000),
+          catchError(() => of([]))
+        ).subscribe((prices: any) => {
+          if (Array.isArray(prices) && prices.length > 0) {
+            const normalized = prices.map(item => ({
+              id: item.id ?? item.Id,
+              productId: Number(item.productId ?? item.ProductId),
+              customerId: Number(item.customerId ?? item.CustomerId ?? cid),
+              specialPrice: Number((item.specialPrice !== undefined ? item.specialPrice : item.SpecialPrice) ?? 0),
+              productName: item.productName || item.ProductName || '',
+              productCode: item.productCode || item.ProductCode || '',
+              originalPrice: Number((item.originalPrice !== undefined ? item.originalPrice : item.OriginalPrice) ?? 0)
+            }));
+            this.offlineStorage.setCache('customer_prices_' + cid, normalized);
+            this.offlineStorage.setCache('customer_prices_' + String(cid), normalized);
+
+            this.offlineStorage.getCache<any[]>('all_customer_prices').then(existing => {
+              const all = Array.isArray(existing) ? existing : [];
+              const filtered = all.filter((p: any) => Number(p.customerId ?? p.CustomerId) !== Number(cid) && String(p.customerId ?? p.CustomerId) !== String(cid));
+              this.offlineStorage.setCache('all_customer_prices', [...filtered, ...normalized]);
+            });
+          }
+        });
+      }, index * 60);
+    });
+  }
+  getCustomerById(id: any): Observable<any> {
+    const fetchOffline = async () => {
+      const cached = await this.offlineStorage.getCache<any>('customer_detail_' + id);
+      if (cached) return cached;
+      const customers = await this.offlineStorage.getCache<any[]>('customers') || [];
+      return customers.find((c: any) => c.id == id) || null;
+    };
+
+    if (!this.isOnline()) {
+      return from(fetchOffline());
+    }
+
+    return this.http.get(this.baseUrl + '/Customer/GetCustomerById/getcustomersby/' + id).pipe(
+      timeout(3500),
+      tap((res: any) => {
+        if (res) {
+          this.offlineStorage.setCache('customer_detail_' + id, res);
+          const pprices = res.productPrices || res.ProductPrices;
+          if (Array.isArray(pprices) && pprices.length > 0) {
+            this.offlineStorage.setCache('customer_prices_' + id, pprices);
+          }
+        }
+      }),
+      catchError(() => from(fetchOffline()))
+    );
+  }
+
   editCustomer(id: any, data: any): Observable<any> {
     return this.http.put(this.baseUrl + '/Customer/EditCustomer/editcustomers/' + id, data).pipe(
-      tap(() => this.clearCustomerCache())
+      tap((res: any) => {
+        this.clearCustomerCache();
+        // Update customer detail cache
+        this.offlineStorage.getCache<any>('customer_detail_' + id).then(existing => {
+          if (existing) {
+            const updated = { ...existing, ...data };
+            this.offlineStorage.setCache('customer_detail_' + id, updated);
+          }
+        });
+      })
     );
   }
+
   deleteCustomer(id: any): Observable<any> {
     return this.http.delete(this.baseUrl + '/Customer/DeleteCustomer/deletecustomer/' + id, { responseType: 'text' }).pipe(
-      tap(() => this.clearCustomerCache())
+      tap(() => {
+        this.clearCustomerCache();
+        this.offlineStorage.removeCache('customer_detail_' + id);
+        this.offlineStorage.removeCache('customer_prices_' + id);
+      })
     );
   }
-  getCustomerProductPrices(customerId: any): Observable<any> { return this.http.get(this.baseUrl + '/Customer/GetCustomerProductPrices/customers/' + customerId + '/product-prices').pipe(timeout(3500), catchError(() => of([]))); }
-  createCustomerProductPrice(customerId: any, data: any): Observable<any> { return this.http.post(this.baseUrl + '/Customer/CreateCustomerProductPrice/customers/' + customerId + '/product-prices', data); }
-  updateCustomerProductPrice(customerId: any, productId: any, data: any): Observable<any> { return this.http.patch(this.baseUrl + '/Customer/UpdateCustomerProductPrice/customers/' + customerId + '/product-prices/' + productId, data); }
-  deleteCustomerProductPrice(customerId: any, productId: any): Observable<any> { return this.http.delete(this.baseUrl + '/Customer/DeleteCustomerProductPrice/customers/' + customerId + '/product-prices/' + productId, { responseType: 'text' }); }
+
+  getAllCustomerProductPrices(): Observable<any[]> {
+    const normalizeList = (list: any[]) => {
+      if (!Array.isArray(list)) return [];
+      return list.map(item => ({
+        id: item.id ?? item.Id,
+        productId: Number(item.productId ?? item.ProductId),
+        customerId: Number(item.customerId ?? item.CustomerId),
+        specialPrice: Number((item.specialPrice !== undefined ? item.specialPrice : item.SpecialPrice) ?? 0),
+        productName: item.productName || item.ProductName || '',
+        productCode: item.productCode || item.ProductCode || '',
+        originalPrice: Number((item.originalPrice !== undefined ? item.originalPrice : item.OriginalPrice) ?? 0)
+      }));
+    };
+
+    const fetchOffline = async () => {
+      const allPrices = await this.offlineStorage.getCache<any[]>('all_customer_prices') || [];
+      return normalizeList(allPrices);
+    };
+
+    if (!this.isOnline()) {
+      return from(fetchOffline());
+    }
+
+    return this.http.get<any[]>(this.baseUrl + '/Customer/GetAllProductPrices/all-product-prices').pipe(
+      timeout(3500),
+      map((prices: any[]) => normalizeList(prices)),
+      tap((prices: any[]) => {
+        if (Array.isArray(prices)) {
+          this.offlineStorage.setCache('all_customer_prices', prices);
+          const groupMap: { [cid: number]: any[] } = {};
+          for (const p of prices) {
+            const cid = p.customerId;
+            if (cid) {
+              if (!groupMap[cid]) groupMap[cid] = [];
+              groupMap[cid].push(p);
+            }
+          }
+          for (const cid of Object.keys(groupMap)) {
+            this.offlineStorage.setCache('customer_prices_' + cid, groupMap[Number(cid)]);
+          }
+        }
+      }),
+      catchError(() => from(fetchOffline()))
+    );
+  }
+
+  getCustomerProductPrices(customerId: any): Observable<any[]> {
+    if (!customerId) return of([]);
+    const cid = Number(customerId);
+    const strCid = String(customerId);
+
+    const normalizeList = (list: any[]) => {
+      if (!Array.isArray(list)) return [];
+      return list.map(item => ({
+        id: item.id ?? item.Id,
+        productId: Number(item.productId ?? item.ProductId),
+        customerId: Number(item.customerId ?? item.CustomerId ?? cid),
+        specialPrice: Number((item.specialPrice !== undefined ? item.specialPrice : item.SpecialPrice) ?? 0),
+        productName: item.productName || item.ProductName || '',
+        productCode: item.productCode || item.ProductCode || '',
+        originalPrice: Number((item.originalPrice !== undefined ? item.originalPrice : item.OriginalPrice) ?? 0)
+      }));
+    };
+
+    const fetchOffline = async () => {
+      // 1. 先查专属缓存 (数字 id 与 字符串 id)
+      let cached = await this.offlineStorage.getCache<any[]>('customer_prices_' + cid);
+      if (!cached || !Array.isArray(cached) || cached.length === 0) {
+        cached = await this.offlineStorage.getCache<any[]>('customer_prices_' + strCid);
+      }
+      if (Array.isArray(cached) && cached.length > 0) {
+        return normalizeList(cached);
+      }
+      // 2. 查全局所有客户特价缓存
+      const allPrices = await this.offlineStorage.getCache<any[]>('all_customer_prices') || [];
+      const matchedAll = allPrices.filter((p: any) => Number(p.customerId ?? p.CustomerId) === cid || String(p.customerId ?? p.CustomerId) === strCid);
+      if (matchedAll.length > 0) {
+        this.offlineStorage.setCache('customer_prices_' + cid, matchedAll);
+        this.offlineStorage.setCache('customer_prices_' + strCid, matchedAll);
+        return normalizeList(matchedAll);
+      }
+      // 3. 查该客户详情缓存
+      let custDetail = await this.offlineStorage.getCache<any>('customer_detail_' + cid);
+      if (!custDetail) {
+        custDetail = await this.offlineStorage.getCache<any>('customer_detail_' + strCid);
+      }
+      const detailPrices = custDetail?.productPrices || custDetail?.ProductPrices;
+      if (Array.isArray(detailPrices) && detailPrices.length > 0) {
+        this.offlineStorage.setCache('customer_prices_' + cid, detailPrices);
+        this.offlineStorage.setCache('customer_prices_' + strCid, detailPrices);
+        return normalizeList(detailPrices);
+      }
+      // 4. 查客户列表缓存中的该客户
+      const custList = await this.offlineStorage.getCache<any[]>('customers') || [];
+      const found = custList.find((c: any) => Number(c.id ?? c.Id) === cid || String(c.id ?? c.Id) === strCid || String(c.customerCode) === strCid);
+      const listPrices = found?.productPrices || found?.ProductPrices;
+      if (Array.isArray(listPrices) && listPrices.length > 0) {
+        this.offlineStorage.setCache('customer_prices_' + cid, listPrices);
+        this.offlineStorage.setCache('customer_prices_' + strCid, listPrices);
+        return normalizeList(listPrices);
+      }
+      return [];
+    };
+
+    if (!this.isOnline()) {
+      return from(fetchOffline());
+    }
+
+    return this.http.get(this.baseUrl + '/Customer/GetCustomerProductPrices/customers/' + customerId + '/product-prices').pipe(
+      timeout(3500),
+      map((res: any) => normalizeList(Array.isArray(res) ? res : [])),
+      tap((res: any[]) => {
+        if (Array.isArray(res)) {
+          this.offlineStorage.setCache('customer_prices_' + cid, res);
+          this.offlineStorage.setCache('customer_prices_' + strCid, res);
+          this.offlineStorage.getCache<any[]>('all_customer_prices').then(existing => {
+            const all = Array.isArray(existing) ? existing : [];
+            const filtered = all.filter((p: any) => Number(p.customerId ?? p.CustomerId) !== cid && String(p.customerId ?? p.CustomerId) !== strCid);
+            this.offlineStorage.setCache('all_customer_prices', [...filtered, ...res]);
+          });
+        }
+      }),
+      catchError(() => from(fetchOffline()))
+    );
+  }
+
+  createCustomerProductPrice(customerId: any, data: any): Observable<any> {
+    return this.http.post(this.baseUrl + '/Customer/CreateCustomerProductPrice/customers/' + customerId + '/product-prices', data).pipe(
+      tap(async (res: any) => {
+        const prices = await this.offlineStorage.getCache<any[]>('customer_prices_' + customerId) || [];
+        const newEntity = res?.data || { customerId, productId: data.productId, specialPrice: data.specialPrice };
+        this.offlineStorage.setCache('customer_prices_' + customerId, [...prices, newEntity]);
+      })
+    );
+  }
+
+  updateCustomerProductPrice(customerId: any, productId: any, data: any): Observable<any> {
+    return this.http.patch(this.baseUrl + '/Customer/UpdateCustomerProductPrice/customers/' + customerId + '/product-prices/' + productId, data).pipe(
+      tap(async () => {
+        const prices = await this.offlineStorage.getCache<any[]>('customer_prices_' + customerId) || [];
+        const idx = prices.findIndex((p: any) => p.productId == productId);
+        if (idx !== -1) {
+          prices[idx] = { ...prices[idx], specialPrice: data.specialPrice };
+          this.offlineStorage.setCache('customer_prices_' + customerId, prices);
+        }
+      })
+    );
+  }
+
+  deleteCustomerProductPrice(customerId: any, productId: any): Observable<any> {
+    return this.http.delete(this.baseUrl + '/Customer/DeleteCustomerProductPrice/customers/' + customerId + '/product-prices/' + productId, { responseType: 'text' }).pipe(
+      tap(async () => {
+        const prices = await this.offlineStorage.getCache<any[]>('customer_prices_' + customerId) || [];
+        const filtered = prices.filter((p: any) => p.productId != productId);
+        this.offlineStorage.setCache('customer_prices_' + customerId, filtered);
+      })
+    );
+  }
   getCustomerPurchaseHistory(customerId: any): Observable<any> {
     const fetchOfflineHistory = async () => {
       const invoices = await this.offlineStorage.getCache<any[]>('invoices_list') || [];

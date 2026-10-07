@@ -1,11 +1,13 @@
 import { AlertService } from '../../services/alert.service';
-import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
-import { NavController } from '@ionic/angular';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
+import { NavController, Platform } from '@ionic/angular';
 import { Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { IonicModule } from '@ionic/angular';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../services/api.service';
+import { Subscription } from 'rxjs';
+import Swal from 'sweetalert2';
 
 @Component({
   standalone: true,
@@ -14,7 +16,7 @@ import { ApiService } from '../../services/api.service';
   templateUrl: './customers.page.html',
   styleUrls: ['./customers.page.scss'],
 })
-export class CustomersPage implements OnInit {
+export class CustomersPage implements OnInit, OnDestroy {
   customers: any[] = [];
   filteredCustomers: any[] = [];
   displayedCustomers: any[] = [];
@@ -68,9 +70,19 @@ export class CustomersPage implements OnInit {
     { text: 'Delete', role: 'destructive', handler: () => this.deleteCustomer() }
   ];
 
-  constructor(private router: Router, private navCtrl: NavController, private api: ApiService, private cdr: ChangeDetectorRef, private alertService: AlertService) { }
+  private backButtonSub?: Subscription;
+
+  constructor(
+    private router: Router,
+    private navCtrl: NavController,
+    private api: ApiService,
+    private cdr: ChangeDetectorRef,
+    private alertService: AlertService,
+    private platform: Platform
+  ) { }
 
   ionViewWillEnter() {
+    this.registerBackButton();
     this.showModal = false;
     this.isEditMode = false;
     this.isEditing = false;
@@ -99,6 +111,7 @@ export class CustomersPage implements OnInit {
         this.displayedCustomers = this.filteredCustomers.slice(0, this.pageSize);
         this.isLoading = false;
         this.loadAllRelatedData();
+        this.api.getAllCustomerProductPrices().subscribe({ error: () => {} });
       },
       error: () => { this.isLoading = false; this.showToastMsg('Failed to load customers'); }
     });
@@ -222,11 +235,29 @@ export class CustomersPage implements OnInit {
     this.cdr.detectChanges();
   }
 
+  switchSubTab(tab: string) {
+    this.activeSubTab = tab;
+    if (tab === 'PRICE' && this.selectedCustomer) {
+      const cid = this.selectedCustomer.id || this.selectedCustomer.Id;
+      if (cid) {
+        this.loadCustomerPrices(cid);
+        this.loadPriceProducts();
+      }
+    }
+    this.cdr.detectChanges();
+  }
+
   loadCustomerPrices(customerId: number) {
     if (!customerId) return;
     this.api.getCustomerProductPrices(customerId).subscribe({
-      next: (res) => { this.customerPrices = Array.isArray(res) ? res : []; this.cdr.detectChanges(); },
-      error: () => { this.customerPrices = []; }
+      next: (res) => {
+        this.customerPrices = Array.isArray(res) ? res : [];
+        this.cdr.detectChanges();
+      },
+      error: () => {
+        this.customerPrices = [];
+        this.cdr.detectChanges();
+      }
     });
   }
 
@@ -518,9 +549,45 @@ export class CustomersPage implements OnInit {
         this.loadPriceProducts();
       },
       error: () => {
-        this.isModalLoading = false;
-        this.showModal = false;
-        this.showToastMsg('Failed to load customer data');
+        // Fallback to customer passed from list so offline edit modal can still open
+        if (customer) {
+          this.isModalLoading = false;
+          this.selectedCustomer = customer;
+          const branch = (customer.branches && customer.branches.length > 0) ? customer.branches[0] : null;
+          this.form = {
+            name: customer.name || '',
+            phone: customer.phone || '',
+            email: customer.email || '',
+            address: customer.address || '',
+            code: customer.customerCode || '',
+            term: customer.term || 'Cash Sale',
+            sequence: customer.sequence || '',
+            category: customer.customerCategory || 'DEFAULT',
+            description: customer.description || '',
+            processCompany: customer.processCompany || 'ALL COMPANY',
+            taxStatus: customer.taxStatus || 'Un-Defined',
+            taxDocNo: customer.taxDocNo || '',
+            discount: customer.discountPercent || 0,
+            enableDiscount: customer.enableDiscount != null ? customer.enableDiscount : (customer.discountPercent > 0),
+            requireDigitSign: customer.requireDigitSign || false,
+            totalCredit: 0,
+            branchCode: branch ? (branch.code || '') : '',
+            branchName: branch ? (branch.name || '') : '',
+            branchAddress: branch ? (branch.address1 || '') : (customer.address || ''),
+            branchPostcode: branch ? (branch.postcode || '') : '',
+            branchCity: branch ? (branch.city || '') : '',
+            branchState: branch ? (branch.state || '') : '',
+            isDefaultBranch: branch ? (branch.isDefaultBranch || false) : false,
+            _hasBranch: !!branch
+          };
+          this.loadCustomerSpecificData(customer.id);
+          this.loadCustomerPrices(customer.id);
+          this.loadPriceProducts();
+        } else {
+          this.isModalLoading = false;
+          this.showModal = false;
+          this.showToastMsg('Failed to load customer data');
+        }
       }
     });
   }
@@ -687,7 +754,62 @@ export class CustomersPage implements OnInit {
   }
 
   showToastMsg(msg: string) { const isWarn = msg.toLowerCase().includes('please') || msg.toLowerCase().includes('must') || msg.toLowerCase().includes('cannot') || msg.toLowerCase().includes('required') || msg.toLowerCase().includes('no '); const isErr = msg.toLowerCase().includes('fail') || msg.toLowerCase().includes('error'); this.alertService.toast(msg, isErr ? 'error' : (isWarn ? 'warning' : 'success')); }
-  goBack() { this.navCtrl.navigateRoot('pages/billing'); }
+  goBack() {
+    if (this.showProductSelectModal) {
+      this.closeProductSelectModal();
+      this.cdr.detectChanges();
+      return;
+    }
+    if (this.showAddPriceForm) {
+      this.showAddPriceForm = false;
+      this.cdr.detectChanges();
+      return;
+    }
+    if (this.activeReport) {
+      this.activeReport = null;
+      this.cdr.detectChanges();
+      return;
+    }
+    if (this.showModal) {
+      this.closeModal();
+      this.cdr.detectChanges();
+      return;
+    }
+    if (this.showSearch) {
+      this.showSearch = false;
+      this.searchTerm = '';
+      this.filterCustomers();
+      this.cdr.detectChanges();
+      return;
+    }
+    this.navCtrl.navigateRoot('pages/home');
+  }
+
+  ionViewWillLeave() {
+    this.unregisterBackButton();
+  }
+
+  ngOnDestroy() {
+    this.unregisterBackButton();
+  }
+
+  registerBackButton() {
+    this.unregisterBackButton();
+    this.backButtonSub = this.platform.backButton.subscribeWithPriority(10, () => {
+      if (Swal.isVisible()) {
+        Swal.close();
+        return;
+      }
+      this.goBack();
+    });
+  }
+
+  unregisterBackButton() {
+    if (this.backButtonSub) {
+      this.backButtonSub.unsubscribe();
+      this.backButtonSub = undefined;
+    }
+  }
 }
 
 

@@ -415,9 +415,9 @@
         </div>
 
         <div class="cd-sub-tabs">
-          <div class="sub-tab" [class.active]="activeSubTab === 'MASTER'" (click)="activeSubTab = 'MASTER'">MASTER</div>
-          <div class="sub-tab" [class.active]="activeSubTab === 'BRANCHES'" (click)="activeSubTab = 'BRANCHES'">BRANCHES</div>
-          <div class="sub-tab" [class.active]="activeSubTab === 'PRICE'" (click)="activeSubTab = 'PRICE'">PRICE</div>
+          <div class="sub-tab" [class.active]="activeSubTab === 'MASTER'" (click)="switchSubTab('MASTER')">MASTER</div>
+          <div class="sub-tab" [class.active]="activeSubTab === 'BRANCHES'" (click)="switchSubTab('BRANCHES')">BRANCHES</div>
+          <div class="sub-tab" [class.active]="activeSubTab === 'PRICE'" (click)="switchSubTab('PRICE')">PRICE</div>
         </div>
       </div>
 

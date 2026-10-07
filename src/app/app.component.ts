@@ -98,9 +98,9 @@ export class AppComponent implements OnInit {
         '/pages/configuration': 'pages/setting',
         '/pages/setting': 'pages/preferences',
         '/pages/preferences': 'pages/billing',
-        '/pages/add-product': 'pages/products',
+        '/pages/add-product': 'pages/home',
         '/pages/products': 'pages/home',
-        '/pages/customer-detail': 'pages/customers',
+        '/pages/customer-detail': 'pages/home',
         '/pages/customers': 'pages/home',
         '/pages/home': 'pages/billing',
         '/pages/invoices': 'pages/billing'

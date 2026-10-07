@@ -24,10 +24,11 @@ export interface CacheEntry<T = any> {
 })
 export class OfflineStorageService {
   private readonly DB_NAME = 'TDMobilePOS_OfflineDB';
-  private readonly DB_VERSION = 1;
+  private readonly DB_VERSION = 2;
   private readonly STORE_QUEUE = 'sync_queue';
   private readonly STORE_CACHE = 'master_cache';
 
+  private memoryCache = new Map<string, any>();
   private dbPromise: Promise<IDBDatabase> | null = null;
   private queueCountSubject = new BehaviorSubject<number>(0);
   public queueCount$: Observable<number> = this.queueCountSubject.asObservable();
@@ -276,26 +277,30 @@ export class OfflineStorageService {
    * 保存离线基础数据缓存（如商品列表、客户列表等）
    */
   public async setCache<T>(key: string, data: T): Promise<void> {
+    this.memoryCache.set(key, data);
     const entry: CacheEntry<T> = {
       key,
       data,
       updatedAt: Date.now()
     };
     try {
+      localStorage.setItem('td_cache_' + key, JSON.stringify(entry));
+    } catch (e) {
+      console.warn('LocalStorage cache set failed:', e);
+    }
+    try {
       const db = await this.getDB();
-      await new Promise<void>((resolve, reject) => {
-        const tx = db.transaction(this.STORE_CACHE, 'readwrite');
-        const store = tx.objectStore(this.STORE_CACHE);
-        const req = store.put(entry);
-        req.onsuccess = () => resolve();
-        req.onerror = () => reject(req.error);
-      });
-    } catch {
-      try {
-        localStorage.setItem('td_cache_' + key, JSON.stringify(entry));
-      } catch (e) {
-        console.warn('LocalStorage cache failed (quota exceeded?):', e);
+      if (db.objectStoreNames.contains(this.STORE_CACHE)) {
+        await new Promise<void>((resolve, reject) => {
+          const tx = db.transaction(this.STORE_CACHE, 'readwrite');
+          const store = tx.objectStore(this.STORE_CACHE);
+          const req = store.put(entry);
+          req.onsuccess = () => resolve();
+          req.onerror = () => reject(req.error);
+        });
       }
+    } catch (e) {
+      console.warn('IndexedDB setCache failed:', e);
     }
   }
 
@@ -303,50 +308,60 @@ export class OfflineStorageService {
    * 读取离线基础数据缓存
    */
   public async getCache<T>(key: string): Promise<T | null> {
+    if (this.memoryCache.has(key)) {
+      return this.memoryCache.get(key) as T;
+    }
+    try {
+      const raw = localStorage.getItem('td_cache_' + key);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && parsed.data !== undefined) {
+          this.memoryCache.set(key, parsed.data);
+          return parsed.data as T;
+        }
+      }
+    } catch {}
+
     try {
       const db = await this.getDB();
-      return await new Promise<T | null>((resolve) => {
-        const tx = db.transaction(this.STORE_CACHE, 'readonly');
-        const store = tx.objectStore(this.STORE_CACHE);
-        const req = store.get(key);
-        req.onsuccess = () => {
-          if (req.result && req.result.data) {
-            resolve(req.result.data as T);
-          } else {
-            resolve(null);
-          }
-        };
-        req.onerror = () => resolve(null);
-      });
-    } catch {
-      try {
-        const raw = localStorage.getItem('td_cache_' + key);
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          return parsed.data || null;
-        }
-      } catch {
-        return null;
+      if (db.objectStoreNames.contains(this.STORE_CACHE)) {
+        return await new Promise<T | null>((resolve) => {
+          const tx = db.transaction(this.STORE_CACHE, 'readonly');
+          const store = tx.objectStore(this.STORE_CACHE);
+          const req = store.get(key);
+          req.onsuccess = () => {
+            if (req.result && req.result.data !== undefined) {
+              this.memoryCache.set(key, req.result.data);
+              resolve(req.result.data as T);
+            } else {
+              resolve(null);
+            }
+          };
+          req.onerror = () => resolve(null);
+        });
       }
-      return null;
-    }
+    } catch {}
+
+    return null;
   }
 
   public async removeCache(key: string): Promise<void> {
+    this.memoryCache.delete(key);
+    try {
+      localStorage.removeItem('td_cache_' + key);
+    } catch {}
     try {
       const db = await this.getDB();
-      await new Promise<void>((resolve, reject) => {
-        const tx = db.transaction(this.STORE_CACHE, 'readwrite');
-        const store = tx.objectStore(this.STORE_CACHE);
-        const req = store.delete(key);
-        req.onsuccess = () => resolve();
-        req.onerror = () => reject(req.error);
-      });
-    } catch {
-      try {
-        localStorage.removeItem('td_cache_' + key);
-      } catch {}
-    }
+      if (db.objectStoreNames.contains(this.STORE_CACHE)) {
+        await new Promise<void>((resolve, reject) => {
+          const tx = db.transaction(this.STORE_CACHE, 'readwrite');
+          const store = tx.objectStore(this.STORE_CACHE);
+          const req = store.delete(key);
+          req.onsuccess = () => resolve();
+          req.onerror = () => reject(req.error);
+        });
+      }
+    } catch {}
   }
 
   // --- LocalStorage Fallback 辅助函数 ---

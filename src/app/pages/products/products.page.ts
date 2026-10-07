@@ -1,11 +1,13 @@
 import { AlertService } from '../../services/alert.service';
-import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
-import { NavController } from '@ionic/angular';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
+import { NavController, Platform } from '@ionic/angular';
 import { Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { IonicModule } from '@ionic/angular';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../services/api.service';
+import { Subscription } from 'rxjs';
+import Swal from 'sweetalert2';
 
 @Component({
   standalone: true,
@@ -14,7 +16,7 @@ import { ApiService } from '../../services/api.service';
   templateUrl: './products.page.html',
   styleUrls: ['./products.page.scss'],
 })
-export class ProductsPage implements OnInit {
+export class ProductsPage implements OnInit, OnDestroy {
   products: any[] = [];
   filteredProducts: any[] = [];
   displayedProducts: any[] = [];
@@ -42,10 +44,61 @@ export class ProductsPage implements OnInit {
     { text: 'Delete', role: 'destructive', handler: () => this.deleteProduct() }
   ];
 
-  constructor(private router: Router, private navCtrl: NavController, private api: ApiService, private cdr: ChangeDetectorRef, private alertService: AlertService) {}
+  private backButtonSub?: Subscription;
+
+  constructor(
+    private router: Router,
+    private navCtrl: NavController,
+    private api: ApiService,
+    private cdr: ChangeDetectorRef,
+    private alertService: AlertService,
+    private platform: Platform
+  ) {}
 
   ionViewWillEnter() {
+    this.registerBackButton();
     this.cdr.detectChanges();
+  }
+
+  ionViewWillLeave() {
+    this.unregisterBackButton();
+  }
+
+  ngOnDestroy() {
+    this.unregisterBackButton();
+  }
+
+  registerBackButton() {
+    this.unregisterBackButton();
+    this.backButtonSub = this.platform.backButton.subscribeWithPriority(10, () => {
+      if (Swal.isVisible()) {
+        Swal.close();
+        return;
+      }
+      if (this.showAddStockModal) {
+        this.closeAddStockModal();
+        this.cdr.detectChanges();
+        return;
+      }
+      if (this.showModal) {
+        this.closeModal();
+        this.cdr.detectChanges();
+        return;
+      }
+      if (this.showSearch) {
+        this.toggleSearch();
+        this.cdr.detectChanges();
+        return;
+      }
+      this.goBack();
+    });
+  }
+
+  unregisterBackButton() {
+    if (this.backButtonSub) {
+      this.backButtonSub.unsubscribe();
+      this.backButtonSub = undefined;
+    }
   }
 
   ngOnInit() { this.loadProducts(); this.loadCategories(); }
@@ -256,7 +309,25 @@ export class ProductsPage implements OnInit {
   }
 
   showToastMsg(msg: string) { const isWarn = msg.toLowerCase().includes('please') || msg.toLowerCase().includes('must') || msg.toLowerCase().includes('cannot') || msg.toLowerCase().includes('required') || msg.toLowerCase().includes('no '); const isErr = msg.toLowerCase().includes('fail') || msg.toLowerCase().includes('error'); this.alertService.toast(msg, isErr ? 'error' : (isWarn ? 'warning' : 'success')); }
-  goBack() { this.navCtrl.navigateRoot('pages/billing'); }
+
+  goBack() {
+    if (this.showAddStockModal) {
+      this.closeAddStockModal();
+      this.cdr.detectChanges();
+      return;
+    }
+    if (this.showModal) {
+      this.closeModal();
+      this.cdr.detectChanges();
+      return;
+    }
+    if (this.showSearch) {
+      this.toggleSearch();
+      this.cdr.detectChanges();
+      return;
+    }
+    this.navCtrl.navigateRoot('pages/home');
+  }
 }
 
 
