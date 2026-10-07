@@ -420,22 +420,22 @@ export class InvoicesPage implements OnInit, OnDestroy {
           let paid = Number(inv.paidAmount ?? inv.PaidAmount ?? 0);
           const cred = Number(inv.creditUsed ?? inv.CreditUsed ?? 0);
           const cn = Number(inv.cnTotal ?? inv.CNTotal ?? 0);
-          const effectiveBal = Math.max(0, total - paid - cred - cn);
+          const effectiveBal = Math.max(0, total - paid - cred);
           const bal = effectiveBal;
 
           let stat: string;
-          if (effectiveBal <= 0.01 && (paid > 0 || cred > 0 || cn > 0 || inv.status === 'Paid')) {
+          if (effectiveBal <= 0.01 && (paid > 0 || cred > 0 || inv.status === 'Paid')) {
             stat = 'Paid';
           } else if (isCreditTerm) {
             // 赊账 (On Credit / Net 30 Days)
-            if (paid > 0 || cred > 0 || cn > 0) {
+            if (paid > 0 || cred > 0) {
               stat = 'Partial';
             } else {
               stat = 'Unpaid';
             }
           } else {
             // Cash Sale
-            stat = (paid > 0 || cred > 0 || cn > 0) ? 'Partial' : (inv.status || 'Paid');
+            stat = (paid > 0 || cred > 0) ? 'Partial' : (inv.status || 'Paid');
           }
           return {
             ...inv,
@@ -1212,6 +1212,28 @@ export class InvoicesPage implements OnInit, OnDestroy {
         const invNum = details.docNo || details.invoiceNumber || invoice.docNo || invoice.invoiceNumber || this.getDocNo(details);
         const term = details.termType || details.TermType || invoice.termType || 'CASH SALE';
         const isCash = (term === 'CASH SALE' || term === 'Cash');
+        const isCreditTerm = (term === 'On Credit' || term === 'Net 30 Days');
+
+        const tot = Number(details.totalAmount ?? invoice.totalAmount ?? 0);
+        const paid = Number(details.paidAmount ?? invoice.paidAmount ?? 0);
+        const cred = Number(details.creditUsed ?? invoice.creditUsed ?? 0);
+        const effectiveBal = Math.max(0, tot - paid - cred);
+
+        let consistentStatus = details.status || invoice.status || (isCash ? 'Paid' : 'Unpaid');
+        if (isCreditTerm) {
+          if (effectiveBal <= 0.01 && (paid > 0 || cred > 0 || details.status === 'Paid')) {
+            consistentStatus = 'Paid';
+          } else if (paid > 0 || cred > 0) {
+            consistentStatus = 'Partial';
+          } else {
+            consistentStatus = 'Unpaid';
+          }
+        }
+        if (this.selectedInvoice) {
+          this.selectedInvoice.status = consistentStatus;
+          this.selectedInvoice.balance = effectiveBal;
+        }
+
         this.editForm = {
           customerId: custId,
           customerName: details.customerName || invoice.customerName || this.selectedCustomerDetail?.name || '',
@@ -1219,7 +1241,7 @@ export class InvoicesPage implements OnInit, OnDestroy {
           invoiceDate: this.formatForDatetimeLocal(details.invoiceDate || this.getMYSDate()),
           remark: details.remark || '',
           termType: term,
-          status: details.status || invoice.status || (isCash ? 'Paid' : 'Unpaid'),
+          status: consistentStatus,
           items: hasSuccessItems
             ? rawSuccessItems.map((i: any) => ({
               productId: i.productId ?? i.ProductId ?? 0,
@@ -1238,10 +1260,10 @@ export class InvoicesPage implements OnInit, OnDestroy {
           matchingInList.customerName = details.customerName || (details.customer?.name) || this.selectedCustomerDetail?.name || matchingInList.customerName;
           matchingInList.customerCode = this.selectedCustomerDetail?.customerCode || this.selectedCustomerDetail?.code || matchingInList.customerCode;
           matchingInList.termType = details.termType || matchingInList.termType;
-          matchingInList.status = details.status || matchingInList.status;
-          matchingInList.paidAmount = details.paidAmount ?? matchingInList.paidAmount;
-          matchingInList.balance = details.balance ?? matchingInList.balance;
-          matchingInList.totalAmount = details.totalAmount ?? matchingInList.totalAmount;
+          matchingInList.status = consistentStatus;
+          matchingInList.paidAmount = paid;
+          matchingInList.balance = effectiveBal;
+          matchingInList.totalAmount = tot;
         }
 
         // 保存至本地离线缓存

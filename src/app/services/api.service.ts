@@ -900,19 +900,18 @@ export class ApiService {
       const hasActualPayments = Array.isArray(inv.payments) && inv.payments.length > 0;
       const tot = Number(inv.totalAmount ?? inv.TotalAmount ?? 0);
       const cred = Number(inv.creditUsed ?? inv.CreditUsed ?? 0);
-      const cn = Number(inv.cnTotal ?? inv.CNTotal ?? 0);
       const paid = ov?.paidAmount !== undefined ? Number(ov.paidAmount) : Number(inv.paidAmount || 0);
-      const effBal = Math.max(0, tot - cred - cn - paid);
+      const effBal = Math.max(0, tot - cred - paid);
 
-      if (effBal <= 0.01 && (cn > 0 || cred > 0 || paid > 0 || inv.status === 'Paid')) {
+      if (effBal <= 0.01 && (cred > 0 || paid > 0 || inv.status === 'Paid')) {
         inv.status = 'Paid';
         inv.balance = 0;
       } else if (!hasActualPayments && (ov?.status !== 'Paid')) {
-        inv.status = (cn > 0 || cred > 0 || paid > 0) ? 'Partial' : 'Unpaid';
+        inv.status = (cred > 0 || paid > 0) ? 'Partial' : 'Unpaid';
         if (ov?.paidAmount !== undefined) {
           inv.paidAmount = ov.paidAmount;
         } else {
-          inv.paidAmount = 0;
+          inv.paidAmount = paid;
         }
         if (ov?.balance !== undefined) {
           inv.balance = ov.balance;

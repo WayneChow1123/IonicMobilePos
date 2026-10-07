@@ -111,6 +111,10 @@
         <span style="font-size:15px;font-weight:700;color:#e67e22;">- RM {{ getBulkCreditNotes() | number:'1.2-2'
           }}</span>
       </div>
+      <div *ngIf="getBulkCNExcess() > 0" style="display:flex;justify-content:space-between;margin-bottom:6px;">
+        <span style="font-size:14px;color:#27ae60;font-weight:700;">CN Excess</span>
+        <span style="font-size:14px;font-weight:800;color:#27ae60;">+ RM {{ getBulkCNExcess() | number:'1.2-2' }}</span>
+      </div>
       <div *ngIf="getBulkCreditUsed() > 0" style="display:flex;justify-content:space-between;margin-bottom:6px;">
         <span style="font-size:15px;color: #6c5ce7;">Credit Used</span>
         <span style="font-size:15px;font-weight:700;color: #6c5ce7;">- RM {{ getBulkCreditUsed() | number:'1.2-2'
@@ -121,9 +125,12 @@
         <span style="font-size:15px;font-weight:700;color:#27ae60;">RM {{ getBulkPaidAmount() | number:'1.2-2' }}</span>
       </div>
       <div style="height:1px;background:rgba(0,0,0,0.1);margin:8px 0;"></div>
-      <div style="display:flex;justify-content:space-between;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
         <span style="font-size:17px;font-weight:800;color:#1a1a1a;" class="grand-label">Grand Balance Due</span>
-        <span style="font-size:17px;font-weight:800;color:#e57373;">RM {{ getBulkBalance() | number:'1.2-2' }}</span>
+        <span style="font-size:17px;font-weight:800;" [style.color]="getBulkBalance() > 0 ? '#e57373' : '#27ae60'">RM {{ getBulkBalance() | number:'1.2-2' }}</span>
+      </div>
+      <div *ngIf="getBulkCNExcess() > 0" style="font-size:12px;color:#27ae60;font-weight:700;margin-top:8px;padding-top:6px;border-top:1px dashed rgba(39,174,96,0.3);text-align:right;">
+        ✓ Fully covered by Credit Note, no payment required
       </div>
     </div>
     <div class="form-card" style="background:#C5C8E0;">
@@ -1075,6 +1082,11 @@
               <span>CN Deducted:</span>
               <span>- RM {{ getStandardCNDeduction(inv) | number:'1.2-2' }}</span>
             </div>
+            <div *ngIf="getInvoiceCNExcess(inv) > 0"
+              style="display: flex; justify-content: space-between; color: #27ae60; font-weight: 700;">
+              <span>CN Excess:</span>
+              <span>+ RM {{ getInvoiceCNExcess(inv) | number:'1.2-2' }}</span>
+            </div>
             <div *ngIf="getInvoiceCreditUsed(inv) > 0"
               style="display: flex; justify-content: space-between; color: #6c5ce7; font-weight: 700;">
               <span>Credit Used:</span>
@@ -1082,7 +1094,7 @@
             </div>
             <div style="display: flex; justify-content: space-between; color: #27ae60; font-weight: 700;">
               <span>Net Amount:</span>
-              <span>RM {{ (inv.netTotal ?? inv.NetTotal ?? inv.totalAmount) | number:'1.2-2' }}</span>
+              <span>RM {{ getInvoiceNetAmount(inv) | number:'1.2-2' }}</span>
             </div>
           </div>
         </div>

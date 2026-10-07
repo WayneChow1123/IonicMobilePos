@@ -601,9 +601,9 @@ export class BillingPage implements OnInit, OnDestroy {
             if (!inv.balance || Number(inv.balance) <= 0.01) {
               const tot = Number(inv.totalAmount || inv.TotalAmount || 0);
               const cred = Number(inv.creditUsed || inv.CreditUsed || 0);
-              const cn = Number(inv.cnTotal || inv.CNTotal || 0);
-              inv.balance = Math.max(0, tot - cred - cn);
-              inv.paidAmount = 0;
+              const paid = Number(inv.paidAmount || inv.PaidAmount || 0);
+              inv.balance = Math.max(0, tot - cred - paid);
+              inv.paidAmount = paid;
             }
           }
           const bal = inv.balance ?? inv.Balance ?? (Number(inv.totalAmount || 0) - Number(inv.paidAmount || 0));
@@ -629,9 +629,9 @@ export class BillingPage implements OnInit, OnDestroy {
             if (!inv.balance || Number(inv.balance) <= 0.01) {
               const tot = Number(inv.totalAmount || inv.TotalAmount || 0);
               const cred = Number(inv.creditUsed || inv.CreditUsed || 0);
-              const cn = Number(inv.cnTotal || inv.CNTotal || 0);
-              inv.balance = Math.max(0, tot - cred - cn);
-              inv.paidAmount = 0;
+              const paid = Number(inv.paidAmount || inv.PaidAmount || 0);
+              inv.balance = Math.max(0, tot - cred - paid);
+              inv.paidAmount = paid;
             }
           }
           const bal = inv.balance ?? inv.Balance ?? (Number(inv.totalAmount || 0) - Number(inv.paidAmount || 0));
@@ -1512,6 +1512,7 @@ export class BillingPage implements OnInit, OnDestroy {
     event.preventDefault();
 
     const balance = this.getBulkBalance();
+    const maxAllowed = balance > 0 ? balance : this.selectedInvoicesList.reduce((sum, inv) => sum + (inv.Balance ?? inv.balance ?? 0), 0);
     let digits = '';
 
     if (this.isFirstATMInput && key >= '0' && key <= '9') {
@@ -1541,8 +1542,8 @@ export class BillingPage implements OnInit, OnDestroy {
     const rawVal = digits ? parseInt(digits, 10) : 0;
     let newVal = rawVal / 100;
 
-    if (newVal > balance) {
-      newVal = balance;
+    if (newVal > maxAllowed) {
+      newVal = maxAllowed;
     }
 
     this.paymentForm.amount = newVal;
@@ -1560,12 +1561,37 @@ export class BillingPage implements OnInit, OnDestroy {
     return this.selectedInvoicesList.reduce((sum, inv) => sum + (inv.CNTotal ?? inv.cnTotal ?? 0), 0);
   }
 
+  getBulkCNExcess(): number {
+    const rawBalance = this.selectedInvoicesList.reduce((sum, inv) => sum + (inv.Balance ?? inv.balance ?? 0), 0);
+    const cnTotal = this.getBulkCreditNotes();
+    const excess = Math.round((cnTotal - rawBalance + Number.EPSILON) * 100) / 100;
+    return excess > 0.01 ? excess : 0;
+  }
+
+  getInvoiceCNExcess(inv: any): number {
+    const bal = inv.balance ?? inv.Balance ?? (Number(inv.totalAmount || 0) - Number(inv.paidAmount || 0));
+    const cn = inv.CNTotal ?? inv.cnTotal ?? 0;
+    const excess = Math.round((cn - bal + Number.EPSILON) * 100) / 100;
+    return excess > 0.01 ? excess : 0;
+  }
+
+  getInvoiceNetAmount(inv: any): number {
+    const bal = inv.balance ?? inv.Balance ?? (Number(inv.totalAmount || 0) - Number(inv.paidAmount || 0));
+    const cn = inv.CNTotal ?? inv.cnTotal ?? 0;
+    const cred = inv.CreditUsed ?? inv.creditUsed ?? 0;
+    const net = Math.round((bal - cn - cred + Number.EPSILON) * 100) / 100;
+    return net > 0.01 ? net : 0;
+  }
+
   getBulkCreditUsed(): number {
     return this.selectedInvoicesList.reduce((sum, inv) => sum + (inv.CreditUsed ?? inv.creditUsed ?? 0), 0);
   }
 
   getBulkBalance(): number {
-    return this.selectedInvoicesList.reduce((sum, inv) => sum + (inv.Balance ?? inv.balance ?? 0), 0);
+    const rawBalance = this.selectedInvoicesList.reduce((sum, inv) => sum + (inv.Balance ?? inv.balance ?? 0), 0);
+    const cnTotal = this.getBulkCreditNotes();
+    const netBal = Math.round((rawBalance - cnTotal + Number.EPSILON) * 100) / 100;
+    return netBal > 0.01 ? netBal : 0;
   }
 
   useCreditNote(cn: any) {
@@ -1595,11 +1621,15 @@ export class BillingPage implements OnInit, OnDestroy {
     const balance = this.getBulkBalance();
     const amount = Number(this.paymentForm.amount);
 
-    if (isNaN(amount) || amount <= 0) {
-      return 'Amount must be greater than 0';
+    if (isNaN(amount) || amount < 0) {
+      return 'Amount must be greater than or equal to 0';
     }
 
-    if (amount > balance) {
+    if (balance <= 0 && amount <= 0) {
+      return 'This invoice is fully covered by Credit Note (Balance is RM 0.00). No payment is required.';
+    }
+
+    if (balance > 0 && amount > balance) {
       return `Amount cannot exceed the balance due: RM ${balance.toFixed(2)}`;
     }
 
