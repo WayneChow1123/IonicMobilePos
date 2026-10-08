@@ -183,6 +183,7 @@ export class BillingPage implements OnInit, OnDestroy {
   }
 
   async loadAllProducts() {
+    this.productSearchTerm = '';
     if (!this.allProducts || this.allProducts.length === 0) {
       const cached = await this.offlineStorage.getCache<any[]>('products') || [];
       if (cached.length > 0) {
@@ -216,16 +217,26 @@ export class BillingPage implements OnInit, OnDestroy {
   }
 
   filterProductsForSelection() {
-    const term = this.productSearchTerm.toLowerCase();
-    this.filteredProductsSelection = this.allProducts.filter(p =>
+    const term = (this.productSearchTerm || '').toLowerCase().trim();
+    if (!term) {
+      this.filteredProductsSelection = [...(this.allProducts || [])];
+      return;
+    }
+    this.filteredProductsSelection = (this.allProducts || []).filter(p =>
       (p.name || '').toLowerCase().includes(term) ||
       (p.productCode || p.code || '').toLowerCase().includes(term) ||
       (p.barcode || '').toLowerCase().includes(term)
     );
   }
 
+  clearProductSearch() {
+    this.productSearchTerm = '';
+    this.filterProductsForSelection();
+  }
+
   selectProduct(product: any) {
     this.showProductModal = false;
+    this.clearProductSearch();
 
     if (this.isEditingCN) {
       if (!this.editCNForm.items) {
@@ -293,6 +304,7 @@ export class BillingPage implements OnInit, OnDestroy {
   }
 
   async loadPurchaseHistory() {
+    this.historySearchTerm = '';
     if (!this.cnForm.customerId || this.cnForm.customerId == 0) {
       this.showToastMsg('Please select a customer first');
       return;
@@ -345,16 +357,26 @@ export class BillingPage implements OnInit, OnDestroy {
   }
 
   filterHistory() {
-    const term = this.historySearchTerm.toLowerCase();
-    this.filteredHistory = this.purchaseHistory.filter(h =>
+    const term = (this.historySearchTerm || '').toLowerCase().trim();
+    if (!term) {
+      this.filteredHistory = [...(this.purchaseHistory || [])];
+      return;
+    }
+    this.filteredHistory = (this.purchaseHistory || []).filter(h =>
       (h.productName || '').toLowerCase().includes(term) ||
       (h.invoiceNumber || '').toLowerCase().includes(term)
     );
   }
 
+  clearHistorySearch() {
+    this.historySearchTerm = '';
+    this.filterHistory();
+  }
+
   selectHistoryItem(item: any) {
     this.cnForm.customerId = Number(item.customerId) || this.cnForm.customerId;
     this.showHistoryModal = false;
+    this.clearHistorySearch();
 
     // Check if item already exists in the list
     const found = this.cnForm.items.find((i: any) => i.productId === item.productId);

@@ -877,14 +877,14 @@
   </div>
 
   <!-- Purchase History Modal (Standard Ionic Modal) -->
-  <ion-modal [isOpen]="showHistoryModal" (didDismiss)="showHistoryModal = false"
+  <ion-modal [isOpen]="showHistoryModal" (didDismiss)="showHistoryModal = false; clearHistorySearch()"
     style="--border-radius: 24px; --height: 90vh; --width: 98vw; --max-width: 600px;">
     <ng-template>
       <div style="height: 90vh; max-height: 90vh; display: flex; flex-direction: column; background: #fdfdfd; overflow: hidden; box-sizing: border-box;">
         <div class="modal-header"
           style="background: #6c5ce7; padding: 20px; display: flex; justify-content: space-between; align-items: center; color: #fff; flex-shrink: 0;">
           <h2 style="margin: 0; font-size: 22px; font-weight: 800; letter-spacing: 1px;">Purchase History</h2>
-          <ion-button fill="clear" (click)="showHistoryModal = false" style="--color: #fff; margin: 0;">
+          <ion-button fill="clear" (click)="showHistoryModal = false; clearHistorySearch()" style="--color: #fff; margin: 0;">
             <ion-icon name="close-outline" slot="icon-only" style="font-size: 28px;"></ion-icon>
           </ion-button>
         </div>
@@ -892,9 +892,13 @@
         <div style="padding: 16px 20px 0; background: #fdfdfd; flex-shrink: 0;">
           <div class="search-box"
             style="margin-bottom: 12px; background: #f1f2f6; border-radius: 16px; padding: 4px 16px; display: flex; align-items: center;">
-            <ion-icon name="search-outline" style="color: #a4b0be; font-size: 24px;"></ion-icon>
+            <ion-icon name="search-outline" style="color: #a4b0be; font-size: 24px; flex-shrink: 0;"></ion-icon>
             <input type="text" [(ngModel)]="historySearchTerm" (input)="filterHistory()" placeholder="Search product..."
-              style="border: none; background: transparent; padding: 12px 10px; flex: 1; outline: none; font-size: 15px; color: #2f3542;" />
+              style="border: none; background: transparent; padding: 12px 10px; flex: 1; outline: none; font-size: 15px; color: #2f3542; min-width: 0;" />
+            <ion-button *ngIf="historySearchTerm" fill="clear" (click)="clearHistorySearch()"
+              style="--color: #a4b0be; --padding-start: 0; --padding-end: 0; height: 28px; margin: 0; flex-shrink: 0;">
+              <ion-icon name="close-circle" slot="icon-only" style="font-size: 20px;"></ion-icon>
+            </ion-button>
           </div>
         </div>
 
@@ -939,14 +943,14 @@
   </ion-modal>
 
   <!-- Product Selection Modal -->
-  <ion-modal [isOpen]="showProductModal" (didDismiss)="showProductModal = false"
+  <ion-modal [isOpen]="showProductModal" (didDismiss)="showProductModal = false; clearProductSearch()"
     style="--border-radius: 24px; --height: 90vh; --width: 98vw; --max-width: 600px;">
     <ng-template>
       <div style="height: 90vh; max-height: 90vh; display: flex; flex-direction: column; background: #fdfdfd; overflow: hidden; box-sizing: border-box;">
         <div class="modal-header"
           style="background: #5c85d6; padding: 20px; display: flex; justify-content: space-between; align-items: center; color: #fff; flex-shrink: 0;">
           <h2 style="margin: 0; font-size: 22px; font-weight: 800; letter-spacing: 1px;">Select Product</h2>
-          <ion-button fill="clear" (click)="showProductModal = false" style="--color: #fff; margin: 0;">
+          <ion-button fill="clear" (click)="showProductModal = false; clearProductSearch()" style="--color: #fff; margin: 0;">
             <ion-icon name="close-outline" slot="icon-only" style="font-size: 28px;"></ion-icon>
           </ion-button>
         </div>
@@ -954,10 +958,14 @@
         <div style="padding: 16px 20px 0; background: #fdfdfd; flex-shrink: 0;">
           <div class="search-box"
             style="margin-bottom: 12px; background: #f1f2f6; border-radius: 16px; padding: 4px 16px; display: flex; align-items: center;">
-            <ion-icon name="search-outline" style="color: #a4b0be; font-size: 24px;"></ion-icon>
+            <ion-icon name="search-outline" style="color: #a4b0be; font-size: 24px; flex-shrink: 0;"></ion-icon>
             <input type="text" [(ngModel)]="productSearchTerm" (input)="filterProductsForSelection()"
               placeholder="Search by name, code or barcode..."
-              style="border: none; background: transparent; padding: 12px 10px; flex: 1; outline: none; font-size: 15px; color: #2f3542;" />
+              style="border: none; background: transparent; padding: 12px 10px; flex: 1; outline: none; font-size: 15px; color: #2f3542; min-width: 0;" />
+            <ion-button *ngIf="productSearchTerm" fill="clear" (click)="clearProductSearch()"
+              style="--color: #a4b0be; --padding-start: 0; --padding-end: 0; height: 28px; margin: 0; flex-shrink: 0;">
+              <ion-icon name="close-circle" slot="icon-only" style="font-size: 20px;"></ion-icon>
+            </ion-button>
           </div>
         </div>
 

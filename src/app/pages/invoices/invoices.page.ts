@@ -960,6 +960,8 @@ export class InvoicesPage implements OnInit, OnDestroy {
     };
     this.form.items.push(newItem);
     this.showProductSelector = false;
+    this.productSearchTerm = '';
+    this.filteredProductsForSelection = [...this.products];
   }
 
 
