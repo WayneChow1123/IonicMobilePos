@@ -441,9 +441,10 @@ export class BillingPage implements OnInit, OnDestroy {
       this.loadCreditNotes();
       this.loadPayments();
     } else if (res.failCount > 0) {
+      const errDetail = res.lastError ? `\n\nDetails: ${res.lastError}` : '';
       this.alertService.confirm(
         'Sync Failed',
-        `Server temporarily returned an error while syncing ${res.failCount} task(s). Your offline data is safely preserved. Clear from queue only if you want to permanently discard it.`,
+        `Server temporarily returned an error while syncing ${res.failCount} task(s). Your offline data is safely preserved. Clear from queue only if you want to permanently discard it.${errDetail}`,
         'Discard Task',
         'Keep & Retry Later'
       ).then(async (clear) => {
@@ -538,7 +539,7 @@ export class BillingPage implements OnInit, OnDestroy {
           }
         });
       } else if (params['action'] === 'viewCN') {
-        const cnId = Number(params['cnId']);
+        const cnId = params['cnId'];
         const invId = Number(params['invoiceId']) || 0;
         const cnNumber = params['cnNumber'];
 
@@ -553,7 +554,7 @@ export class BillingPage implements OnInit, OnDestroy {
             this.filteredCreditNotes = [...this.creditNotes];
 
             const foundCN = this.creditNotes.find((c: any) =>
-              (cnId && (c.id === cnId || (c.rawIds && c.rawIds.includes(cnId)))) ||
+              (cnId && (String(c.id) === String(cnId) || (c.rawIds && c.rawIds.some((r: any) => String(r) === String(cnId))))) ||
               (cnNumber && (c.cnNumber === cnNumber || c.CNNumber === cnNumber))
             );
 
@@ -742,7 +743,19 @@ export class BillingPage implements OnInit, OnDestroy {
         });
       } else {
         const existing = groupedMap.get(key);
-        const rIds = item.rawIds || item.RawIds || [id];
+        const rIds = (item.rawIds || item.RawIds || [id]).map((x: any) => String(x)).filter(Boolean);
+        const existingRIds = (existing.rawIds || []).map((x: any) => String(x));
+
+        // 避免重复合并同一笔 CN：如果本记录的 ID 或 rawIds 已经全部在 existing 中，或者是相同的单号/ID，直接跳过
+        const allIdsAlreadyIncluded = rIds.length > 0 && rIds.every((rid: string) => existingRIds.includes(rid));
+        const isSameId = id != null && String(existing.id) === String(id);
+        const isSameCnNumber = (item.cnNumber && existing.cnNumber && item.cnNumber === existing.cnNumber) ||
+                               (item.CNNumber && existing.CNNumber && item.CNNumber === existing.CNNumber);
+
+        if (allIdsAlreadyIncluded || isSameId || isSameCnNumber) {
+          continue;
+        }
+
         for (const rid of rIds) {
           if (!existing.rawIds.includes(rid)) existing.rawIds.push(rid);
         }
@@ -822,8 +835,22 @@ export class BillingPage implements OnInit, OnDestroy {
         }
       }
 
-      const localList = [...offlineCNs, ...cached].filter(c => !deletedCNIds.includes(String(c.id ?? c.Id)));
-      this.renderCreditNotesList(localList);
+      // 严格去重：如果待同步队列中已有同 id 或同 cnNumber 的离线记录，排除缓存中的重复项
+      const seenIds = new Set<string>();
+      const seenNumbers = new Set<string>();
+      const uniqueLocalList: any[] = [];
+      for (const item of [...offlineCNs, ...cached]) {
+        const cid = String(item.id ?? item.Id ?? '');
+        const cnum = item.cnNumber || item.CNNumber;
+        if (deletedCNIds.includes(cid)) continue;
+        if (cid && seenIds.has(cid)) continue;
+        if (cnum && seenNumbers.has(cnum)) continue;
+        if (cid) seenIds.add(cid);
+        if (cnum) seenNumbers.add(cnum);
+        uniqueLocalList.push(item);
+      }
+
+      this.renderCreditNotesList(uniqueLocalList);
       this.isLoading = false;
       this.cdr.detectChanges();
     } catch (e) {
@@ -1256,9 +1283,37 @@ export class BillingPage implements OnInit, OnDestroy {
     return (this.paymentForm?.customerId ?? 0) == c.id;
   }
 
+  getInvoiceCustomerName(inv: any): string {
+    if (!inv) return '';
+    const name = inv.customerName || inv.CustomerName || inv.customer?.name;
+    if (name && typeof name === 'string' && name.trim()) return name.trim();
+    const cid = inv.customerId ?? inv.CustomerId ?? inv.customer_id;
+    if (cid && this.customers?.length) {
+      const c = this.customers.find((cust: any) => String(cust.id) === String(cid));
+      if (c && c.name && c.name.trim()) return c.name.trim();
+    }
+    if (this.cnForm?.customerId && (!cid || String(cid) === String(this.cnForm.customerId))) {
+      const c = this.customers?.find((cust: any) => String(cust.id) === String(this.cnForm.customerId));
+      if (c && c.name && c.name.trim()) return c.name.trim();
+    }
+    return cid ? ('Customer #' + cid) : '';
+  }
+
   // ─── Create CN Invoice Selector Modal ───
-  openCNInvoiceModal() {
+  async openCNInvoiceModal() {
     this.cnInvoiceSearchTerm = '';
+    if (!this.customers || this.customers.length === 0) {
+      const cachedCust = await this.offlineStorage.getCache<any[]>('customers') || [];
+      if (cachedCust.length > 0) {
+        this.customers = cachedCust;
+        this.filteredCustomers = [...cachedCust];
+      }
+    }
+    for (const inv of this.cnFilteredInvoices) {
+      if (!inv.customerName || !String(inv.customerName).trim()) {
+        inv.customerName = this.getInvoiceCustomerName(inv);
+      }
+    }
     this.filteredCNInvoicesForSelect = [...this.cnFilteredInvoices];
     this.showCNInvoiceModal = true;
     this.cdr.detectChanges();
@@ -1278,7 +1333,8 @@ export class BillingPage implements OnInit, OnDestroy {
         (inv.invoiceNumber || '').toLowerCase().includes(term) ||
         (inv.docNo || '').toLowerCase().includes(term) ||
         this.getDocNo(inv).toLowerCase().includes(term) ||
-        (inv.customerName || '').toLowerCase().includes(term)
+        (inv.customerName || '').toLowerCase().includes(term) ||
+        (this.getInvoiceCustomerName(inv) || '').toLowerCase().includes(term)
       );
     }
     this.cdr.detectChanges();
@@ -1286,6 +1342,7 @@ export class BillingPage implements OnInit, OnDestroy {
 
   selectCNInvoice(inv: any) {
     this.cnForm.invoiceId = inv ? inv.id : 0;
+    this.cnForm.items = [];
     this.closeCNInvoiceModal();
 
     if (!inv || !inv.id) {
@@ -1298,6 +1355,8 @@ export class BillingPage implements OnInit, OnDestroy {
   }
 
   promptCNInvoiceProducts(invoiceId: number) {
+    this.cnForm.items = [];
+    this.cdr.detectChanges();
     Swal.fire({
       title: 'Display Products?',
       text: 'Would you like to display all products from this invoice?',
@@ -1313,7 +1372,7 @@ export class BillingPage implements OnInit, OnDestroy {
         this.showCNInvoiceFinancials = true;
         this.onCNInvoiceChange(true);
       } else {
-        this.showCNInvoiceFinancials = false;
+        this.showCNInvoiceFinancials = true;
         this.onCNInvoiceChange(false);
       }
     });
@@ -1424,7 +1483,7 @@ export class BillingPage implements OnInit, OnDestroy {
           this.loadCustomerProductPrices(Number(cid));
         }
         const sourceItems = localInv.items || localInv.Items || [];
-        if (sourceItems.length > 0) {
+        if (loadProducts && sourceItems.length > 0) {
           this.cnForm.items = sourceItems.map((item: any) => {
             const remainingQty = (Number(item.quantity) || 1) - (Number(item.returnedQuantity) || 0);
             return {
@@ -1437,6 +1496,8 @@ export class BillingPage implements OnInit, OnDestroy {
               returnToStock: false
             };
           });
+        } else if (!loadProducts) {
+          this.cnForm.items = [];
         }
         this.cdr.detectChanges();
       }
@@ -1469,6 +1530,8 @@ export class BillingPage implements OnInit, OnDestroy {
                 }
               });
             }
+          } else {
+            this.cnForm.items = [];
           }
           this.cdr.detectChanges();
         },
@@ -1476,11 +1539,15 @@ export class BillingPage implements OnInit, OnDestroy {
           if (!this.selectedCNInvoiceDetail && localInv) {
             this.selectedCNInvoiceDetail = localInv;
           }
+          if (!loadProducts) {
+            this.cnForm.items = [];
+          }
           this.cdr.detectChanges();
         }
       });
     } else {
       this.selectedCNInvoiceDetail = null;
+      this.cnForm.items = [];
     }
   }
 
@@ -1834,12 +1901,29 @@ export class BillingPage implements OnInit, OnDestroy {
 
     // ✅ 智能切换：如果列表里有来自“历史记录”的商品，或者根本没选发票，或是离线开具的发票，就走全局接口
     const hasGlobalItems = itemsToReturn.some((i: any) => i.isGlobal);
-    const isOfflineInvoice = this.cnForm.invoiceId && String(this.cnForm.invoiceId).startsWith('inv_');
+    const isOfflineInvoice = Boolean(
+      this.cnForm.invoiceId && (
+        String(this.cnForm.invoiceId).startsWith('inv_') ||
+        String(this.cnForm.invoiceId).startsWith('offline_') ||
+        String(this.cnForm.invoiceId).startsWith('OFFLINE') ||
+        String(this.cnForm.invoiceId).includes('-') ||
+        isNaN(Number(this.cnForm.invoiceId)) ||
+        Number(this.cnForm.invoiceId) > 100000000 ||
+        this.cnFilteredInvoices.find((i: any) => String(i.id) === String(this.cnForm.invoiceId))?.isOffline
+      )
+    );
     const useGlobalMode = !this.cnForm.invoiceId || this.cnForm.invoiceId == 0 || hasGlobalItems || isOfflineInvoice;
 
     const customer = this.customers.find((c: any) => c.id == this.cnForm.customerId);
     const customerName = customer ? customer.name : (this.cnForm.customerName || '');
-    const extraInfo = { customerName, customerId: this.cnForm.customerId };
+    const selectedInv = this.getSelectedCNInvoice();
+    const invDocNo = selectedInv ? (selectedInv.invoiceNumber || selectedInv.docNo || this.getDocNo(selectedInv)) : '';
+    const extraInfo = {
+      customerName,
+      customerId: this.cnForm.customerId,
+      invoiceId: this.cnForm.invoiceId || null,
+      invoiceNumber: invDocNo || null
+    };
 
     this.isSubmittingCN = true;
     this.lastCNSubmissionTime = now;

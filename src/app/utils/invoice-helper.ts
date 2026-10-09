@@ -16,6 +16,47 @@ export const cachedDocNoMap = new Map<any, string>();
 let cachedInvoicesList: any[] = [];
 
 /**
+ * Normalizes ISO date string by stripping trailing UTC markers ('Z', '.000Z', '+00:00')
+ * so that dates saved as local time are parsed correctly as local time rather than being shifted.
+ */
+export function normalizeInvoiceDate(val: any): string {
+  if (!val) return '';
+  if (val instanceof Date) {
+    if (isNaN(val.getTime())) return '';
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${val.getFullYear()}-${pad(val.getMonth() + 1)}-${pad(val.getDate())}T${pad(val.getHours())}:${pad(val.getMinutes())}:${pad(val.getSeconds())}`;
+  }
+  if (typeof val === 'number') {
+    const dt = new Date(val);
+    if (!isNaN(dt.getTime())) {
+      return normalizeInvoiceDate(dt);
+    }
+  }
+  if (typeof val === 'string') {
+    const trimmed = val.trim();
+    return trimmed.replace(/(\.\d+)?(z|[+-]00:?00)$/i, '');
+  }
+  return String(val);
+}
+
+export function getInvoiceNormalizedDate(inv: any): string {
+  if (!inv) return '';
+  const numStr = String(inv.invoiceNumber || inv.docNo || (typeof inv === 'string' ? inv : ''));
+  // Match 14-digit timestamp YYYYMMDDHHmmss inside invoice number (e.g. INV-T715-20261008143321-62 or INV-20261008143321)
+  const match = numStr.match(/(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})/);
+  if (match) {
+    const year = match[1];
+    const month = match[2];
+    const day = match[3];
+    const hour = match[4];
+    const min = match[5];
+    const sec = match[6];
+    return `${year}-${month}-${day}T${hour}:${min}:${sec}`;
+  }
+  return normalizeInvoiceDate(inv.invoiceDate || inv.InvoiceDate || inv.createdAt || inv.CreatedAt || inv);
+}
+
+/**
  * Extracts Year, Month (1-12, unpadded), and Date from an invoice object or timestamp.
  */
 export function extractInvoiceDateParts(inv: any): DateParts {
@@ -26,15 +67,18 @@ export function extractInvoiceDateParts(inv: any): DateParts {
   if (!inv) return { y, m, d };
 
   const numStr = String(inv.invoiceNumber || '');
-  const match = numStr.match(/^INV-(\d{4})(\d{2})(\d{2})/i);
+  const match = numStr.match(/(\d{4})(\d{2})(\d{2})/);
   if (match) {
-    y = parseInt(match[1], 10);
-    m = parseInt(match[2], 10); // 09 -> 9
-    d = parseInt(match[3], 10); // 14 -> 14, 04 -> 4
-    return { y, m, d };
+    const parsedY = parseInt(match[1], 10);
+    if (parsedY >= 2020 && parsedY <= 2099) {
+      y = parsedY;
+      m = parseInt(match[2], 10); // 09 -> 9
+      d = parseInt(match[3], 10); // 14 -> 14, 04 -> 4
+      return { y, m, d };
+    }
   }
 
-  const rawDate = inv.invoiceDate || inv.createdAt;
+  const rawDate = getInvoiceNormalizedDate(inv);
   if (rawDate) {
     const dt = new Date(rawDate);
     if (!isNaN(dt.getTime())) {

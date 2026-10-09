@@ -11,6 +11,7 @@ export interface SyncResult {
   successCount: number;
   failCount: number;
   totalProcessed: number;
+  lastError?: string;
 }
 
 @Injectable({
@@ -128,6 +129,7 @@ export class SyncService {
 
     let successCount = 0;
     let failCount = 0;
+    let lastError: string | undefined;
 
     try {
       // 1. 从 LocalDbService 获取所有 PENDING 订单（已按 created_at 升序排列）
@@ -168,6 +170,7 @@ export class SyncService {
 
           if (errorType === 'CLIENT_DATA_ERROR') {
             const errMsg = err?.error?.message || (typeof err?.error === 'string' ? err?.error : null) || 'Bad Request (400)';
+            lastError = errMsg;
             console.error('[SyncService] Client data error on order:', order.clientId, errMsg);
             await this.localDb.markSyncFailed(order.clientId, `Data Error: ${errMsg}`);
           }
@@ -178,6 +181,9 @@ export class SyncService {
       const offlineRes = await this.syncOfflineTasks(forceRetry);
       successCount += offlineRes.successCount;
       failCount += offlineRes.failCount;
+      if (!lastError && offlineRes.lastError) {
+        lastError = offlineRes.lastError;
+      }
 
     } finally {
       this.isSyncing = false;
@@ -187,7 +193,8 @@ export class SyncService {
     const result: SyncResult = {
       successCount,
       failCount,
-      totalProcessed: successCount + failCount
+      totalProcessed: successCount + failCount,
+      lastError
     };
 
     this.syncCompletedSubject.next(result);
@@ -265,9 +272,10 @@ export class SyncService {
    * - UPDATE_CN: 点数单修改
    * - DELETE_CN: 点数单删除
    */
-  private async syncOfflineTasks(forceRetry: boolean = false): Promise<{ successCount: number; failCount: number }> {
+  private async syncOfflineTasks(forceRetry: boolean = false): Promise<{ successCount: number; failCount: number; lastError?: string }> {
     let successCount = 0;
     let failCount = 0;
+    let lastError: string | undefined;
 
     try {
       const pending = await this.offlineStorage.getPendingQueue();
@@ -404,12 +412,78 @@ export class SyncService {
             await this.offlineStorage.removeQueueItem(task.id);
             successCount++;
           } else if (task.type === 'CREATE_CN') {
-            const url = `${baseUrl}/Credit/CreateCreditNote/invoices/${task.payload.invoiceId}/credit-notes`;
-            await firstValueFrom(this.api.postDirect(url, task.payload.data));
+            let invId = task.payload?.invoiceId;
+            let realServerInvId: number | null = null;
+
+            // 1. Check if invId is already a valid server integer ID
+            const numInvId = Number(invId);
+            if (!isNaN(numInvId) && numInvId > 0 && numInvId < 100000000) {
+              realServerInvId = numInvId;
+            }
+
+            // 2. If it's an offline ID (UUID, offline_, inv_, OFFLINE-), look up the serverId
+            if (!realServerInvId && invId) {
+              const strInvId = String(invId);
+              const order = await this.localDb.getOrderByClientId(strInvId);
+              if (order && order.serverId) {
+                realServerInvId = order.serverId;
+              } else {
+                const cachedInvs = await this.offlineStorage.getCache<any[]>('invoices_list') || [];
+                const matched = cachedInvs.find(inv =>
+                  String(inv.id) === strInvId ||
+                  inv.offlineId === strInvId ||
+                  inv.clientId === strInvId ||
+                  inv.docNo === strInvId ||
+                  inv.invoiceNumber === strInvId
+                );
+                if (matched && matched.serverId) {
+                  realServerInvId = matched.serverId;
+                } else if (matched && typeof matched.id === 'number' && matched.id > 0 && matched.id < 100000000) {
+                  realServerInvId = matched.id;
+                }
+              }
+            }
+
+            // 3. Try to sync via specific invoice endpoint if server ID is resolved
+            let synced = false;
+            if (realServerInvId) {
+              try {
+                const url = `${baseUrl}/Credit/CreateCreditNote/invoices/${realServerInvId}/credit-notes`;
+                await firstValueFrom(this.api.postDirect(url, task.payload.data));
+                synced = true;
+              } catch (err: any) {
+                console.warn('[SyncService] Specific invoice CN failed, attempting global fallback:', err);
+              }
+            }
+
+            // 4. Fallback to CreateGlobalCreditNote for the customer if invoice endpoint fails or ID not resolved
+            if (!synced) {
+              const custId = task.payload?.customerId || task.payload?.data?.customerId;
+              if (custId) {
+                const url = `${baseUrl}/Credit/CreateGlobalCreditNote/customers/${custId}/credit-notes-global`;
+                const globalData = {
+                  ...task.payload.data,
+                  preferredInvoiceId: realServerInvId || undefined
+                };
+                await firstValueFrom(this.api.postDirect(url, globalData));
+                synced = true;
+              } else {
+                throw new Error('Cannot sync CN: Missing valid customerId and invoiceId');
+              }
+            }
+
             await this.offlineStorage.removeQueueItem(task.id);
             successCount++;
           } else if (task.type === 'CREATE_GLOBAL_CN') {
-            const url = `${baseUrl}/Credit/CreateGlobalCreditNote/customers/${task.payload.customerId}/credit-notes-global`;
+            let custId = task.payload.customerId;
+            if (typeof custId === 'string' && custId.startsWith('cust_')) {
+              const cachedCustomers = await this.offlineStorage.getCache<any[]>('customers') || [];
+              const matched = cachedCustomers.find(c => String(c.id) === String(custId) || c.offlineId === custId);
+              if (matched && typeof matched.id === 'number') {
+                custId = matched.id;
+              }
+            }
+            const url = `${baseUrl}/Credit/CreateGlobalCreditNote/customers/${custId}/credit-notes-global`;
             await firstValueFrom(this.api.postDirect(url, task.payload.data));
             await this.offlineStorage.removeQueueItem(task.id);
             successCount++;
@@ -485,6 +559,7 @@ export class SyncService {
           }
           task.retryCount = (task.retryCount || 0) + 1;
           task.lastError = e?.error?.message || (typeof e?.error === 'string' ? e.error : e?.message) || 'Data error';
+          lastError = task.lastError;
           if (task.retryCount >= this.MAX_RETRY_LIMIT) {
             task.status = 'failed';
           }
@@ -496,7 +571,7 @@ export class SyncService {
       console.warn('[SyncService] Offline tasks check error:', e);
     }
 
-    return { successCount, failCount };
+    return { successCount, failCount, lastError };
   }
 
   private sleep(ms: number): Promise<void> {

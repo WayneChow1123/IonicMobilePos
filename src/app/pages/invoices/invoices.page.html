@@ -72,7 +72,7 @@
           <div class="item-info-content">
             <div class="info-left">
               <div class="item-name-row">
-                <span *ngIf="invoice.hasCreditNote || invoice.HasCreditNote" class="cn-badge">CN</span>
+                <span *ngIf="invoice.hasCreditNote || invoice.HasCreditNote || (invoice.CNTotal || invoice.cnTotal || 0) > 0" class="cn-badge">CN</span>
                 <span class="item-name">{{ getInvoiceCustomerName(invoice) }}</span>
               </div>
               <div class="item-sub">{{ getCustomerCode(invoice) }}</div>

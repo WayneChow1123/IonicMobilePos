@@ -9,7 +9,7 @@ import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../services/api.service';
 import { ActivatedRoute } from '@angular/router';
 import { BluetoothPrintService } from '../../services/bluetooth-print.service';
-import { formatDocNo, updateInvoiceDocNos, cachedDocNoMap } from '../../utils/invoice-helper';
+import { formatDocNo, updateInvoiceDocNos, cachedDocNoMap, normalizeInvoiceDate, getInvoiceNormalizedDate } from '../../utils/invoice-helper';
 import { SyncService } from '../../services/sync.service';
 import { OfflineStorageService } from '../../services/offline-storage.service';
 
@@ -376,8 +376,11 @@ export class InvoicesPage implements OnInit, OnDestroy {
           invoiceNumber: p.invoiceNumber || ('OFFLINE-' + String(q.id).slice(-6)),
           docNo: p.invoiceNumber || 'OFFLINE (Pending)',
           customerName: this.customers.find(c => c.id == p.customerId)?.name || ('Customer #' + p.customerId),
-          customerId: p.customerId,
-          invoiceDate: p.invoiceDate || new Date(q.createdAt).toISOString(),
+          invoiceDate: getInvoiceNormalizedDate({
+            invoiceNumber: p.invoiceNumber,
+            invoiceDate: p.invoiceDate,
+            createdAt: q.createdAt
+          }),
           createdAt: q.createdAt,
           totalAmount: total,
           paidAmount: paid,
@@ -420,11 +423,11 @@ export class InvoicesPage implements OnInit, OnDestroy {
           let paid = Number(inv.paidAmount ?? inv.PaidAmount ?? 0);
           const cred = Number(inv.creditUsed ?? inv.CreditUsed ?? 0);
           const cn = Number(inv.cnTotal ?? inv.CNTotal ?? 0);
-          const effectiveBal = Math.max(0, total - paid - cred);
+          const effectiveBal = Math.max(0, total - paid - cred - cn);
           const bal = effectiveBal;
 
           let stat: string;
-          if (effectiveBal <= 0.01 && (paid > 0 || cred > 0 || inv.status === 'Paid')) {
+          if (effectiveBal <= 0.01 && (paid > 0 || cred > 0 || cn > 0 || inv.status === 'Paid')) {
             stat = 'Paid';
           } else if (isCreditTerm) {
             // 赊账 (On Credit / Net 30 Days)
@@ -439,6 +442,7 @@ export class InvoicesPage implements OnInit, OnDestroy {
           }
           return {
             ...inv,
+            invoiceDate: getInvoiceNormalizedDate(inv),
             customerId: custId,
             customerName: cName || (custId ? ('Customer #' + custId) : 'Walk-in Cash'),
             customerCode: cCode,
@@ -480,9 +484,11 @@ export class InvoicesPage implements OnInit, OnDestroy {
         });
         this.invoices = uniqueInvoices;
         updateInvoiceDocNos(this.invoices);
-        this.filterInvoices();
-        this.isLoading = false;
-        this.cdr.detectChanges();
+        this.applyOfflineCreditNotesToInvoices(this.invoices).then(() => {
+          this.filterInvoices();
+          this.isLoading = false;
+          this.cdr.detectChanges();
+        });
       },
       error: async () => {
         const cached = await this.offlineStorage.getCache<any[]>('invoices_list');
@@ -494,7 +500,11 @@ export class InvoicesPage implements OnInit, OnDestroy {
           if (total <= 0 && computedTotal > 0) {
             total = computedTotal;
           }
-          return { ...inv, totalAmount: total };
+          return {
+            ...inv,
+            invoiceDate: getInvoiceNormalizedDate(inv),
+            totalAmount: total
+          };
         });
         cachedList.sort((a, b) => {
           const timeA = new Date(a.invoiceDate || a.createdAt || 0).getTime();
@@ -523,11 +533,184 @@ export class InvoicesPage implements OnInit, OnDestroy {
         });
         this.invoices = uniqueInvoices;
         updateInvoiceDocNos(this.invoices);
+        await this.applyOfflineCreditNotesToInvoices(this.invoices);
         this.filterInvoices();
         this.isLoading = false;
         this.cdr.detectChanges();
       }
     });
+  }
+
+  async applyOfflineCreditNotesToInvoices(invoices: any[]) {
+    if (!Array.isArray(invoices) || invoices.length === 0) return;
+    try {
+      const cachedCNs = await this.offlineStorage.getCache<any[]>('credit_notes_list') || [];
+      const queue = await this.offlineStorage.getPendingQueue();
+      const queueCNs = queue
+        .filter(q => q.type === 'CREATE_CN' || q.type === 'CREATE_GLOBAL_CN')
+        .map(q => {
+          const items = q.payload?.data?.items || [];
+          const totalAmount = items.reduce((sum: number, it: any) => sum + ((Number(it.quantity) || 0) * (Number(it.unitPrice) || 0)), 0);
+          return {
+            id: q.id,
+            cnNumber: q.payload?.cnNumber || ('CN-OFFLINE-' + q.id),
+            invoiceId: q.payload?.invoiceId || q.payload?.data?.preferredInvoiceId || 0,
+            invoiceNumber: q.payload?.invoiceNumber || '',
+            customerId: q.payload?.customerId || 0,
+            customerName: q.payload?.customerName || '',
+            amount: totalAmount,
+            createdAt: new Date(q.createdAt).toISOString(),
+            reason: q.payload?.data?.reason || '',
+            items: items,
+            isOffline: true
+          };
+        });
+
+      const allOfflineCNs: any[] = [];
+      const seenCN = new Set<string>();
+      for (const cn of [...queueCNs, ...cachedCNs]) {
+        const key = String(cn.id || cn.cnNumber || '');
+        if (key && !seenCN.has(key)) {
+          seenCN.add(key);
+          allOfflineCNs.push(cn);
+        }
+      }
+
+      if (allOfflineCNs.length === 0) return;
+
+      for (const inv of invoices) {
+        const invIdStr = String(inv.id || '');
+        const invDocStr = String(inv.invoiceNumber || inv.docNo || '').trim();
+        const invHelperDoc = this.getDocNo(inv).trim();
+        const invRefStr = String(inv.offlineReferenceId || '');
+
+        const matchedCNs = allOfflineCNs.filter(cn => {
+          const cnInvId = String(cn.invoiceId || '');
+          const cnInvDoc = String(cn.invoiceNumber || '').trim();
+          if (cnInvId && cnInvId !== '0' && (cnInvId === invIdStr || (invRefStr && cnInvId === invRefStr))) {
+            return true;
+          }
+          if (cnInvDoc && (cnInvDoc === invDocStr || cnInvDoc === invHelperDoc || (invDocStr && cnInvDoc.includes(invDocStr)) || (invDocStr && invDocStr.includes(cnInvDoc)))) {
+            return true;
+          }
+          return false;
+        });
+
+        if (matchedCNs.length > 0) {
+          inv.creditNotes = inv.creditNotes || [];
+          for (const mcn of matchedCNs) {
+            const alreadyHas = inv.creditNotes.some((c: any) =>
+              String(c.id || '') === String(mcn.id || '') ||
+              (c.cnNumber && c.cnNumber === mcn.cnNumber)
+            );
+            if (!alreadyHas) {
+              inv.creditNotes.push(mcn);
+            }
+          }
+
+          inv.hasCreditNote = true;
+          inv.HasCreditNote = true;
+          const cnSum = inv.creditNotes
+            .filter((c: any) => !(c.cnNumber || '').startsWith('CN-CHG'))
+            .reduce((sum: number, c: any) => sum + (Number(c.amount) || 0), 0);
+          inv.cnTotal = cnSum;
+          inv.CNTotal = cnSum;
+
+          const total = Number(inv.totalAmount ?? inv.TotalAmount ?? 0);
+          const paid = Number(inv.paidAmount ?? inv.PaidAmount ?? 0);
+          const cred = Number(inv.creditUsed ?? inv.CreditUsed ?? 0);
+          inv.balance = Math.max(0, total - paid - cred - cnSum);
+          if (inv.balance <= 0.01 && (paid > 0 || cred > 0 || cnSum > 0 || inv.status === 'Paid')) {
+            inv.status = 'Paid';
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[Invoices] Error applying offline CNs:', e);
+    }
+  }
+
+  async ensureInvoiceCreditNotes(inv: any) {
+    if (!inv) return;
+    try {
+      const cachedCNs = await this.offlineStorage.getCache<any[]>('credit_notes_list') || [];
+      const queue = await this.offlineStorage.getPendingQueue();
+      const queueCNs = queue
+        .filter(q => q.type === 'CREATE_CN' || q.type === 'CREATE_GLOBAL_CN')
+        .map(q => {
+          const items = q.payload?.data?.items || [];
+          const totalAmount = items.reduce((sum: number, it: any) => sum + ((Number(it.quantity) || 0) * (Number(it.unitPrice) || 0)), 0);
+          return {
+            id: q.id,
+            cnNumber: q.payload?.cnNumber || ('CN-OFFLINE-' + q.id),
+            invoiceId: q.payload?.invoiceId || q.payload?.data?.preferredInvoiceId || 0,
+            invoiceNumber: q.payload?.invoiceNumber || '',
+            customerId: q.payload?.customerId || 0,
+            customerName: q.payload?.customerName || '',
+            amount: totalAmount,
+            createdAt: new Date(q.createdAt).toISOString(),
+            reason: q.payload?.data?.reason || '',
+            items: items,
+            isOffline: true
+          };
+        });
+
+      const allOfflineCNs: any[] = [];
+      const seenCN = new Set<string>();
+      for (const cn of [...queueCNs, ...cachedCNs]) {
+        const key = String(cn.id || cn.cnNumber || '');
+        if (key && !seenCN.has(key)) {
+          seenCN.add(key);
+          allOfflineCNs.push(cn);
+        }
+      }
+
+      const invIdStr = String(inv.id || '');
+      const invDocStr = String(inv.invoiceNumber || inv.docNo || '').trim();
+      const invHelperDoc = this.getDocNo(inv).trim();
+      const invRefStr = String(inv.offlineReferenceId || '');
+
+      const matchedCNs = allOfflineCNs.filter(cn => {
+        const cnInvId = String(cn.invoiceId || '');
+        const cnInvDoc = String(cn.invoiceNumber || '').trim();
+        if (cnInvId && cnInvId !== '0' && (cnInvId === invIdStr || (invRefStr && cnInvId === invRefStr))) {
+          return true;
+        }
+        if (cnInvDoc && (cnInvDoc === invDocStr || cnInvDoc === invHelperDoc || (invDocStr && cnInvDoc.includes(invDocStr)) || (invDocStr && invDocStr.includes(cnInvDoc)))) {
+          return true;
+        }
+        return false;
+      });
+
+      if (matchedCNs.length > 0) {
+        inv.creditNotes = inv.creditNotes || [];
+        for (const mcn of matchedCNs) {
+          const alreadyHas = inv.creditNotes.some((c: any) =>
+            String(c.id || '') === String(mcn.id || '') ||
+            (c.cnNumber && c.cnNumber === mcn.cnNumber)
+          );
+          if (!alreadyHas) {
+            inv.creditNotes.push(mcn);
+          }
+        }
+        inv.hasCreditNote = true;
+        inv.HasCreditNote = true;
+        const cnSum = inv.creditNotes
+          .filter((c: any) => !(c.cnNumber || '').startsWith('CN-CHG'))
+          .reduce((sum: number, c: any) => sum + (Number(c.amount) || 0), 0);
+        inv.cnTotal = cnSum;
+        inv.CNTotal = cnSum;
+        const total = Number(inv.totalAmount ?? inv.TotalAmount ?? 0);
+        const paid = Number(inv.paidAmount ?? inv.PaidAmount ?? 0);
+        const cred = Number(inv.creditUsed ?? inv.CreditUsed ?? 0);
+        inv.balance = Math.max(0, total - paid - cred - cnSum);
+        if (inv.balance <= 0.01 && (paid > 0 || cred > 0 || cnSum > 0 || inv.status === 'Paid')) {
+          inv.status = 'Paid';
+        }
+      }
+    } catch (e) {
+      console.warn('[Invoices] Error ensuring invoice credit notes:', e);
+    }
   }
 
   async manualSync() {
@@ -538,9 +721,10 @@ export class InvoicesPage implements OnInit, OnDestroy {
       this.showToastMsg(`Synced ${res.successCount} item(s) successfully!`);
       this.loadInvoices();
     } else if (res.failCount > 0) {
+      const errDetail = res.lastError ? `\n\nDetails: ${res.lastError}` : '';
       this.alertService.confirm(
         'Sync Failed',
-        `Server temporarily returned an error while syncing ${res.failCount} task(s). Your offline data is safely preserved. Clear from queue only if you want to permanently discard it.`,
+        `Server temporarily returned an error while syncing ${res.failCount} task(s). Your offline data is safely preserved. Clear from queue only if you want to permanently discard it.${errDetail}`,
         'Discard Task',
         'Keep & Retry Later'
       ).then(async (clear) => {
@@ -621,7 +805,19 @@ export class InvoicesPage implements OnInit, OnDestroy {
         });
       } else {
         const exist = groupedMap.get(key);
-        const rIds = cn.rawIds || cn.RawIds || [cn.id || cn.Id];
+        const rIds = (cn.rawIds || cn.RawIds || [cn.id || cn.Id]).map((x: any) => String(x)).filter(Boolean);
+        const existRIds = (exist.rawIds || []).map((x: any) => String(x));
+        const cnId = String(cn.id || cn.Id || '');
+
+        const allIdsAlreadyIncluded = rIds.length > 0 && rIds.every((rid: string) => existRIds.includes(rid));
+        const isSameId = cnId && (String(exist.id || exist.Id) === cnId);
+        const isSameCnNumber = (cn.cnNumber && exist.cnNumber && cn.cnNumber === exist.cnNumber) ||
+                               (cn.CNNumber && exist.CNNumber && cn.CNNumber === exist.CNNumber);
+
+        if (allIdsAlreadyIncluded || isSameId || isSameCnNumber) {
+          continue;
+        }
+
         for (const rid of rIds) {
           if (!exist.rawIds.includes(rid)) exist.rawIds.push(rid);
         }
@@ -665,11 +861,15 @@ export class InvoicesPage implements OnInit, OnDestroy {
             });
           } else {
             const exist = groupedMap.get(invKey);
+            const cnRIds = (cn.rawIds || [cn.id]).map((x: any) => String(x)).filter(Boolean);
+            const existRIds = (exist.rawIds || []).map((x: any) => String(x));
+            const isAlreadyIncluded = cnRIds.length > 0 && cnRIds.every((rid: string) => existRIds.includes(rid));
+            if (isAlreadyIncluded || (cn.id && String(exist.id) === String(cn.id))) {
+              continue;
+            }
             exist.amount += Number(cn.amount || 0);
-            if (cn.rawIds) {
-              for (const rid of cn.rawIds) { if (!exist.rawIds.includes(rid)) exist.rawIds.push(rid); }
-            } else if (!exist.rawIds.includes(cn.id)) {
-              exist.rawIds.push(cn.id);
+            for (const rid of cnRIds) {
+              if (!exist.rawIds.includes(rid)) exist.rawIds.push(rid);
             }
             if (cn.items || cn.Items) {
               exist.items.push(...(cn.items || cn.Items));
@@ -1126,6 +1326,7 @@ export class InvoicesPage implements OnInit, OnDestroy {
     // 1. 如果是离线创建的单据：直接从本地数据源组装详情，无需发起服务端 HTTP 请求
     if (invoice.isOffline) {
       this.selectedInvoice = { ...invoice };
+      await this.ensureInvoiceCreditNotes(this.selectedInvoice);
       const rawOfflineItems = (invoice.items && Array.isArray(invoice.items) && invoice.items.length > 0) ? invoice.items : [];
       const invNum = invoice.docNo || invoice.invoiceNumber || this.getDocNo(invoice);
       const term = invoice.termType || invoice.TermType || 'CASH SALE';
@@ -1160,6 +1361,7 @@ export class InvoicesPage implements OnInit, OnDestroy {
       const custId = details.customerId ?? details.CustomerId ?? invoice.customerId ?? invoice.CustomerId ?? 0;
       this.selectedCustomerDetail = this.customers.find(c => c.id === custId);
       this.selectedInvoice = { ...details, customerName: details.customerName || invoice.customerName, customerId: custId };
+      await this.ensureInvoiceCreditNotes(this.selectedInvoice);
       const rawFallbackItems = (details.items || details.Items);
       const hasValidItems = Array.isArray(rawFallbackItems) && rawFallbackItems.length > 0;
       const invNum = details.docNo || details.invoiceNumber || invoice.docNo || invoice.invoiceNumber || this.getDocNo(details);
@@ -1205,6 +1407,7 @@ export class InvoicesPage implements OnInit, OnDestroy {
         const custId = details.customerId ?? details.CustomerId ?? invoice.customerId ?? invoice.CustomerId ?? 0;
         this.selectedCustomerDetail = this.customers.find(c => c.id === custId);
         this.selectedInvoice = { ...details, customerName: details.customerName || invoice.customerName, customerId: custId };
+        this.ensureInvoiceCreditNotes(this.selectedInvoice).then(() => this.cdr.detectChanges());
         const customerId = Number(custId);
         if (customerId) {
           this.loadCustomerProductPrices(customerId);
@@ -1678,9 +1881,11 @@ export class InvoicesPage implements OnInit, OnDestroy {
       const useCredit = !!this.selectedCreditNoteId;
       const isCreditTerm = (this.termType === 'Net 30 Days' || this.termType === 'On Credit');
       const nowMYS = this.getMYSDate();
-      const finalInvoiceDate = (this.editForm?.invoiceDate && this.editForm.invoiceDate.trim())
-        ? (this.editForm.invoiceDate.length === 16 ? this.editForm.invoiceDate + ':00' : this.editForm.invoiceDate)
-        : nowMYS;
+      const finalInvoiceDate = (!this.isEditing)
+        ? nowMYS
+        : ((this.editForm?.invoiceDate && this.editForm.invoiceDate.trim())
+            ? (this.editForm.invoiceDate.length === 16 ? this.editForm.invoiceDate + ':00' : this.editForm.invoiceDate)
+            : nowMYS);
 
       const payload = {
         ...this.form,

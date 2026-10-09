@@ -866,7 +866,7 @@
           <span class="inv-card-status" [class.paid]="inv.status==='Paid'" [class.partial]="inv.status==='Partial'" [class.unpaid]="inv.status==='Unpaid'||!inv.status">{{ inv.status || 'Unpaid' }}</span>
         </div>
         <div class="inv-card-bottom">
-          <span class="inv-card-cust">{{ inv.customerName }} • {{ inv.invoiceDate | date:'dd/MM/yyyy' }}</span>
+          <span class="inv-card-cust">{{ getInvoiceCustomerName(inv) }} • {{ (inv.invoiceDate || inv.date) | date:'dd/MM/yyyy' }}</span>
           <span class="inv-card-amount">RM {{ (inv.totalAmount || 0) | number:'1.2-2' }}</span>
         </div>
       </div>
