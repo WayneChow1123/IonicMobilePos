@@ -318,6 +318,32 @@ export class LocalDbService {
     this.notifyChange();
   }
 
+  /**
+   * 级联更新待同步订单明细中的临时 productId 为真实服务端 productId
+   */
+  public async updateProductIdInOrderItems(oldProductId: any, newProductId: number): Promise<void> {
+    const items = await this.db.order_items.toArray();
+    for (const it of items) {
+      if (String(it.productId) === String(oldProductId)) {
+        if (it.id != null) {
+          await this.db.order_items.update(it.id, { productId: newProductId });
+        }
+      }
+    }
+  }
+
+  /**
+   * 级联更新待同步订单主体中的临时 customerId 为真实服务端 customerId
+   */
+  public async updateCustomerIdInOrders(oldCustomerId: any, newCustomerId: number): Promise<void> {
+    const orders = await this.db.orders.toArray();
+    for (const ord of orders) {
+      if (String(ord.customerId) === String(oldCustomerId)) {
+        await this.db.orders.update(ord.clientId, { customerId: newCustomerId });
+      }
+    }
+  }
+
   // --- 内部辅助函数 ---
   private async attachDetailsToOrders(orders: LocalOrder[]): Promise<FullOrder[]> {
     const result: FullOrder[] = [];

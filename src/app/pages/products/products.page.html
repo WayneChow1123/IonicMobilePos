@@ -7,7 +7,11 @@
           <ion-icon name="chevron-back-outline"></ion-icon> Back
         </ion-button>
         <span class="page-title">Products</span>
-        <div class="top-right">
+        <div class="top-right" style="display:flex;align-items:center;">
+          <ion-button *ngIf="pendingOfflineCount > 0" fill="outline" size="small" (click)="manualSync()" [disabled]="isSyncing" style="--border-radius:12px;font-size:11px;font-weight:700;height:30px;--color:#d35400;--border-color:#e67e22;margin-right:4px;">
+            <ion-icon [name]="isSyncing ? 'sync-outline' : 'cloud-upload-outline'" slot="start" [class.spin-animation]="isSyncing"></ion-icon>
+            {{ isSyncing ? 'Syncing...' : 'Sync (' + pendingOfflineCount + ')' }}
+          </ion-button>
           <ion-button fill="clear" class="icon-btn" (click)="toggleSearch()">
             <ion-icon name="search-outline"></ion-icon>
           </ion-button>
@@ -30,7 +34,7 @@
     </div>
 
     <div *ngIf="!isLoading">
-      <div *ngFor="let product of displayedProducts" class="product-card" [class.inactive]="product.isActive === false">
+      <div *ngFor="let product of displayedProducts" class="product-card" [class.inactive]="product.isActive === false" [class.offline-card]="product.isOffline" [class.modified-card]="product.isModified && !product.isOffline">
         <div class="product-main" (click)="openEditModal(product)">
           <div class="product-left">
             <div class="product-icon" [class.out-of-stock]="product.stock === 0">
@@ -40,6 +44,10 @@
               <div class="product-name-row">
                 <span class="item-name">{{ product.name }}</span>
                 <span class="item-code" *ngIf="product.code">#{{ product.code }}</span>
+                <span *ngIf="product.isOffline" class="badge" style="background:#ff9800;color:#fff;margin-left:6px;font-size:10px;padding:2px 6px;border-radius:4px;font-weight:700;">OFFLINE</span>
+                <span *ngIf="product.isModified && !product.isOffline" class="badge" style="background:#2196f3;color:#fff;margin-left:6px;font-size:10px;padding:2px 6px;border-radius:4px;font-weight:700;display:inline-flex;align-items:center;gap:2px;">
+                  <ion-icon name="sync-outline" style="font-size:10px;"></ion-icon> MODIFIED
+                </span>
                 <span *ngIf="product.isActive === false" class="badge inactive-badge">INACTIVE</span>
                 <span *ngIf="product.stock === 0" class="badge oos-badge">OUT OF STOCK</span>
               </div>
@@ -135,6 +143,12 @@
         <ion-icon [name]="isEditMode ? 'save-outline' : 'settings-outline'"></ion-icon> 
         {{ isEditMode ? 'SAVE' : 'EDIT' }}
       </ion-button>
+    </div>
+
+    <!-- Offline/Modified notice -->
+    <div *ngIf="isEditing && (selectedProduct?.isOffline || selectedProduct?.isModified)" style="background:#fff3e0;border:1px solid #ffe082;border-radius:10px;padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;gap:8px;font-size:12px;color:#e65100;font-weight:600;">
+      <ion-icon name="cloud-offline-outline" style="font-size:18px;flex-shrink:0;"></ion-icon>
+      <span>{{ selectedProduct?.isOffline ? 'This product was created offline and is waiting to sync.' : 'This product has offline modifications waiting to sync.' }}</span>
     </div>
 
     <!-- Barcode Code Display -->

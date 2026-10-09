@@ -132,6 +132,14 @@ export class SyncService {
     let lastError: string | undefined;
 
     try {
+      // 0. 优先同步离线创建的商品与客户，确保获取到真实的服务端自增 ID，并完成所有待发票订单的 ID 回填
+      const priorityRes = await this.syncPriorityEntities(forceRetry);
+      successCount += priorityRes.successCount;
+      failCount += priorityRes.failCount;
+      if (priorityRes.lastError && !lastError) {
+        lastError = priorityRes.lastError;
+      }
+
       // 1. 从 LocalDbService 获取所有 PENDING 订单（已按 created_at 升序排列）
       const pendingOrders = await this.localDb.getPendingOrders();
 
@@ -140,7 +148,7 @@ export class SyncService {
           continue;
         }
 
-        const payload = this.buildInvoicePayload(order);
+        const payload = await this.buildInvoicePayload(order);
 
         try {
           const res = await firstValueFrom(this.api.postInvoiceDirect(payload));
@@ -204,9 +212,20 @@ export class SyncService {
   /**
    * 组装与后端 CreateInvoiceDto 严格一致的上传数据载荷
    */
-  private buildInvoicePayload(order: FullOrder): any {
+  private async buildInvoicePayload(order: FullOrder): Promise<any> {
+    const cachedProds = await this.offlineStorage.getCache<any[]>('products') || [];
+    const cachedCusts = await this.offlineStorage.getCache<any[]>('customers') || [];
+
+    let customerId: any = order.customerId;
+    if (typeof customerId === 'string' && String(customerId).startsWith('cust_')) {
+      const mc = cachedCusts.find(c => String(c.id) === String(customerId) || c.offlineId === customerId);
+      if (mc && typeof mc.id === 'number') {
+        customerId = mc.id;
+      }
+    }
+
     return {
-      customerId: order.customerId,
+      customerId: Number(customerId) || 0,
       invoiceDate: order.orderDate,
       remark: order.remark || '',
       useCreditBalance: false,
@@ -217,12 +236,21 @@ export class SyncService {
       clientId: order.clientId,           // 关键客户端 Guid 幂等主键
       offlineReferenceId: order.clientId, // 兼容字段
       invoiceNumber: order.orderNumber,   // 关键客户端机台防撞单号
-      items: (order.items || []).map(it => ({
-        productId: it.productId,
-        quantity: it.quantity,
-        unitPrice: it.unitPrice,
-        remark: it.remark || ''
-      }))
+      items: (order.items || []).map(it => {
+        let pid: any = it.productId;
+        if (typeof pid === 'string' && String(pid).startsWith('prod_')) {
+          const mp = cachedProds.find(p => String(p.id) === String(pid) || p.offlineId === pid);
+          if (mp && typeof mp.id === 'number') {
+            pid = mp.id;
+          }
+        }
+        return {
+          productId: Number(pid) || 0,
+          quantity: it.quantity,
+          unitPrice: it.unitPrice,
+          remark: it.remark || ''
+        };
+      })
     };
   }
 
@@ -264,39 +292,118 @@ export class SyncService {
   }
 
   /**
-   * 全量同步 offlineStorage 中的所有任务类型：
-   * - CREATE_INVOICE: 发票上传
-   * - UPDATE_INVOICE: 发票修改
-   * - DELETE_INVOICE: 发票作废
-   * - CREATE_CN / CREATE_GLOBAL_CN: 点数单/退货单新建
-   * - UPDATE_CN: 点数单修改
-   * - DELETE_CN: 点数单删除
+   * 优先同步实体（离线新建的商品与客户）：
+   * 保证在同步发票或订单之前，获取到后端分配的真实自增数字 ID，
+   * 并级联更新本地缓存、Dexie 订单明细及待同步队列中的临时外键引用。
    */
-  private async syncOfflineTasks(forceRetry: boolean = false): Promise<{ successCount: number; failCount: number; lastError?: string }> {
+  public async syncPriorityEntities(forceRetry: boolean = false): Promise<{ successCount: number; failCount: number; lastError?: string }> {
     let successCount = 0;
     let failCount = 0;
     let lastError: string | undefined;
+    const baseUrl = (this.api as any).baseUrl;
 
     try {
       const pending = await this.offlineStorage.getPendingQueue();
-      const baseUrl = (this.api as any).baseUrl;
+      const priorityTasks = pending.filter(t => t.type === 'CREATE_PRODUCT' || t.type === 'CREATE_CUSTOMER');
 
-      // 客户创建优先同步，以便后续关联发票获取真实服务端 customerId
-      const customerTasks = pending.filter(t => t.type === 'CREATE_CUSTOMER');
-      const otherTasks = pending.filter(t => t.type !== 'CREATE_CUSTOMER');
-      const sortedPending = [...customerTasks, ...otherTasks];
-
-      for (const task of sortedPending) {
+      for (const task of priorityTasks) {
         if (!forceRetry && (task.status === 'failed' || task.retryCount >= this.MAX_RETRY_LIMIT)) {
           continue;
         }
 
         try {
-          if (task.type === 'CREATE_CUSTOMER') {
+          if (task.type === 'CREATE_PRODUCT') {
+            const url = `${baseUrl}/Product/CreateProducts/createproducts`;
+            const payload = task.payload?.data || task.payload;
+            const res: any = await firstValueFrom(this.api.postDirect(url, payload));
+            const serverId = res?.id || res?.data?.id || res?.productId || 0;
+
+            if (serverId) {
+              // 1. 更新商品缓存
+              const cachedProducts = await this.offlineStorage.getCache<any[]>('products') || [];
+              const matched = cachedProducts.find(p => String(p.id) === String(task.id) || p.offlineId === task.id);
+              if (matched) {
+                matched.id = serverId;
+                matched.isOffline = false;
+                await this.offlineStorage.setCache('products', cachedProducts);
+              }
+
+              // 2. 级联更新 Dexie 本地订单明细中的临时 productId
+              try {
+                await this.localDb.updateProductIdInOrderItems(task.id, serverId);
+              } catch (dexErr) {
+                console.warn('[SyncService] Failed updating Dexie order_items productId:', dexErr);
+              }
+
+              // 3. 级联更新待同步队列中的外键引用
+              const pendingQueue = await this.offlineStorage.getPendingQueue();
+              for (const q of pendingQueue) {
+                // 发票创建
+                if (q.type === 'CREATE_INVOICE' && q.payload?.items && Array.isArray(q.payload.items)) {
+                  let changed = false;
+                  for (const it of q.payload.items) {
+                    if (String(it.productId) === String(task.id)) {
+                      it.productId = serverId;
+                      changed = true;
+                    }
+                  }
+                  if (changed) await this.offlineStorage.updateQueueItem(q);
+                }
+                // 发票更新
+                if (q.type === 'UPDATE_INVOICE' && q.payload) {
+                  const itList = q.payload.data?.items || q.payload.items;
+                  if (Array.isArray(itList)) {
+                    let changed = false;
+                    for (const it of itList) {
+                      if (String(it.productId) === String(task.id)) {
+                        it.productId = serverId;
+                        changed = true;
+                      }
+                    }
+                    if (changed) await this.offlineStorage.updateQueueItem(q);
+                  }
+                }
+                // 退货单
+                if (q.type === 'CREATE_CN' || q.type === 'CREATE_GLOBAL_CN' || q.type === 'UPDATE_CN') {
+                  const itList = q.payload?.items || q.payload?.data?.items;
+                  if (Array.isArray(itList)) {
+                    let changed = false;
+                    for (const it of itList) {
+                      if (String(it.productId) === String(task.id)) {
+                        it.productId = serverId;
+                        changed = true;
+                      }
+                    }
+                    if (changed) await this.offlineStorage.updateQueueItem(q);
+                  }
+                }
+                // 客户特价
+                if ((q.type === 'CREATE_CUSTOMER_PRICE' || q.type === 'UPDATE_CUSTOMER_PRICE' || q.type === 'DELETE_CUSTOMER_PRICE') && q.payload) {
+                  if (String(q.payload.productId) === String(task.id) || String(q.payload.data?.productId) === String(task.id)) {
+                    if (q.payload.productId) q.payload.productId = serverId;
+                    if (q.payload.data?.productId) q.payload.data.productId = serverId;
+                    await this.offlineStorage.updateQueueItem(q);
+                  }
+                }
+                // 商品后续操作
+                if ((q.type === 'UPDATE_PRODUCT' || q.type === 'DELETE_PRODUCT' || q.type === 'ACTIVATE_PRODUCT' || q.type === 'DEACTIVATE_PRODUCT' || q.type === 'ADD_STOCK') && q.payload) {
+                  if (String(q.payload.id) === String(task.id)) {
+                    q.payload.id = serverId;
+                    await this.offlineStorage.updateQueueItem(q);
+                  }
+                }
+              }
+            }
+
+            await this.offlineStorage.removeQueueItem(task.id);
+            successCount++;
+
+          } else if (task.type === 'CREATE_CUSTOMER') {
             const url = `${baseUrl}/Customer/CreateCustomers/createcustomers`;
             const payload = task.payload?.data || task.payload;
             const res: any = await firstValueFrom(this.api.postDirect(url, payload));
             const serverId = res?.data?.id || res?.id || 0;
+
             if (serverId) {
               const cachedCustomers = await this.offlineStorage.getCache<any[]>('customers') || [];
               const matched = cachedCustomers.find(c => String(c.id) === String(task.id) || c.offlineId === task.id);
@@ -304,6 +411,13 @@ export class SyncService {
                 matched.id = serverId;
                 matched.isOffline = false;
                 await this.offlineStorage.setCache('customers', cachedCustomers);
+              }
+
+              // 级联更新 Dexie 本地订单主体中的临时 customerId
+              try {
+                await this.localDb.updateCustomerIdInOrders(task.id, serverId);
+              } catch (dexErr) {
+                console.warn('[SyncService] Failed updating Dexie orders customerId:', dexErr);
               }
 
               // 同步更新队列中依赖该离线 customerId 的发票和特价任务
@@ -318,6 +432,136 @@ export class SyncService {
                   await this.offlineStorage.updateQueueItem(q);
                 }
               }
+            }
+
+            await this.offlineStorage.removeQueueItem(task.id);
+            successCount++;
+          }
+        } catch (err: any) {
+          failCount++;
+          const errorType = this.classifyError(err);
+          if (errorType === 'AUTH_ERROR') {
+            this.authErrorSubject.next('Session expired or unauthorized. Please re-login.');
+            break;
+          }
+          if (errorType === 'NETWORK_ERROR') {
+            break;
+          }
+          if (errorType === 'CLIENT_DATA_ERROR') {
+            const errMsg = err?.error?.message || (typeof err?.error === 'string' ? err?.error : null) || 'Bad Request (400)';
+            lastError = errMsg;
+            task.status = 'failed';
+            task.retryCount = (task.retryCount || 0) + 1;
+            task.lastError = errMsg;
+            await this.offlineStorage.updateQueueItem(task);
+          }
+        }
+      }
+    } catch (e: any) {
+      lastError = e?.message;
+    }
+
+    return { successCount, failCount, lastError };
+  }
+
+  /**
+   * 全量同步 offlineStorage 中的所有任务类型：
+   * - CREATE_PRODUCT: 商品创建
+   * - UPDATE_PRODUCT: 商品修改
+   * - DELETE_PRODUCT: 商品删除
+   * - ACTIVATE_PRODUCT: 商品启用
+   * - DEACTIVATE_PRODUCT: 商品停用
+   * - ADD_STOCK: 商品加库存
+   * - CREATE_INVOICE: 发票上传
+   * - UPDATE_INVOICE: 发票修改
+   * - DELETE_INVOICE: 发票作废
+   * - CREATE_CN / CREATE_GLOBAL_CN: 点数单/退货单新建
+   * - UPDATE_CN: 点数单修改
+   * - DELETE_CN: 点数单删除
+   */
+  private async syncOfflineTasks(forceRetry: boolean = false): Promise<{ successCount: number; failCount: number; lastError?: string }> {
+    let successCount = 0;
+    let failCount = 0;
+    let lastError: string | undefined;
+
+    try {
+      // 0. 优先执行商品与客户创建同步，确保 ID 依赖已全部解决
+      const prioRes = await this.syncPriorityEntities(forceRetry);
+      successCount += prioRes.successCount;
+      failCount += prioRes.failCount;
+      if (prioRes.lastError && !lastError) {
+        lastError = prioRes.lastError;
+      }
+
+      const pending = await this.offlineStorage.getPendingQueue();
+      const baseUrl = (this.api as any).baseUrl;
+
+      // 过滤掉已由 syncPriorityEntities 处理的 CREATE_PRODUCT 和 CREATE_CUSTOMER
+      const remainingTasks = pending.filter(t => t.type !== 'CREATE_PRODUCT' && t.type !== 'CREATE_CUSTOMER');
+
+      for (const task of remainingTasks) {
+        if (!forceRetry && (task.status === 'failed' || task.retryCount >= this.MAX_RETRY_LIMIT)) {
+          continue;
+        }
+
+        try {
+          if (task.type === 'UPDATE_PRODUCT') {
+            const pid = task.payload?.id || String(task.id).replace('upd_prod_', '');
+            const url = `${baseUrl}/Product/EditProduct/editproduct/${pid}`;
+            const payload = task.payload?.data || task.payload;
+            await firstValueFrom(this.api.putDirect(url, payload));
+            const cachedProducts = await this.offlineStorage.getCache<any[]>('products') || [];
+            const matched = cachedProducts.find(p => String(p.id) === String(pid));
+            if (matched) {
+              matched.isModified = false;
+              await this.offlineStorage.setCache('products', cachedProducts);
+            }
+            await this.offlineStorage.removeQueueItem(task.id);
+            successCount++;
+          } else if (task.type === 'DELETE_PRODUCT') {
+            const pid = task.payload?.id || String(task.id).replace('del_prod_', '');
+            const url = `${baseUrl}/Product/DeleteProduct/deleteproduct/${pid}`;
+            try {
+              await firstValueFrom(this.api.deleteDirect(url));
+            } catch (err: any) {
+              if (err?.status !== 404) throw err;
+            }
+            await this.offlineStorage.removeQueueItem(task.id);
+            successCount++;
+          } else if (task.type === 'ACTIVATE_PRODUCT') {
+            const pid = task.payload?.id || String(task.id).replace('act_prod_', '');
+            const url = `${baseUrl}/Product/ActivateProduct/activateproduct/${pid}`;
+            await firstValueFrom(this.api.patchDirect(url, {}));
+            const cachedProducts = await this.offlineStorage.getCache<any[]>('products') || [];
+            const matched = cachedProducts.find(p => String(p.id) === String(pid));
+            if (matched) {
+              matched.isModified = false;
+              await this.offlineStorage.setCache('products', cachedProducts);
+            }
+            await this.offlineStorage.removeQueueItem(task.id);
+            successCount++;
+          } else if (task.type === 'DEACTIVATE_PRODUCT') {
+            const pid = task.payload?.id || String(task.id).replace('deact_prod_', '');
+            const url = `${baseUrl}/Product/DeactivateProduct/deactivateproduct/${pid}`;
+            await firstValueFrom(this.api.patchDirect(url, {}));
+            const cachedProducts = await this.offlineStorage.getCache<any[]>('products') || [];
+            const matched = cachedProducts.find(p => String(p.id) === String(pid));
+            if (matched) {
+              matched.isModified = false;
+              await this.offlineStorage.setCache('products', cachedProducts);
+            }
+            await this.offlineStorage.removeQueueItem(task.id);
+            successCount++;
+          } else if (task.type === 'ADD_STOCK') {
+            const pid = task.payload?.id || String(task.id).replace('stock_prod_', '').split('_')[0];
+            const url = `${baseUrl}/Product/AddStock/addstock/${pid}`;
+            const payload = { quantity: Number(task.payload?.quantity || 0) };
+            await firstValueFrom(this.api.patchDirect(url, payload));
+            const cachedProducts = await this.offlineStorage.getCache<any[]>('products') || [];
+            const matched = cachedProducts.find(p => String(p.id) === String(pid));
+            if (matched) {
+              matched.isModified = false;
+              await this.offlineStorage.setCache('products', cachedProducts);
             }
             await this.offlineStorage.removeQueueItem(task.id);
             successCount++;
@@ -362,6 +606,18 @@ export class SyncService {
                 task.payload.customerId = matched.id;
               }
             }
+            // 如果发票中的商品使用了离线 productId，先从已同步商品中查找映射
+            if (Array.isArray(task.payload?.items)) {
+              const cachedProds = await this.offlineStorage.getCache<any[]>('products') || [];
+              for (const it of task.payload.items) {
+                if (typeof it.productId === 'string' && String(it.productId).startsWith('prod_')) {
+                  const matchedP = cachedProds.find(p => String(p.id) === String(it.productId) || p.offlineId === it.productId);
+                  if (matchedP && typeof matchedP.id === 'number') {
+                    it.productId = matchedP.id;
+                  }
+                }
+              }
+            }
             const res = await firstValueFrom(this.api.postInvoiceDirect(task.payload));
             const serverId = res?.invoiceId || res?.id || 0;
             try { await this.localDb.markAsSynced(task.id, serverId); } catch { }
@@ -379,13 +635,19 @@ export class SyncService {
             console.log('[SyncService] Processing UPDATE_INVOICE:', task.id, task.payload);
             const rawData = task.payload?.data || task.payload || {};
             const invId = task.payload?.invoiceId || task.payload?.id || String(task.id).replace('upd_inv_', '');
+            const cachedProds = await this.offlineStorage.getCache<any[]>('products') || [];
             const cleanItems = (rawData.items || []).map((it: any) => {
               let p = it.unitPrice != null ? Number(it.unitPrice) : null;
               if (p !== null && p <= 0) {
                 p = null; // 转换为 null，使后端自动按特价/原价取值，避免 400 校验错误
               }
+              let pid = it.productId;
+              if (typeof pid === 'string' && pid.startsWith('prod_')) {
+                const mp = cachedProds.find(cp => String(cp.id) === String(pid) || cp.offlineId === pid);
+                if (mp && typeof mp.id === 'number') pid = mp.id;
+              }
               return {
-                productId: Number(it.productId),
+                productId: Number(pid) || 0,
                 quantity: Number(it.quantity || 1),
                 unitPrice: p,
                 remark: it.remark || ''

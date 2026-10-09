@@ -844,3 +844,26 @@ ion-content {
     color: #1a1a1a !important;
   }
 }
+
+.offline-card {
+  border-left: 4px solid #ff9800 !important;
+  background: #fffdf8 !important;
+}
+
+.modified-card {
+  border-left: 4px solid #2196f3 !important;
+  background: #f8fbff !important;
+}
+
+.spin-animation {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}

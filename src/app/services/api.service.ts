@@ -73,7 +73,26 @@ export class ApiService {
   downloadBackup(id: string): Observable<any> { return this.http.get(this.baseUrl + '/api/backup/download/' + id); }
 
   createCategory(data: any): Observable<any> { return this.http.post(this.baseUrl + '/Category/CreateCategory/createcategory', data); }
-  getCategories(): Observable<any> { return this.http.get(this.baseUrl + '/Category/GetCategories/categories'); }
+  getCategories(): Observable<any> {
+    const fetchOfflineCategories = async () => {
+      const cached = await this.offlineStorage.getCache<any[]>('categories') || [];
+      return cached;
+    };
+
+    if (!this.isOnline()) {
+      return from(fetchOfflineCategories());
+    }
+
+    return this.http.get(this.baseUrl + '/Category/GetCategories/categories').pipe(
+      timeout(3500),
+      tap((res: any) => {
+        if (Array.isArray(res)) {
+          this.offlineStorage.setCache('categories', res);
+        }
+      }),
+      catchError(() => from(fetchOfflineCategories()))
+    );
+  }
   editCategory(id: any, data: any): Observable<any> { return this.http.put(this.baseUrl + '/Category/EditCategory/editcategory/' + id, data); }
   deleteCategory(id: any): Observable<any> { return this.http.delete(this.baseUrl + '/Category/DeleteCategory/deletecategory/' + id, { responseType: 'text' }); }
 
@@ -2159,16 +2178,166 @@ export class ApiService {
     );
   }
 
+  private async reconcileProductsWithQueue(serverProducts: any[]): Promise<any[]> {
+    const queue = await this.offlineStorage.getPendingQueue();
+    const offlineCreates = queue
+      .filter(q => q.type === 'CREATE_PRODUCT')
+      .map(q => {
+        const p = q.payload?.data || q.payload || {};
+        return {
+          ...p,
+          id: q.id,
+          name: p.name || '',
+          description: p.description || '',
+          barcode: p.barcode || '',
+          code: p.code || '',
+          category: p.category || 'DEFAULT',
+          uom: p.uom || 'UNIT',
+          price: Number(p.price) || 0,
+          rate: p.rate != null ? Number(p.rate) : 1,
+          cost: Number(p.cost) || 0,
+          lowestPrice: Number(p.lowestPrice) || 0,
+          stock: p.stock != null ? Number(p.stock) : 0,
+          includeTax: !!p.includeTax,
+          salesDefault: !!p.salesDefault,
+          returnDefault: !!p.returnDefault,
+          isActive: p.isActive !== false,
+          isOffline: true,
+          createdAt: new Date(q.createdAt).toISOString()
+        };
+      });
+
+    const deletedIds = new Set(
+      queue.filter(q => q.type === 'DELETE_PRODUCT').map(q => String(q.payload?.id || q.id).replace('del_prod_', ''))
+    );
+
+    const updateMap = new Map<string, any>();
+    queue
+      .filter(q => q.type === 'UPDATE_PRODUCT')
+      .forEach(q => {
+        const pid = String(q.payload?.id || q.id).replace('upd_prod_', '');
+        const data = q.payload?.data || q.payload || {};
+        updateMap.set(pid, data);
+      });
+
+    const activateSet = new Set(
+      queue.filter(q => q.type === 'ACTIVATE_PRODUCT').map(q => String(q.payload?.id || q.id).replace('act_prod_', ''))
+    );
+    const deactivateSet = new Set(
+      queue.filter(q => q.type === 'DEACTIVATE_PRODUCT').map(q => String(q.payload?.id || q.id).replace('deact_prod_', ''))
+    );
+    const addStockMap = new Map<string, number>();
+    queue
+      .filter(q => q.type === 'ADD_STOCK')
+      .forEach(q => {
+        const pid = String(q.payload?.id || q.id).replace('stock_prod_', '').split('_')[0];
+        const qty = Number(q.payload?.quantity || q.payload?.data?.quantity || 0);
+        addStockMap.set(pid, (addStockMap.get(pid) || 0) + qty);
+      });
+
+    const baseList = Array.isArray(serverProducts) ? serverProducts : [];
+    const combined = [...offlineCreates, ...baseList];
+    const seen = new Set<string>();
+    const result: any[] = [];
+
+    for (let p of combined) {
+      const pidStr = String(p.id ?? p.Id ?? '');
+      if (pidStr && deletedIds.has(pidStr)) continue;
+      if (pidStr && seen.has(pidStr)) continue;
+      if (pidStr) seen.add(pidStr);
+
+      let item = { ...p };
+      let hasChanges = false;
+      if (updateMap.has(pidStr)) {
+        item = { ...item, ...updateMap.get(pidStr) };
+        hasChanges = true;
+      }
+      if (activateSet.has(pidStr)) {
+        item.isActive = true;
+        hasChanges = true;
+      } else if (deactivateSet.has(pidStr)) {
+        item.isActive = false;
+        hasChanges = true;
+      }
+      if (addStockMap.has(pidStr)) {
+        item.stock = (Number(item.stock) || 0) + (addStockMap.get(pidStr) || 0);
+        hasChanges = true;
+      }
+      if (hasChanges && !item.isOffline) {
+        item.isModified = true;
+      }
+      result.push(item);
+    }
+
+    return result;
+  }
+
   createProduct(data: any): Observable<any> {
+    const saveOfflineProduct = async () => {
+      const offlineId = 'prod_off_' + Date.now();
+      const newProduct = {
+        id: offlineId,
+        name: data.name || '',
+        description: data.description || '',
+        barcode: data.barcode || '',
+        code: data.code || '',
+        category: data.category || 'DEFAULT',
+        uom: data.uom || 'UNIT',
+        price: Number(data.price) || 0,
+        rate: data.rate != null ? Number(data.rate) : 1,
+        cost: Number(data.cost) || 0,
+        lowestPrice: Number(data.lowestPrice) || 0,
+        stock: data.stock != null ? Number(data.stock) : 0,
+        includeTax: !!data.includeTax,
+        salesDefault: !!data.salesDefault,
+        returnDefault: !!data.returnDefault,
+        isActive: true,
+        isOffline: true,
+        createdAt: new Date().toISOString()
+      };
+
+      await this.offlineStorage.enqueue('CREATE_PRODUCT', data, offlineId);
+
+      const cached = await this.offlineStorage.getCache<any[]>('products') || [];
+      const updated = [newProduct, ...cached.filter(p => String(p.id) !== offlineId)];
+      await this.offlineStorage.setCache('products', updated);
+      this.cachedProducts = updated;
+
+      return {
+        message: 'Product created offline (Queued for sync)',
+        id: offlineId,
+        data: newProduct,
+        isOffline: true
+      };
+    };
+
+    if (!this.isOnline()) {
+      return from(saveOfflineProduct());
+    }
+
     return this.http.post(this.baseUrl + '/Product/CreateProducts/createproducts', data).pipe(
-      tap(() => this.clearProductCache())
+      timeout(4000),
+      tap((res: any) => {
+        this.clearProductCache();
+        if (res && (res.id || res.productId)) {
+          const sid = res.id || res.productId;
+          this.offlineStorage.getCache<any[]>('products').then(cached => {
+            const list = cached || [];
+            const item = { ...data, id: sid };
+            this.offlineStorage.setCache('products', [item, ...list.filter(p => p.id !== sid)]);
+          });
+        }
+      }),
+      catchError(() => from(saveOfflineProduct()))
     );
   }
+
   getProducts(forceRefresh = false): Observable<any> {
     const fetchOfflineProducts = async () => {
       const cached = await this.offlineStorage.getCache<any[]>('products') || [];
-      this.cachedProducts = cached;
-      return cached;
+      const reconciled = await this.reconcileProductsWithQueue(cached);
+      this.cachedProducts = reconciled;
+      return reconciled;
     };
 
     if (!this.isOnline()) {
@@ -2178,51 +2347,253 @@ export class ApiService {
 
     if (!forceRefresh && this.cachedProducts) {
       this.http.get(this.baseUrl + '/Product/GetProducts/products').pipe(timeout(3500)).subscribe({
-        next: (res: any) => {
+        next: async (res: any) => {
           if (Array.isArray(res)) {
-            this.cachedProducts = res;
-            this.offlineStorage.setCache('products', res);
+            const reconciled = await this.reconcileProductsWithQueue(res);
+            this.cachedProducts = reconciled;
+            await this.offlineStorage.setCache('products', reconciled);
           }
         },
         error: () => { }
       });
       return of(this.cachedProducts);
     }
+
     return this.http.get(this.baseUrl + '/Product/GetProducts/products').pipe(
       timeout(3500),
-      tap((res: any) => {
+      switchMap((res: any) => from((async () => {
         if (Array.isArray(res)) {
-          this.cachedProducts = res;
-          this.offlineStorage.setCache('products', res);
+          const reconciled = await this.reconcileProductsWithQueue(res);
+          this.cachedProducts = reconciled;
+          await this.offlineStorage.setCache('products', reconciled);
+          return reconciled;
         }
-      }),
+        return res;
+      })())),
       catchError(() => from(fetchOfflineProducts()))
     );
   }
-  getProductById(id: any): Observable<any> { return this.http.get(this.baseUrl + '/Product/GetProductById/getproductsby/' + id); }
+
+  getProductById(id: any): Observable<any> {
+    const fetchOfflineProduct = async () => {
+      const cached = await this.offlineStorage.getCache<any[]>('products') || [];
+      return cached.find(p => String(p.id) === String(id)) || null;
+    };
+    if (!this.isOnline() || String(id).startsWith('prod_')) {
+      return from(fetchOfflineProduct());
+    }
+    return this.http.get(this.baseUrl + '/Product/GetProductById/getproductsby/' + id).pipe(
+      timeout(3500),
+      catchError(() => from(fetchOfflineProduct()))
+    );
+  }
+
   editProduct(id: any, data: any): Observable<any> {
+    const isOfflineId = String(id).startsWith('prod_');
+
+    const saveOfflineEdit = async () => {
+      if (isOfflineId) {
+        const item = await this.offlineStorage.getQueueItemById(String(id));
+        if (item && item.payload) {
+          const currentData = item.payload.data || item.payload;
+          item.payload = {
+            ...item.payload,
+            ...(item.payload.data ? { data: { ...currentData, ...data } } : data)
+          };
+          await this.offlineStorage.updateQueueItem(item);
+        }
+      } else {
+        await this.offlineStorage.enqueue('UPDATE_PRODUCT', { id, data }, 'upd_prod_' + id);
+      }
+
+      const cachedList = await this.offlineStorage.getCache<any[]>('products') || [];
+      const updatedList = cachedList.map(p => {
+        if (String(p.id) === String(id)) {
+          return { ...p, ...data, isModified: !p.isOffline };
+        }
+        return p;
+      });
+      await this.offlineStorage.setCache('products', updatedList);
+      this.cachedProducts = updatedList;
+
+      return {
+        message: 'Product updated offline (Queued for sync)',
+        id,
+        isOffline: true
+      };
+    };
+
+    if (!this.isOnline() || isOfflineId) {
+      return from(saveOfflineEdit());
+    }
+
     return this.http.put(this.baseUrl + '/Product/EditProduct/editproduct/' + id, data).pipe(
-      tap(() => this.clearProductCache())
+      timeout(4000),
+      tap(() => {
+        this.clearProductCache();
+        this.offlineStorage.getCache<any[]>('products').then(cached => {
+          if (cached) {
+            const updated = cached.map(p => String(p.id) === String(id) ? { ...p, ...data } : p);
+            this.offlineStorage.setCache('products', updated);
+          }
+        });
+      }),
+      catchError(() => from(saveOfflineEdit()))
     );
   }
+
   deleteProduct(id: any): Observable<any> {
+    const isOfflineId = String(id).startsWith('prod_');
+
+    const saveOfflineDelete = async () => {
+      if (isOfflineId) {
+        await this.offlineStorage.removeQueueItem(String(id));
+        await this.offlineStorage.removeQueueItem('upd_prod_' + id);
+        await this.offlineStorage.removeQueueItem('act_prod_' + id);
+        await this.offlineStorage.removeQueueItem('deact_prod_' + id);
+        await this.offlineStorage.removeQueueItem('stock_prod_' + id);
+      } else {
+        await this.offlineStorage.removeQueueItem('upd_prod_' + id);
+        await this.offlineStorage.removeQueueItem('act_prod_' + id);
+        await this.offlineStorage.removeQueueItem('deact_prod_' + id);
+        await this.offlineStorage.removeQueueItem('stock_prod_' + id);
+        await this.offlineStorage.enqueue('DELETE_PRODUCT', { id }, 'del_prod_' + id);
+      }
+
+      const cachedList = await this.offlineStorage.getCache<any[]>('products') || [];
+      const filteredList = cachedList.filter(p => String(p.id) !== String(id));
+      await this.offlineStorage.setCache('products', filteredList);
+      this.cachedProducts = filteredList;
+
+      return {
+        message: 'Product deleted offline (Queued for sync)',
+        id,
+        isOffline: true
+      };
+    };
+
+    if (!this.isOnline() || isOfflineId) {
+      return from(saveOfflineDelete());
+    }
+
     return this.http.delete(this.baseUrl + '/Product/DeleteProduct/deleteproduct/' + id, { responseType: 'text' }).pipe(
-      tap(() => this.clearProductCache())
+      timeout(4000),
+      tap(() => {
+        this.clearProductCache();
+        this.offlineStorage.getCache<any[]>('products').then(cached => {
+          if (cached) {
+            const updated = cached.filter(p => String(p.id) !== String(id));
+            this.offlineStorage.setCache('products', updated);
+          }
+        });
+      }),
+      catchError(() => from(saveOfflineDelete()))
     );
   }
+
   activateProduct(id: any): Observable<any> {
+    const isOfflineId = String(id).startsWith('prod_');
+    const saveOfflineActivate = async () => {
+      if (isOfflineId) {
+        const item = await this.offlineStorage.getQueueItemById(String(id));
+        if (item && item.payload) {
+          const d = item.payload.data || item.payload;
+          d.isActive = true;
+          await this.offlineStorage.updateQueueItem(item);
+        }
+      } else {
+        await this.offlineStorage.removeQueueItem('deact_prod_' + id);
+        await this.offlineStorage.enqueue('ACTIVATE_PRODUCT', { id }, 'act_prod_' + id);
+      }
+      const cached = await this.offlineStorage.getCache<any[]>('products') || [];
+      const updated = cached.map(p => String(p.id) === String(id) ? { ...p, isActive: true, isModified: !p.isOffline } : p);
+      await this.offlineStorage.setCache('products', updated);
+      this.cachedProducts = updated;
+      return { success: true, isOffline: true };
+    };
+
+    if (!this.isOnline() || isOfflineId) {
+      return from(saveOfflineActivate());
+    }
+
     return this.http.patch(this.baseUrl + '/Product/ActivateProduct/activateproduct/' + id, {}).pipe(
-      tap(() => this.clearProductCache())
+      timeout(4000),
+      tap(() => this.clearProductCache()),
+      catchError(() => from(saveOfflineActivate()))
     );
   }
+
   deactivateProduct(id: any): Observable<any> {
+    const isOfflineId = String(id).startsWith('prod_');
+    const saveOfflineDeactivate = async () => {
+      if (isOfflineId) {
+        const item = await this.offlineStorage.getQueueItemById(String(id));
+        if (item && item.payload) {
+          const d = item.payload.data || item.payload;
+          d.isActive = false;
+          await this.offlineStorage.updateQueueItem(item);
+        }
+      } else {
+        await this.offlineStorage.removeQueueItem('act_prod_' + id);
+        await this.offlineStorage.enqueue('DEACTIVATE_PRODUCT', { id }, 'deact_prod_' + id);
+      }
+      const cached = await this.offlineStorage.getCache<any[]>('products') || [];
+      const updated = cached.map(p => String(p.id) === String(id) ? { ...p, isActive: false, isModified: !p.isOffline } : p);
+      await this.offlineStorage.setCache('products', updated);
+      this.cachedProducts = updated;
+      return { success: true, isOffline: true };
+    };
+
+    if (!this.isOnline() || isOfflineId) {
+      return from(saveOfflineDeactivate());
+    }
+
     return this.http.patch(this.baseUrl + '/Product/DeactivateProduct/deactivateproduct/' + id, {}).pipe(
-      tap(() => this.clearProductCache())
+      timeout(4000),
+      tap(() => this.clearProductCache()),
+      catchError(() => from(saveOfflineDeactivate()))
     );
   }
+
   addStock(id: any, data: any): Observable<any> {
+    const isOfflineId = String(id).startsWith('prod_');
+    const addedQty = Number(data?.quantity || 0);
+
+    const saveOfflineAddStock = async () => {
+      let newStock = addedQty;
+      const cached = await this.offlineStorage.getCache<any[]>('products') || [];
+      const updated = cached.map(p => {
+        if (String(p.id) === String(id)) {
+          newStock = (Number(p.stock) || 0) + addedQty;
+          return { ...p, stock: newStock, isModified: !p.isOffline };
+        }
+        return p;
+      });
+      await this.offlineStorage.setCache('products', updated);
+      this.cachedProducts = updated;
+
+      if (isOfflineId) {
+        const item = await this.offlineStorage.getQueueItemById(String(id));
+        if (item && item.payload) {
+          const d = item.payload.data || item.payload;
+          d.stock = newStock;
+          await this.offlineStorage.updateQueueItem(item);
+        }
+      } else {
+        await this.offlineStorage.enqueue('ADD_STOCK', { id, quantity: addedQty }, 'stock_prod_' + id + '_' + Date.now());
+      }
+
+      return { success: true, isOffline: true, newStock };
+    };
+
+    if (!this.isOnline() || isOfflineId) {
+      return from(saveOfflineAddStock());
+    }
+
     return this.http.patch(this.baseUrl + '/Product/AddStock/addstock/' + id, data).pipe(
-      tap(() => this.clearProductCache())
+      timeout(4000),
+      tap(() => this.clearProductCache()),
+      catchError(() => from(saveOfflineAddStock()))
     );
   }
 

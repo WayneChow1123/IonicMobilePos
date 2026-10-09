@@ -6,6 +6,8 @@ import { CommonModule } from '@angular/common';
 import { IonicModule } from '@ionic/angular';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../services/api.service';
+import { OfflineStorageService } from '../../services/offline-storage.service';
+import { SyncService } from '../../services/sync.service';
 import { Subscription } from 'rxjs';
 import Swal from 'sweetalert2';
 
@@ -38,6 +40,8 @@ export class ProductsPage implements OnInit, OnDestroy {
   showToast = false;
   toastMessage = '';
   addStockQty = 0;
+  pendingOfflineCount: number = 0;
+  isSyncing: boolean = false;
   form: any = { name: '', description: '', barcode: '', code: '', category: 'DEFAULT', uom: 'UNIT', price: 0, rate: null, cost: 0, lowestPrice: 0, stock: null, includeTax: false, salesDefault: false, returnDefault: false };
   deleteButtons = [
     { text: 'Cancel', role: 'cancel' },
@@ -45,11 +49,16 @@ export class ProductsPage implements OnInit, OnDestroy {
   ];
 
   private backButtonSub?: Subscription;
+  private queueCountSub?: Subscription;
+  private syncingSub?: Subscription;
+  private syncCompletedSub?: Subscription;
 
   constructor(
     private router: Router,
     private navCtrl: NavController,
     private api: ApiService,
+    private offlineStorage: OfflineStorageService,
+    private syncService: SyncService,
     private cdr: ChangeDetectorRef,
     private alertService: AlertService,
     private platform: Platform
@@ -57,15 +66,75 @@ export class ProductsPage implements OnInit, OnDestroy {
 
   ionViewWillEnter() {
     this.registerBackButton();
+    this.initSyncSubscriptions();
+    this.offlineStorage.refreshQueueCount();
+    this.loadProducts();
+    this.loadCategories();
     this.cdr.detectChanges();
   }
 
   ionViewWillLeave() {
     this.unregisterBackButton();
+    this.unsubscribeSync();
   }
 
   ngOnDestroy() {
     this.unregisterBackButton();
+    this.unsubscribeSync();
+  }
+
+  private initSyncSubscriptions() {
+    this.unsubscribeSync();
+    this.queueCountSub = this.offlineStorage.queueCount$.subscribe(count => {
+      this.pendingOfflineCount = count;
+      this.cdr.detectChanges();
+    });
+    this.syncingSub = this.syncService.isSyncing$.subscribe(syncing => {
+      this.isSyncing = syncing;
+      this.cdr.detectChanges();
+    });
+    this.syncCompletedSub = this.syncService.syncCompleted$.subscribe(() => {
+      this.loadProducts();
+      this.loadCategories();
+      this.cdr.detectChanges();
+    });
+  }
+
+  private unsubscribeSync() {
+    this.queueCountSub?.unsubscribe();
+    this.queueCountSub = undefined;
+    this.syncingSub?.unsubscribe();
+    this.syncingSub = undefined;
+    this.syncCompletedSub?.unsubscribe();
+    this.syncCompletedSub = undefined;
+  }
+
+  async manualSync() {
+    if (this.isSyncing) return;
+    this.showToastMsg('Syncing offline data...');
+    const res = await this.syncService.syncPendingOrders(true);
+    if (res.successCount > 0) {
+      this.showToastMsg(`Synced ${res.successCount} item(s) successfully!`);
+      this.loadProducts();
+    } else if (res.failCount > 0) {
+      this.alertService.confirm(
+        'Sync Failed',
+        `Server temporarily returned an error while syncing ${res.failCount} task(s). Your offline data is safely preserved. Clear from queue only if you want to permanently discard it.`,
+        'Retry Sync',
+        'Clear Queue'
+      ).then(retry => {
+        if (retry) {
+          this.manualSync();
+        } else {
+          this.offlineStorage.clearQueue().then(() => {
+            this.showToastMsg('Queue cleared.');
+            this.loadProducts();
+          });
+        }
+      });
+    } else {
+      this.showToastMsg('All offline items are already synchronized.');
+    }
   }
 
   registerBackButton() {
@@ -222,17 +291,18 @@ export class ProductsPage implements OnInit, OnDestroy {
     if (!payload.category) payload.category = 'DEFAULT';
     if (this.isEditing && this.selectedProduct) {
       this.api.editProduct(this.selectedProduct.id, payload).subscribe({
-        next: () => { 
-          this.showToastMsg('Product updated!'); 
+        next: (res: any) => { 
+          this.showToastMsg(res?.isOffline ? 'Product updated offline! (Queued for sync)' : 'Product updated!'); 
           this.isEditMode = false; 
+          this.closeModal(); 
           this.loadProducts(); 
         },
         error: (err: any) => this.showToastMsg('Failed: ' + (err.error?.message || err.message || 'error'))
       });
     } else {
       this.api.createProduct(payload).subscribe({
-        next: () => { 
-          this.showToastMsg('Product created!'); 
+        next: (res: any) => { 
+          this.showToastMsg(res?.isOffline ? 'Product created offline! (Queued for sync)' : 'Product created!'); 
           this.isEditMode = false; 
           this.closeModal(); 
           this.loadProducts(); 
@@ -245,12 +315,18 @@ export class ProductsPage implements OnInit, OnDestroy {
   toggleActive(product: any) {
     if (product.isActive) {
       this.api.deactivateProduct(product.id).subscribe({
-        next: () => { this.showToastMsg(product.name + ' deactivated!'); this.loadProducts(); },
+        next: (res: any) => { 
+          this.showToastMsg(res?.isOffline ? (product.name + ' deactivated offline! (Queued for sync)') : (product.name + ' deactivated!')); 
+          this.loadProducts(); 
+        },
         error: (err: any) => this.showToastMsg('Failed: ' + (err.error?.message || err.message || 'error'))
       });
     } else {
       this.api.activateProduct(product.id).subscribe({
-        next: () => { this.showToastMsg(product.name + ' activated!'); this.loadProducts(); },
+        next: (res: any) => { 
+          this.showToastMsg(res?.isOffline ? (product.name + ' activated offline! (Queued for sync)') : (product.name + ' activated!')); 
+          this.loadProducts(); 
+        },
         error: (err: any) => this.showToastMsg('Failed: ' + (err.error?.message || err.message || 'error'))
       });
     }
@@ -268,7 +344,7 @@ export class ProductsPage implements OnInit, OnDestroy {
     if (!this.addStockQty || this.addStockQty <= 0) { this.showToastMsg('Quantity must be greater than 0'); return; }
     this.api.addStock(this.selectedProduct.id, { quantity: this.addStockQty }).subscribe({
       next: (res: any) => {
-        this.showToastMsg('Stock added! New stock: ' + res.newStock);
+        this.showToastMsg(res?.isOffline ? ('Stock added offline! New stock: ' + res.newStock + ' (Queued for sync)') : ('Stock added! New stock: ' + res.newStock));
         this.closeAddStockModal();
         this.loadProducts();
       },
@@ -281,7 +357,10 @@ export class ProductsPage implements OnInit, OnDestroy {
   deleteProduct() {
     if (!this.selectedProduct) return;
     this.api.deleteProduct(this.selectedProduct.id).subscribe({
-      next: () => { this.showToastMsg('Product deleted!'); this.loadProducts(); },
+      next: (res: any) => { 
+        this.showToastMsg(res?.isOffline ? 'Product deleted offline! (Queued for sync)' : 'Product deleted!'); 
+        this.loadProducts(); 
+      },
       error: (err: any) => this.showToastMsg('Failed: ' + (err.error?.message || err.message || 'error'))
     });
   }
