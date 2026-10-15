@@ -1400,3 +1400,954 @@ body.dark {
     transform: scale(1) translateY(0);
   }
 }
+
+@keyframes fadeInChip {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+// ════════════════════════════════════════════════════════════════
+// Select Invoices View (Responsive for Phone, Tablet, PC)
+// ════════════════════════════════════════════════════════════════
+.select-invoices-view {
+  background: #F0EBE3;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  padding: 16px 20px 150px;
+
+  .select-invoices-content-wrapper {
+    width: 100%;
+    max-width: 860px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+  }
+
+  .top-bar {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: #F0EBE3;
+    padding-top: calc(max(env(safe-area-inset-top, 0px), 16px) + 8px);
+    margin-bottom: 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+
+    .back-btn {
+      --color: #1a1a1a;
+      font-size: 15px;
+      font-weight: 700;
+    }
+
+    .page-title {
+      font-size: 18px;
+      font-weight: 800;
+      color: #1a1a1a;
+      letter-spacing: -0.3px;
+    }
+  }
+
+  .select-search-container {
+    margin-bottom: 12px;
+    position: relative;
+
+    .custom-report-searchbar {
+      --background: #ffffff;
+      --border-radius: 16px;
+      --box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+      --placeholder-color: #888;
+      --icon-color: #5c85d6;
+      padding: 0;
+      margin: 0;
+    }
+
+    // Active Keyword Filter Chip Bar
+    .active-keyword-chip-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #e8f0fe;
+      border: 1px solid #c2dbff;
+      border-radius: 12px;
+      padding: 8px 12px;
+      margin-top: 8px;
+      animation: fadeInChip 0.2s ease-out;
+
+      .chip-content {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        color: #1967d2;
+        min-width: 0;
+
+        ion-icon {
+          font-size: 15px;
+          flex-shrink: 0;
+        }
+
+        .chip-label {
+          color: #5f6368;
+          font-weight: 600;
+          white-space: nowrap;
+        }
+
+        .chip-val {
+          color: #1a1a1a;
+          font-weight: 800;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+      }
+
+      .chip-close-btn {
+        background: transparent;
+        border: none;
+        padding: 0;
+        margin-left: 8px;
+        display: flex;
+        align-items: center;
+        cursor: pointer;
+        color: #5f6368;
+        transition: color 0.15s ease;
+
+        ion-icon {
+          font-size: 18px;
+        }
+
+        &:hover {
+          color: #d93025;
+        }
+      }
+    }
+
+    // Keyword Suggestions Panel
+    .search-suggestions-panel {
+      background: #ffffff;
+      border-radius: 16px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+      border: 1px solid rgba(0, 0, 0, 0.06);
+      margin-top: 8px;
+      overflow: hidden;
+      animation: popInCard 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      z-index: 20;
+
+      .suggestions-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        background: #f8f9fa;
+        padding: 10px 14px;
+        border-bottom: 1px solid #f1f2f6;
+
+        .s-head-title {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          font-size: 11px;
+          font-weight: 800;
+          color: #747d8c;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+
+          ion-icon {
+            font-size: 14px;
+            color: #5c85d6;
+          }
+        }
+
+        .close-suggestions-btn {
+          background: transparent;
+          border: none;
+          color: #888;
+          cursor: pointer;
+          padding: 2px 6px;
+          display: flex;
+          align-items: center;
+          font-size: 16px;
+
+          &:hover {
+            color: #2f3542;
+          }
+        }
+      }
+
+      .suggestions-list {
+        max-height: 280px;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior: contain;
+        scrollbar-width: none; // Firefox: directly hide scrollbar
+        -ms-overflow-style: none; // IE/Edge
+
+        &::-webkit-scrollbar {
+          display: none !important; // Chrome/Safari: directly hide scrollbar
+          width: 0 !important;
+          height: 0 !important;
+        }
+
+        .suggestion-item {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 12px 14px;
+          border-bottom: 1px solid #f8f9fa;
+          cursor: pointer;
+          transition: background 0.15s ease;
+
+          &:last-child {
+            border-bottom: none;
+          }
+
+          &:hover, &:active {
+            background: #f8f7ff;
+          }
+
+          .suggestion-icon {
+            width: 34px;
+            height: 34px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+
+            &.customer {
+              background: #eff6ff;
+              color: #3b82f6;
+            }
+            &.doc {
+              background: #fef3c7;
+              color: #d97706;
+            }
+            &.all {
+              background: #f1f5f9;
+              color: #64748b;
+            }
+
+            ion-icon {
+              font-size: 18px;
+            }
+          }
+
+          .suggestion-info {
+            flex: 1;
+            min-width: 0;
+
+            .suggestion-title {
+              font-size: 13.5px;
+              font-weight: 700;
+              color: #1a1a1a;
+              white-space: nowrap;
+              overflow: hidden;
+              text-overflow: ellipsis;
+            }
+
+            .suggestion-sub {
+              font-size: 11px;
+              color: #888;
+              font-weight: 500;
+              margin-top: 1px;
+              white-space: nowrap;
+              overflow: hidden;
+              text-overflow: ellipsis;
+            }
+          }
+
+          .suggestion-right {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-shrink: 0;
+
+            .suggestion-badge {
+              font-size: 10px;
+              font-weight: 700;
+              background: #f1f2f6;
+              color: #57606f;
+              padding: 2px 6px;
+              border-radius: 8px;
+            }
+
+            .suggestion-arrow {
+              font-size: 14px;
+              color: #cbd5e1;
+            }
+          }
+
+          &.view-all {
+            background: #fafafa;
+            border-top: 1px dashed #e2e8f0;
+
+            .suggestion-title {
+              color: #5c85d6;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // ─── Date Range Filter Styles ───
+  .date-filter-card {
+    background: #fff;
+    border-radius: 16px;
+    padding: 14px 16px;
+    margin-bottom: 14px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.02);
+    border: 1px solid rgba(0, 0, 0, 0.04);
+
+    .date-filter-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+
+      .df-title {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        font-weight: 700;
+        color: #1a1a1a;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+
+        ion-icon {
+          font-size: 16px;
+          color: #5c85d6;
+        }
+      }
+
+      .clear-btn {
+        background: #f8d7da;
+        color: #c0392b;
+        border: none;
+        border-radius: 20px;
+        padding: 4px 12px;
+        font-size: 10.5px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: all 0.2s ease;
+
+        &:hover {
+          background: #f5c6cb;
+        }
+      }
+    }
+
+    .date-inputs {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+
+      .date-input-wrapper {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+
+        .input-label {
+          font-size: 9.5px;
+          font-weight: 800;
+          color: #888;
+          letter-spacing: 0.8px;
+        }
+
+        .premium-date-input {
+          width: 100%;
+          min-width: 0;
+          font-family: inherit;
+          border: 1px solid #e1e8ed;
+          border-radius: 10px;
+          padding: 8px 12px;
+          font-size: 12.5px;
+          font-weight: 600;
+          color: #1a1a1a;
+          background: #fdfdfd;
+          outline: none;
+          box-sizing: border-box;
+          transition: all 0.2s ease;
+
+          &:focus {
+            border-color: #5c85d6;
+            background: #fff;
+            box-shadow: 0 0 0 3px rgba(92, 133, 214, 0.15);
+          }
+        }
+      }
+
+      .date-separator {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #aaa;
+        padding-top: 14px;
+
+        ion-icon {
+          font-size: 16px;
+        }
+      }
+    }
+
+    .preset-chips-container {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      white-space: nowrap;
+      scrollbar-width: none;
+      -webkit-overflow-scrolling: touch;
+      margin-top: 12px;
+      padding-bottom: 2px;
+
+      &::-webkit-scrollbar {
+        display: none;
+      }
+
+      .preset-chip {
+        flex-shrink: 0;
+        background: #f1f2f6;
+        color: #57606f;
+        border: none;
+        border-radius: 20px;
+        padding: 6px 14px;
+        font-size: 11.5px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: all 0.2s ease;
+
+        &:hover {
+          background: #e4e7eb;
+          color: #2f3542;
+        }
+
+        &.active {
+          background: #5c85d6;
+          color: #fff;
+          box-shadow: 0 4px 10px rgba(92, 133, 214, 0.25);
+        }
+      }
+    }
+  }
+
+  // ─── Invoices List Body ───
+  .select-invoices-list-body {
+    flex: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 20px;
+
+    .empty-unpaid-invoices {
+      text-align: center;
+      padding: 60px 20px;
+      color: #888;
+
+      .empty-icon {
+        font-size: 56px;
+        color: #ccc;
+        margin-bottom: 16px;
+      }
+
+      .empty-msg {
+        font-size: 16px;
+        font-weight: 700;
+        color: #555;
+      }
+
+      .empty-sub {
+        font-size: 13px;
+        color: #999;
+        margin-top: 4px;
+      }
+
+      .empty-action {
+        margin-top: 16px;
+
+        .show-all-btn {
+          background: #6c5ce7;
+          color: #fff;
+          border: none;
+          border-radius: 10px;
+          padding: 8px 18px;
+          font-size: 13px;
+          font-weight: 700;
+          cursor: pointer;
+          transition: all 0.2s ease;
+
+          &:hover {
+            background: #5844e3;
+          }
+        }
+      }
+    }
+
+    .keyword-select-prompt {
+      text-align: center;
+      padding: 50px 20px;
+      color: #888;
+      animation: fadeInChip 0.2s ease-out;
+
+      .prompt-icon-bubble {
+        width: 56px;
+        height: 56px;
+        border-radius: 50%;
+        background: #e8f0fe;
+        color: #1967d2;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 14px;
+        box-shadow: 0 4px 12px rgba(25, 103, 210, 0.12);
+
+        ion-icon {
+          font-size: 28px;
+        }
+      }
+
+      .prompt-title {
+        font-size: 16px;
+        font-weight: 800;
+        color: #2f3542;
+        margin-bottom: 6px;
+      }
+
+      .prompt-desc {
+        font-size: 13px;
+        color: #747d8c;
+        max-width: 320px;
+        margin: 0 auto;
+        line-height: 1.4;
+      }
+    }
+  }
+
+  // ─── Invoice Row Card ───
+  .invoice-select-row {
+    border: 1.5px solid #eef2f7;
+    border-radius: 16px;
+    padding: 14px 18px;
+    background: #ffffff;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+    margin-bottom: 10px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+
+    &:hover {
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+    }
+
+    &.selected {
+      border-color: #27ae60 !important;
+      background: #f6fbf7 !important;
+      box-shadow: 0 4px 16px rgba(39, 174, 96, 0.12) !important;
+    }
+
+    .item-info {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex: 1;
+      min-width: 0;
+
+      .item-avatar {
+        width: 44px;
+        height: 44px;
+        background: #F0EBE3;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+
+        ion-icon {
+          font-size: 22px;
+          color: #888;
+        }
+
+        &.paid {
+          background: #d4edda;
+          ion-icon { color: #27ae60; }
+        }
+        &.partial {
+          background: #fff3cd;
+          ion-icon { color: #f39c12; }
+        }
+        &.unpaid {
+          background: #f8d7da;
+          ion-icon { color: #c0392b; }
+        }
+      }
+
+      .item-info-content {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        width: 100%;
+        gap: 12px;
+        min-width: 0;
+
+        .info-left {
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+          flex: 1;
+          min-width: 0;
+
+          .item-name-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 2px;
+
+            .cn-badge {
+              font-size: 10px;
+              font-weight: 800;
+              padding: 2px 8px;
+              border-radius: 50px;
+              background: #fff3cd;
+              color: #e67e22;
+              border: 1px solid #f39c12;
+              flex-shrink: 0;
+            }
+
+            .item-name {
+              font-size: 14px;
+              font-weight: 700;
+              color: #1a1a1a;
+              white-space: nowrap;
+              overflow: hidden;
+              text-overflow: ellipsis;
+            }
+          }
+
+          .item-sub {
+            font-size: 12px;
+            color: #888;
+            font-weight: 600;
+          }
+
+          .item-sub-date {
+            font-size: 11px;
+            color: #aaa;
+            margin-top: 3px;
+            font-weight: 500;
+          }
+        }
+
+        .info-right {
+          display: flex;
+          flex-direction: column;
+          align-items: flex-end;
+          gap: 6px;
+          flex-shrink: 0;
+
+          .status-badge {
+            font-size: 10px;
+            font-weight: 700;
+            padding: 2px 8px;
+            border-radius: 50px;
+
+            &.paid {
+              background: #d4edda;
+              color: #27ae60;
+            }
+            &.partial {
+              background: #fff3cd;
+              color: #f39c12;
+            }
+            &.unpaid {
+              background: #f8d7da;
+              color: #c0392b;
+            }
+          }
+
+          .amount-box {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+
+            .paid-amount {
+              font-size: 11px;
+              color: #e67e22;
+              font-weight: 700;
+              margin-bottom: 2px;
+            }
+
+            .item-amount {
+              font-size: 17px;
+              font-weight: 800;
+              color: #1a1a1a;
+              line-height: 1.1;
+            }
+          }
+        }
+      }
+    }
+
+    .item-selection-check {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding-left: 14px;
+      flex-shrink: 0;
+
+      .check-circle {
+        width: 26px;
+        height: 26px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: transparent;
+        border: 2px solid #cbd5e1;
+        transition: all 0.2s ease;
+
+        &.checked {
+          background: #27ae60;
+          border-color: #27ae60;
+          box-shadow: 0 2px 6px rgba(39, 174, 96, 0.3);
+
+          ion-icon {
+            color: #fff;
+            font-size: 18px;
+            font-weight: 900;
+          }
+        }
+      }
+    }
+  }
+
+  // ─── Fixed Bottom Footer (Responsive) ───
+  .select-invoices-summary-footer {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: #ffffff;
+    padding: 12px 20px calc(14px + env(safe-area-inset-bottom, 0px));
+    border-top: 1px solid #eef2f7;
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.08);
+    z-index: 99;
+
+    .footer-inner {
+      width: 100%;
+      max-width: 860px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+
+      .summary-amounts-card {
+        display: flex;
+        align-items: center;
+        justify-content: space-around;
+        background: #f8f9fa;
+        border: 1px solid #eef2f7;
+        border-radius: 14px;
+        padding: 10px 16px;
+
+        .amounts-col {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          text-align: center;
+          flex: 1;
+
+          .amt-title {
+            font-size: 10.5px;
+            font-weight: 700;
+            color: #747d8c;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 2px;
+          }
+
+          .amt-val {
+            font-size: 14px;
+            font-weight: 800;
+            color: #2f3542;
+
+            &.cn-amt {
+              color: #888;
+
+              &.has-cn {
+                color: #e67e22;
+              }
+            }
+
+            &.net-amt {
+              font-size: 15px;
+              font-weight: 900;
+              color: #27ae60;
+            }
+          }
+        }
+
+        .amounts-divider {
+          width: 1px;
+          height: 28px;
+          background: rgba(0, 0, 0, 0.08);
+        }
+      }
+
+      .confirm-bar-btn {
+        width: 100%;
+        background: linear-gradient(135deg, #6c5ce7 0%, #5844e3 100%);
+        color: #fff;
+        border: none;
+        border-radius: 14px;
+        padding: 14px;
+        font-size: 15px;
+        font-weight: 800;
+        box-shadow: 0 4px 14px rgba(108, 92, 231, 0.35);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        transition: all 0.2s ease;
+
+        &:hover:not(:disabled) {
+          filter: brightness(1.06);
+          transform: translateY(-1px);
+        }
+
+        &:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+          box-shadow: none;
+        }
+      }
+    }
+  }
+
+  // ─── Responsive Media Queries ───
+  // Phone / Mobile (< 600px)
+  @media (max-width: 600px) {
+    padding: 12px 14px 150px;
+
+    .top-bar {
+      margin-bottom: 10px;
+      .page-title { font-size: 16px; }
+      .back-btn { font-size: 14px; }
+    }
+
+    .date-filter-card {
+      padding: 10px 12px;
+
+      .date-inputs {
+        gap: 6px;
+        .premium-date-input { font-size: 11px; padding: 6px 8px; }
+      }
+
+      .preset-chips-container .preset-chip {
+        padding: 5px 10px;
+        font-size: 10.5px;
+      }
+    }
+
+    .invoice-select-row {
+      padding: 10px 12px;
+      margin-bottom: 8px;
+
+      .item-info {
+        gap: 10px;
+
+        .item-avatar {
+          width: 38px;
+          height: 38px;
+          border-radius: 10px;
+          ion-icon { font-size: 20px; }
+        }
+
+        .item-info-content {
+          .info-left {
+            .item-name-row .item-name { font-size: 13px; }
+            .item-sub { font-size: 11px; }
+            .item-sub-date { font-size: 10px; }
+          }
+          .info-right {
+            .status-badge { font-size: 9px; padding: 2px 6px; }
+            .amount-box {
+              .paid-amount { font-size: 10px; }
+              .item-amount { font-size: 15px; }
+            }
+          }
+        }
+      }
+
+      .item-selection-check {
+        padding-left: 8px;
+        .check-circle {
+          width: 23px;
+          height: 23px;
+          ion-icon { font-size: 15px; }
+        }
+      }
+    }
+
+    .select-invoices-summary-footer {
+      padding: 10px 14px calc(10px + env(safe-area-inset-bottom, 0px));
+
+      .footer-inner {
+        gap: 8px;
+
+        .summary-amounts-card {
+          padding: 8px 10px;
+
+          .amounts-col {
+            .amt-title { font-size: 9px; }
+            .amt-val { font-size: 12px; }
+            .amt-val.net-amt { font-size: 13px; }
+          }
+
+          .amounts-divider { height: 22px; }
+        }
+
+        .confirm-bar-btn {
+          padding: 12px;
+          font-size: 14px;
+          border-radius: 12px;
+        }
+      }
+    }
+  }
+
+  // Tablet (601px - 1024px)
+  @media (min-width: 601px) and (max-width: 1024px) {
+    padding: 16px 24px 150px;
+    .select-invoices-content-wrapper,
+    .footer-inner {
+      max-width: 760px;
+    }
+  }
+
+  // PC / Desktop (> 1024px)
+  @media (min-width: 1025px) {
+    padding: 20px 32px 160px;
+    .select-invoices-content-wrapper,
+    .footer-inner {
+      max-width: 860px;
+    }
+
+    .invoice-select-row:hover {
+      transform: translateY(-1px);
+    }
+  }
+}

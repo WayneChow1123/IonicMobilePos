@@ -4,6 +4,7 @@ import { NavController, Platform } from '@ionic/angular';
 import { filter } from 'rxjs/operators';
 import { App } from '@capacitor/app';
 import Swal from 'sweetalert2';
+import { SyncService } from './services/sync.service';
 
 @Component({
   selector: 'app-root',
@@ -26,7 +27,8 @@ export class AppComponent implements OnInit {
   constructor(
     private router: Router, 
     private navCtrl: NavController,
-    private platform: Platform
+    private platform: Platform,
+    private syncService: SyncService
   ) {
     // Initializing custom font size scaling from localStorage
     try {

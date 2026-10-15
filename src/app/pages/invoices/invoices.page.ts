@@ -12,6 +12,7 @@ import { BluetoothPrintService } from '../../services/bluetooth-print.service';
 import { formatDocNo, updateInvoiceDocNos, cachedDocNoMap, normalizeInvoiceDate, getInvoiceNormalizedDate } from '../../utils/invoice-helper';
 import { SyncService } from '../../services/sync.service';
 import { OfflineStorageService } from '../../services/offline-storage.service';
+import { LocalDbService } from '../../services/local-db.service';
 
 @Component({
   standalone: true,
@@ -59,6 +60,9 @@ export class InvoicesPage implements OnInit, OnDestroy {
   filteredProductsForSelection: any[] = [];
   showSearch = false;
   searchTerm = '';
+  searchSuggestions: any[] = [];
+  showSearchSuggestions = false;
+  selectedSearchKeyword = '';
   startDate = '';
   endDate = '';
   activePreset = '';
@@ -150,6 +154,10 @@ export class InvoicesPage implements OnInit, OnDestroy {
     return inv?.docNo || formatDocNo(inv, this.invoices);
   }
 
+  getNewDocNoPreview(): string {
+    return formatDocNo({ invoiceDate: new Date() }, this.invoices);
+  }
+
   getProductCode(productId: any): string {
     const product = this.allProducts.find(p => p.id == productId);
     return product?.productCode || product?.code || '';
@@ -192,7 +200,6 @@ export class InvoicesPage implements OnInit, OnDestroy {
 
   getGrandNetTotal() {
     return (this.filteredInvoices || [])
-      .filter(inv => inv.status === 'Paid' || inv.status === 'Partial')
       .reduce((sum, inv) => {
         const net = inv.netTotal ?? inv.NetTotal ?? this.getInvoiceDisplayTotal(inv);
         return sum + (Number(net) || 0);
@@ -249,7 +256,8 @@ export class InvoicesPage implements OnInit, OnDestroy {
     private btPrint: BluetoothPrintService,
     private platform: Platform,
     private syncService: SyncService,
-    private offlineStorage: OfflineStorageService
+    private offlineStorage: OfflineStorageService,
+    private localDb: LocalDbService
   ) { }
 
   ionViewWillEnter() {
@@ -275,9 +283,15 @@ export class InvoicesPage implements OnInit, OnDestroy {
       this.cdr.detectChanges();
     });
 
+    let lastNotifiedSyncError = '';
     this.syncSub = this.syncService.syncCompleted$.subscribe(res => {
       if (res.successCount > 0) {
         this.loadInvoices();
+        this.showToastMsg(`Auto-synced ${res.successCount} item(s) successfully!`);
+      }
+      if (res.failCount > 0 && res.lastError && res.lastError !== lastNotifiedSyncError) {
+        lastNotifiedSyncError = res.lastError;
+        this.showToastMsg(`Auto-sync error: ${res.lastError}`);
       }
     });
 
@@ -463,6 +477,17 @@ export class InvoicesPage implements OnInit, OnDestroy {
         });
 
         this.offlineStorage.setCache('invoices_list', serverInvoices);
+        // 为所有包含 items 的发票预置 inv_detail_ 缓存，确保断网脱机时单据明细齐全
+        for (const inv of serverInvoices) {
+          const items = inv.items || inv.Items;
+          if (inv && inv.id && Array.isArray(items) && items.length > 0) {
+            this.offlineStorage.setCache('inv_detail_' + inv.id, {
+              ...inv,
+              docNo: inv.docNo || inv.invoiceNumber,
+              items: items
+            });
+          }
+        }
         const combined = [...pendingInvoices, ...serverInvoices].filter(inv => !deletedIds.includes(inv.id));
         const seenIds = new Set<string>();
         const seenDocs = new Set<string>();
@@ -584,13 +609,19 @@ export class InvoicesPage implements OnInit, OnDestroy {
         const invHelperDoc = this.getDocNo(inv).trim();
         const invRefStr = String(inv.offlineReferenceId || '');
 
+        const invCustId = String(inv.customerId || inv.CustomerId || '');
+
         const matchedCNs = allOfflineCNs.filter(cn => {
           const cnInvId = String(cn.invoiceId || '');
           const cnInvDoc = String(cn.invoiceNumber || '').trim();
+          const cnCustId = String(cn.customerId || '');
           if (cnInvId && cnInvId !== '0' && (cnInvId === invIdStr || (invRefStr && cnInvId === invRefStr))) {
             return true;
           }
           if (cnInvDoc && (cnInvDoc === invDocStr || cnInvDoc === invHelperDoc || (invDocStr && cnInvDoc.includes(invDocStr)) || (invDocStr && invDocStr.includes(cnInvDoc)))) {
+            return true;
+          }
+          if ((!cnInvId || cnInvId === '0') && !cnInvDoc && cnCustId && invCustId && cnCustId === invCustId) {
             return true;
           }
           return false;
@@ -670,13 +701,19 @@ export class InvoicesPage implements OnInit, OnDestroy {
       const invHelperDoc = this.getDocNo(inv).trim();
       const invRefStr = String(inv.offlineReferenceId || '');
 
+      const invCustId = String(inv.customerId || inv.CustomerId || '');
+
       const matchedCNs = allOfflineCNs.filter(cn => {
         const cnInvId = String(cn.invoiceId || '');
         const cnInvDoc = String(cn.invoiceNumber || '').trim();
+        const cnCustId = String(cn.customerId || '');
         if (cnInvId && cnInvId !== '0' && (cnInvId === invIdStr || (invRefStr && cnInvId === invRefStr))) {
           return true;
         }
         if (cnInvDoc && (cnInvDoc === invDocStr || cnInvDoc === invHelperDoc || (invDocStr && cnInvDoc.includes(invDocStr)) || (invDocStr && invDocStr.includes(cnInvDoc)))) {
+          return true;
+        }
+        if ((!cnInvId || cnInvId === '0') && !cnInvDoc && cnCustId && invCustId && cnCustId === invCustId) {
           return true;
         }
         return false;
@@ -894,8 +931,114 @@ export class InvoicesPage implements OnInit, OnDestroy {
     if (!this.showSearch) { this.searchTerm = ''; this.filteredInvoices = [...this.invoices]; this.currentPage = 1; this.displayedInvoices = this.filteredInvoices.slice(0, this.pageSize); }
   }
 
+  onInvoiceSearchInput() {
+    const term = (this.searchTerm || '').trim();
+    if (!term) {
+      this.searchSuggestions = [];
+      this.showSearchSuggestions = false;
+      this.selectedSearchKeyword = '';
+      this.filterInvoices();
+      return;
+    }
+
+    if (this.selectedSearchKeyword && this.selectedSearchKeyword.toLowerCase() !== term.toLowerCase()) {
+      this.selectedSearchKeyword = '';
+    }
+
+    this.searchSuggestions = this.buildKeywordSuggestions(term, this.invoices || []);
+    this.showSearchSuggestions = this.searchSuggestions.length > 0;
+    this.filterInvoices();
+  }
+
+  buildKeywordSuggestions(term: string, list: any[]): any[] {
+    const cleanTerm = term.toLowerCase();
+    const customerMap = new Map<string, { count: number; code: string; name: string }>();
+    const docList: { docNo: string; custName: string; total: number }[] = [];
+
+    for (const inv of list) {
+      const custName = (this.getInvoiceCustomerName(inv) || '').trim();
+      const custCode = (this.getCustomerCode(inv) || '').trim();
+      const docNo = (inv.docNo || this.getDocNo(inv) || inv.invoiceNumber || '').trim();
+
+      const matchesCust = custName.toLowerCase().includes(cleanTerm) || custCode.toLowerCase().includes(cleanTerm);
+      if (matchesCust) {
+        const key = custName || custCode;
+        if (key) {
+          const entry = customerMap.get(key) || { count: 0, code: custCode, name: custName };
+          entry.count++;
+          customerMap.set(key, entry);
+        }
+      }
+
+      if (docNo.toLowerCase().includes(cleanTerm)) {
+        docList.push({
+          docNo,
+          custName,
+          total: inv.totalAmount || inv.amount || 0
+        });
+      }
+    }
+
+    const suggestions: any[] = [];
+    customerMap.forEach(val => {
+      suggestions.push({
+        type: 'customer',
+        keyword: val.name,
+        displayTitle: val.name,
+        subtitle: val.code ? `${val.code} • ${val.count} invoice${val.count > 1 ? 's' : ''}` : `${val.count} invoice${val.count > 1 ? 's' : ''}`,
+        count: val.count
+      });
+    });
+
+    suggestions.sort((a, b) => b.count - a.count);
+
+    docList.slice(0, 5).forEach(d => {
+      suggestions.push({
+        type: 'docNo',
+        keyword: d.docNo,
+        displayTitle: `# ${d.docNo}`,
+        subtitle: d.custName ? `${d.custName} • RM ${Number(d.total).toFixed(2)}` : `RM ${Number(d.total).toFixed(2)}`,
+        count: 1
+      });
+    });
+
+    return suggestions;
+  }
+
+  selectKeywordSuggestion(suggestion: any) {
+    this.selectedSearchKeyword = suggestion.keyword;
+    this.searchTerm = suggestion.keyword;
+    this.showSearchSuggestions = false;
+    this.filterInvoices();
+  }
+
+  viewAllSearchMatches() {
+    this.selectedSearchKeyword = this.searchTerm;
+    this.showSearchSuggestions = false;
+    this.filterInvoices();
+  }
+
+  clearSelectedKeyword() {
+    this.selectedSearchKeyword = '';
+    this.searchTerm = '';
+    this.showSearchSuggestions = false;
+    this.searchSuggestions = [];
+    this.filterInvoices();
+  }
+
+  clearInvoiceSearch() {
+    this.clearSelectedKeyword();
+  }
+
   filterInvoices() {
-    const term = (this.searchTerm || '').toLowerCase().trim();
+    if (this.showSearchSuggestions && !this.selectedSearchKeyword && this.searchSuggestions.length > 0) {
+      this.filteredInvoices = [];
+      this.currentPage = 1;
+      this.displayedInvoices = [];
+      return;
+    }
+
+    const term = (this.selectedSearchKeyword || this.searchTerm || '').toLowerCase().trim();
     this.filteredInvoices = this.invoices.filter(inv => {
       // Search term filtering
       const custName = (this.getInvoiceCustomerName(inv) || '').toLowerCase();
@@ -1348,6 +1491,7 @@ export class InvoicesPage implements OnInit, OnDestroy {
           remark: i.remark || ''
         }))
       };
+      this.selectedInvoice.items = this.editForm.items;
       this.showModal = true;
       this.cdr.detectChanges();
       return;
@@ -1357,7 +1501,30 @@ export class InvoicesPage implements OnInit, OnDestroy {
     const renderOfflineFallback = async () => {
       this.isLoading = false;
       const cached = await this.offlineStorage.getCache<any>('inv_detail_' + invoice.id);
-      const details = cached || invoice;
+      const cachedItems = cached?.items || cached?.Items;
+      const invoiceItems = invoice?.items || invoice?.Items;
+      let details = (cachedItems && cachedItems.length > 0) ? cached : (invoiceItems && invoiceItems.length > 0 ? invoice : (cached || invoice));
+
+      // 若未找到明细项，从 cached invoices_list 深入查找该单据
+      if ((!details.items || details.items.length === 0) && (!details.Items || details.Items.length === 0)) {
+        const cachedInvoices = await this.offlineStorage.getCache<any[]>('invoices_list') || [];
+        const found = cachedInvoices.find((i: any) => String(i.id) === String(invoice.id));
+        if (found && (found.items || found.Items)) {
+          details = { ...details, items: found.items || found.Items };
+        }
+      }
+
+      // 若仍未找到，从 localDb 查找
+      if ((!details.items || details.items.length === 0) && (!details.Items || details.Items.length === 0)) {
+        try {
+          const pending = await this.localDb.getPendingOrders();
+          const match = pending.find((o: any) => String(o.clientId) === String(invoice.id) || String(o.serverId) === String(invoice.id));
+          if (match && match.items) {
+            details = { ...details, items: match.items };
+          }
+        } catch { }
+      }
+
       const custId = details.customerId ?? details.CustomerId ?? invoice.customerId ?? invoice.CustomerId ?? 0;
       this.selectedCustomerDetail = this.customers.find(c => c.id === custId);
       this.selectedInvoice = { ...details, customerName: details.customerName || invoice.customerName, customerId: custId };
@@ -1386,6 +1553,7 @@ export class InvoicesPage implements OnInit, OnDestroy {
           }))
           : []
       };
+      this.selectedInvoice.items = this.editForm.items;
       this.showModal = true;
       this.cdr.detectChanges();
     };
@@ -1581,10 +1749,31 @@ export class InvoicesPage implements OnInit, OnDestroy {
     return c.address || c.billingAddress || 'NO ADDRESS PROVIDED';
   }
 
-  goToCreateCN() {
+  async goToCreateCN() {
     if (!this.selectedInvoice) return;
     const invId = this.selectedInvoice.id;
-    const custId = this.selectedInvoice.customerId;
+    const custId = this.selectedInvoice.customerId ?? this.editForm?.customerId ?? 0;
+    const items = (this.selectedInvoice.items && Array.isArray(this.selectedInvoice.items) && this.selectedInvoice.items.length > 0)
+      ? this.selectedInvoice.items
+      : (this.editForm?.items || []);
+
+    const invoiceToPass = {
+      ...this.selectedInvoice,
+      items: items,
+      customerId: custId,
+      customerName: this.selectedInvoice.customerName || this.editForm?.customerName || this.selectedCustomerDetail?.name || '',
+      docNo: this.getDocNo(this.selectedInvoice) || this.selectedInvoice.invoiceNumber || this.editForm?.invoiceNumber || ''
+    };
+
+    try {
+      await this.offlineStorage.setCache('pending_cn_invoice', invoiceToPass);
+      if (invId) {
+        await this.offlineStorage.setCache('inv_detail_' + invId, invoiceToPass);
+      }
+    } catch (e) {
+      console.warn('Could not cache pending CN invoice', e);
+    }
+
     this.showModal = false;
     // We navigate to billing with query params
     this.navCtrl.navigateRoot('pages/billing', {
@@ -2561,7 +2750,11 @@ export class InvoicesPage implements OnInit, OnDestroy {
   }
 
   getEditFormTotalProducts(): number {
-    return (this.editForm.items || []).length;
+    const items = this.editForm.items || this.selectedInvoice?.items || this.selectedInvoice?.Items;
+    if (Array.isArray(items) && items.length > 0) {
+      return items.reduce((sum: number, it: any) => sum + (Number(it.quantity ?? it.Quantity) || 1), 0);
+    }
+    return 0;
   }
 
   getCreditNoteId(cn: any): number | null {

@@ -40,6 +40,288 @@ ion-content {
   font-size: 20px;
 }
 
+// Active Keyword Filter Chip Bar
+.active-keyword-chip-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #e8f0fe;
+  border: 1px solid #c2dbff;
+  border-radius: 12px;
+  padding: 8px 12px;
+  margin-top: 8px;
+  animation: fadeInChip 0.2s ease-out;
+
+  .chip-content {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: #1967d2;
+    min-width: 0;
+
+    ion-icon {
+      font-size: 15px;
+      flex-shrink: 0;
+    }
+
+    .chip-label {
+      color: #5f6368;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .chip-val {
+      color: #1a1a1a;
+      font-weight: 800;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+  }
+
+  .chip-close-btn {
+    background: transparent;
+    border: none;
+    padding: 0;
+    margin-left: 8px;
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    color: #5f6368;
+    transition: color 0.15s ease;
+
+    ion-icon {
+      font-size: 18px;
+    }
+
+    &:hover {
+      color: #d93025;
+    }
+  }
+}
+
+// Keyword Suggestions Panel
+.search-suggestions-panel {
+  background: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  margin-top: 8px;
+  overflow: hidden;
+  animation: fadeInChip 0.2s ease-out;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 999;
+
+  .suggestions-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #f8f9fa;
+    padding: 10px 14px;
+    border-bottom: 1px solid #f1f2f6;
+
+    .s-head-title {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      font-weight: 800;
+      color: #747d8c;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+
+      ion-icon {
+        font-size: 14px;
+        color: #5c85d6;
+      }
+    }
+
+    .close-suggestions-btn {
+      background: transparent;
+      border: none;
+      color: #888;
+      cursor: pointer;
+      padding: 2px 6px;
+      display: flex;
+      align-items: center;
+      font-size: 16px;
+
+      &:hover {
+        color: #2f3542;
+      }
+    }
+  }
+
+  .suggestions-list {
+    max-height: 280px;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    scrollbar-width: none; // Firefox: directly hide scrollbar
+    -ms-overflow-style: none; // IE/Edge
+
+    &::-webkit-scrollbar {
+      display: none !important; // Chrome/Safari: directly hide scrollbar
+      width: 0 !important;
+      height: 0 !important;
+    }
+
+    .suggestion-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 14px;
+      border-bottom: 1px solid #f8f9fa;
+      cursor: pointer;
+      transition: background 0.15s ease;
+
+      &:last-child {
+        border-bottom: none;
+      }
+
+      &:hover, &:active {
+        background: #f8f7ff;
+      }
+
+      .suggestion-icon {
+        width: 34px;
+        height: 34px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+
+        &.customer {
+          background: #eff6ff;
+          color: #3b82f6;
+        }
+        &.doc {
+          background: #fef3c7;
+          color: #d97706;
+        }
+        &.all {
+          background: #f1f5f9;
+          color: #64748b;
+        }
+
+        ion-icon {
+          font-size: 18px;
+        }
+      }
+
+      .suggestion-info {
+        flex: 1;
+        min-width: 0;
+
+        .suggestion-title {
+          font-size: 13.5px;
+          font-weight: 700;
+          color: #1a1a1a;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .suggestion-sub {
+          font-size: 11px;
+          color: #888;
+          font-weight: 500;
+          margin-top: 1px;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+      }
+
+      .suggestion-right {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-shrink: 0;
+
+        .suggestion-badge {
+          font-size: 10px;
+          font-weight: 700;
+          background: #f1f2f6;
+          color: #57606f;
+          padding: 2px 6px;
+          border-radius: 8px;
+        }
+
+        .suggestion-arrow {
+          font-size: 14px;
+          color: #cbd5e1;
+        }
+      }
+
+      &.view-all {
+        background: #fafafa;
+        border-top: 1px dashed #e2e8f0;
+
+        .suggestion-title {
+          color: #5c85d6;
+        }
+      }
+    }
+  }
+}
+
+// Keyword Select Prompt
+.keyword-select-prompt {
+  text-align: center;
+  padding: 50px 20px;
+  color: #888;
+  animation: fadeInChip 0.2s ease-out;
+
+  .prompt-icon-bubble {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: #e8f0fe;
+    color: #1967d2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 14px;
+    box-shadow: 0 4px 12px rgba(25, 103, 210, 0.12);
+
+    ion-icon {
+      font-size: 28px;
+    }
+  }
+
+  .prompt-title {
+    font-size: 16px;
+    font-weight: 800;
+    color: #2f3542;
+    margin-bottom: 6px;
+  }
+
+  .prompt-desc {
+    font-size: 13px;
+    color: #747d8c;
+    max-width: 320px;
+    margin: 0 auto;
+    line-height: 1.4;
+  }
+}
+
+@keyframes fadeInChip {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .list-item {
   background: #fff;
   border-radius: 16px;

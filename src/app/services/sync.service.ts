@@ -55,8 +55,8 @@ export class SyncService {
     try {
       Network.addListener('networkStatusChange', (status: any) => {
         if (status.connected) {
-          console.log('[SyncService] Network restored (Capacitor), triggering sync...');
-          this.syncPendingOrders().catch(e => console.error('[SyncService] Network trigger error:', e));
+          console.log('[SyncService] Network restored (Capacitor), triggering sync with forceRetry...');
+          this.syncPendingOrders(true).catch(e => console.error('[SyncService] Network trigger error:', e));
         }
       });
     } catch (e) {
@@ -68,7 +68,7 @@ export class SyncService {
       App.addListener('appStateChange', state => {
         if (state.isActive) {
           console.log('[SyncService] App resumed to foreground, triggering sync check...');
-          this.syncPendingOrders().catch(e => console.error('[SyncService] AppState trigger error:', e));
+          this.syncPendingOrders(true).catch(e => console.error('[SyncService] AppState trigger error:', e));
         }
       });
     } catch (e) {
@@ -86,7 +86,7 @@ export class SyncService {
       });
     }
 
-    // 4. 定时心跳轮询兜底（每 8 秒）：网络恢复时保证自动无感同步
+    // 4. 定时心跳轮询兜底（每 5 秒）：网络恢复时保证自动无感同步
     setInterval(() => {
       if (!this.isSyncing) {
         this.offlineStorage.getPendingQueue().then(queue => {
@@ -96,7 +96,7 @@ export class SyncService {
           }
         });
       }
-    }, 8000);
+    }, 5000);
   }
 
   /**
@@ -499,6 +499,18 @@ export class SyncService {
       // 过滤掉已由 syncPriorityEntities 处理的 CREATE_PRODUCT 和 CREATE_CUSTOMER
       const remainingTasks = pending.filter(t => t.type !== 'CREATE_PRODUCT' && t.type !== 'CREATE_CUSTOMER');
 
+      // 关键依赖排序：保证发票在退货单之前同步，以便退货单在服务端有发票可以挂靠 (Anchor)
+      const getTaskPriority = (t: string): number => {
+        if (t === 'CREATE_INVOICE') return 1;
+        if (t === 'UPDATE_INVOICE') return 2;
+        if (t.startsWith('UPDATE_PROD') || t.startsWith('ACTIVATE') || t.startsWith('DEACTIVATE') || t.startsWith('ADD_STOCK')) return 3;
+        if (t === 'CREATE_CN' || t === 'CREATE_GLOBAL_CN') return 4;
+        if (t === 'UPDATE_CN') return 5;
+        if (t === 'CREATE_BULK_PAYMENT') return 6;
+        return 10;
+      };
+      remainingTasks.sort((a, b) => getTaskPriority(a.type) - getTaskPriority(b.type));
+
       for (const task of remainingTasks) {
         if (!forceRetry && (task.status === 'failed' || task.retryCount >= this.MAX_RETRY_LIMIT)) {
           continue;
@@ -720,7 +732,26 @@ export class SyncService {
 
             // 4. Fallback to CreateGlobalCreditNote for the customer if invoice endpoint fails or ID not resolved
             if (!synced) {
-              const custId = task.payload?.customerId || task.payload?.data?.customerId;
+              let custId = task.payload?.customerId || task.payload?.data?.customerId;
+              if (typeof custId === 'string' && custId.startsWith('cust_')) {
+                const cachedCustomers = await this.offlineStorage.getCache<any[]>('customers') || [];
+                const matched = cachedCustomers.find(c => String(c.id) === String(custId) || c.offlineId === custId);
+                if (matched && typeof matched.id === 'number') {
+                  custId = matched.id;
+                }
+              }
+              // If realServerInvId not found yet, check ANY valid server invoice for this customer in cache
+              if (!realServerInvId && custId) {
+                const cachedInvs = await this.offlineStorage.getCache<any[]>('invoices_list') || [];
+                const matched = cachedInvs.find(inv =>
+                  (String(inv.customerId) === String(custId) || String(inv.CustomerId) === String(custId)) &&
+                  ((typeof inv.id === 'number' && inv.id > 0 && inv.id < 100000000) || inv.serverId)
+                );
+                if (matched) {
+                  realServerInvId = matched.serverId || matched.id;
+                }
+              }
+
               if (custId) {
                 const url = `${baseUrl}/Credit/CreateGlobalCreditNote/customers/${custId}/credit-notes-global`;
                 const globalData = {
@@ -745,8 +776,57 @@ export class SyncService {
                 custId = matched.id;
               }
             }
+
+            const globalData = { ...(task.payload.data || {}) };
+            let prefInvId = globalData.preferredInvoiceId;
+
+            // 1. Resolve offline invoice ID if provided
+            const rawInvId = task.payload?.invoiceId || task.payload?.data?.invoiceId;
+            if (!prefInvId && rawInvId) {
+              const strInv = String(rawInvId);
+              const numInv = Number(strInv);
+              if (!isNaN(numInv) && numInv > 0 && numInv < 100000000) {
+                prefInvId = numInv;
+              } else {
+                const order = await this.localDb.getOrderByClientId(strInv);
+                if (order && order.serverId) {
+                  prefInvId = order.serverId;
+                } else {
+                  const cachedInvs = await this.offlineStorage.getCache<any[]>('invoices_list') || [];
+                  const matched = cachedInvs.find(inv =>
+                    String(inv.id) === strInv ||
+                    inv.offlineId === strInv ||
+                    inv.clientId === strInv ||
+                    inv.docNo === strInv ||
+                    inv.invoiceNumber === strInv
+                  );
+                  if (matched?.serverId) {
+                    prefInvId = matched.serverId;
+                  } else if (typeof matched?.id === 'number' && matched.id > 0 && matched.id < 100000000) {
+                    prefInvId = matched.id;
+                  }
+                }
+              }
+            }
+
+            // 2. If still no preferredInvoiceId, look for ANY valid server invoice for this customer in cache
+            if (!prefInvId && custId) {
+              const cachedInvs = await this.offlineStorage.getCache<any[]>('invoices_list') || [];
+              const matched = cachedInvs.find(inv =>
+                (String(inv.customerId) === String(custId) || String(inv.CustomerId) === String(custId)) &&
+                ((typeof inv.id === 'number' && inv.id > 0 && inv.id < 100000000) || inv.serverId)
+              );
+              if (matched) {
+                prefInvId = matched.serverId || matched.id;
+              }
+            }
+
+            if (prefInvId) {
+              globalData.preferredInvoiceId = prefInvId;
+            }
+
             const url = `${baseUrl}/Credit/CreateGlobalCreditNote/customers/${custId}/credit-notes-global`;
-            await firstValueFrom(this.api.postDirect(url, task.payload.data));
+            await firstValueFrom(this.api.postDirect(url, globalData));
             await this.offlineStorage.removeQueueItem(task.id);
             successCount++;
           } else if (task.type === 'UPDATE_CN') {

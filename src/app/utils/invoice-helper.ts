@@ -1,9 +1,11 @@
 /**
  * Helper utilities for formatting and generating invoice document numbers (DOC NO).
- * Format rule: [Year][Month without leading 0][Day][2-digit sequence of that day]
- * Example for 2026-09-14:
- * 1st invoice: 202691401
- * 2nd invoice: 202691402
+ * Format rule: [Year (4 digits)][Month (2 digits padded)][Day (2 digits padded)][2-digit daily sequence]
+ * Example for 2026-10-13:
+ * 1st invoice: 2026101301
+ * 2nd invoice: 2026101302
+ * Example for September (month 09):
+ * 1st invoice: 2026091301
  */
 
 export interface DateParts {
@@ -57,45 +59,70 @@ export function getInvoiceNormalizedDate(inv: any): string {
 }
 
 /**
- * Extracts Year, Month (1-12, unpadded), and Date from an invoice object or timestamp.
+ * Extracts Year, Month (1-12), and Date from an invoice object or timestamp.
  */
 export function extractInvoiceDateParts(inv: any): DateParts {
-  let y = 2026;
-  let m = 9;
-  let d = 14;
+  const now = new Date();
+  let y = now.getFullYear();
+  let m = now.getMonth() + 1;
+  let d = now.getDate();
 
   if (!inv) return { y, m, d };
 
-  const numStr = String(inv.invoiceNumber || '');
-  const match = numStr.match(/(\d{4})(\d{2})(\d{2})/);
-  if (match) {
-    const parsedY = parseInt(match[1], 10);
-    if (parsedY >= 2020 && parsedY <= 2099) {
-      y = parsedY;
-      m = parseInt(match[2], 10); // 09 -> 9
-      d = parseInt(match[3], 10); // 14 -> 14, 04 -> 4
-      return { y, m, d };
-    }
-  }
-
+  // First try parsing from normalized invoice date
   const rawDate = getInvoiceNormalizedDate(inv);
   if (rawDate) {
     const dt = new Date(rawDate);
     if (!isNaN(dt.getTime())) {
-      y = dt.getFullYear();
-      m = dt.getMonth() + 1;
-      d = dt.getDate();
-      return { y, m, d };
+      return {
+        y: dt.getFullYear(),
+        m: dt.getMonth() + 1,
+        d: dt.getDate()
+      };
     }
   }
 
-  const now = new Date();
-  return { y: now.getFullYear(), m: now.getMonth() + 1, d: now.getDate() };
+  const numStr = String(inv.invoiceNumber || inv.docNo || (typeof inv === 'string' ? inv : ''));
+
+  // 10-digit format: YYYY(4) MM(2) DD(2) SS(2)
+  const match10 = numStr.match(/(\d{4})(\d{2})(\d{2})\d{2}$/);
+  if (match10) {
+    const parsedY = parseInt(match10[1], 10);
+    const parsedM = parseInt(match10[2], 10);
+    const parsedD = parseInt(match10[3], 10);
+    if (parsedY >= 2020 && parsedY <= 2099 && parsedM >= 1 && parsedM <= 12 && parsedD >= 1 && parsedD <= 31) {
+      return { y: parsedY, m: parsedM, d: parsedD };
+    }
+  }
+
+  // 8-digit date match: YYYYMMDD
+  const match8 = numStr.match(/(\d{4})(\d{2})(\d{2})/);
+  if (match8) {
+    const parsedY = parseInt(match8[1], 10);
+    const parsedM = parseInt(match8[2], 10);
+    const parsedD = parseInt(match8[3], 10);
+    if (parsedY >= 2020 && parsedY <= 2099 && parsedM >= 1 && parsedM <= 12 && parsedD >= 1 && parsedD <= 31) {
+      return { y: parsedY, m: parsedM, d: parsedD };
+    }
+  }
+
+  // Old single-digit month pattern (e.g. 202691301)
+  const matchOld = numStr.match(/(\d{4})([1-9])(\d{2})/);
+  if (matchOld) {
+    const parsedY = parseInt(matchOld[1], 10);
+    const parsedM = parseInt(matchOld[2], 10);
+    const parsedD = parseInt(matchOld[3], 10);
+    if (parsedY >= 2020 && parsedY <= 2099 && parsedM >= 1 && parsedM <= 12 && parsedD >= 1 && parsedD <= 31) {
+      return { y: parsedY, m: parsedM, d: parsedD };
+    }
+  }
+
+  return { y, m, d };
 }
 
 /**
  * Updates the global cache and attaches .docNo to every invoice in the array.
- * Invoices accumulate continuously: 01, 02, 03, 04... across all days without resetting daily.
+ * Invoices reset per day: 01, 02, 03... for each unique date (YYYYMMDD).
  */
 export function updateInvoiceDocNos(invoices: any[]): void {
   if (!Array.isArray(invoices)) return;
@@ -114,10 +141,19 @@ export function updateInvoiceDocNos(invoices: any[]): void {
 
   cachedDocNoMap.clear();
 
-  sorted.forEach((inv, index) => {
+  const dailyCounters = new Map<string, number>();
+
+  sorted.forEach((inv) => {
     const { y, m, d } = extractInvoiceDateParts(inv);
-    const seq = String(index + 1).padStart(2, '0');
-    const docNo = `${y}${m}${d}${seq}`;
+    const mm = String(m).padStart(2, '0');
+    const dd = String(d).padStart(2, '0');
+    const dateKey = `${y}${mm}${dd}`;
+
+    const count = (dailyCounters.get(dateKey) || 0) + 1;
+    dailyCounters.set(dateKey, count);
+
+    const seq = String(count).padStart(2, '0');
+    const docNo = `${dateKey}${seq}`;
 
     inv.docNo = docNo;
 
@@ -131,8 +167,9 @@ export function updateInvoiceDocNos(invoices: any[]): void {
 }
 
 /**
- * Formats an invoice object or invoice number string into the desired DOC NO.
- * (e.g. "INV-20260911132149" -> "202691139", or new invoice on 2026-09-14 -> "202691440")
+ * Formats an invoice object or invoice number string into the desired DOC NO:
+ * [YYYY][MM(padded)][DD(padded)][daily sequence(2-digit)].
+ * (e.g. 1st invoice on 2026-10-13 -> "2026101301", on 2026-09-13 -> "2026091301")
  */
 export function formatDocNo(inv: any, allInvoices?: any[]): string {
   if (!inv) return '';
@@ -142,23 +179,23 @@ export function formatDocNo(inv: any, allInvoices?: any[]): string {
     const trimmed = inv.trim();
     if (!trimmed) return '';
 
-    // Already in new format: e.g. "202691401"
-    if (/^\d{8,11}$/.test(trimmed)) return trimmed;
-
-    // Prefixed with INV-: e.g. "INV-202691401"
-    const invMatch = trimmed.match(/^INV-(\d{8,11})$/i);
-    if (invMatch) return invMatch[1];
-
-    // Check cache
+    // Check cache first
     if (cachedDocNoMap.has(trimmed)) {
       return cachedDocNoMap.get(trimmed)!;
     }
 
+    // Already in 10-digit format (e.g. "2026101301")
+    if (/^\d{10}$/.test(trimmed)) return trimmed;
+
+    // Prefixed with INV-: e.g. "INV-2026101301"
+    const invMatch = trimmed.match(/^INV-(\d{10})$/i);
+    if (invMatch) return invMatch[1];
+
     inv = { invoiceNumber: trimmed };
   }
 
-  // Already computed
-  if (inv.docNo) return String(inv.docNo);
+  // Already computed and matches standard 10-digit format
+  if (inv.docNo && /^\d{10}$/.test(String(inv.docNo))) return String(inv.docNo);
 
   // Check cache by ID
   if (inv.id !== undefined && inv.id !== null && cachedDocNoMap.has(Number(inv.id))) {
@@ -175,40 +212,54 @@ export function formatDocNo(inv: any, allInvoices?: any[]): string {
   }
 
   // Already formatted invoiceNumber
-  if (inv.invoiceNumber && /^\d{8,11}$/.test(String(inv.invoiceNumber).trim())) {
+  if (inv.invoiceNumber && /^\d{10}$/.test(String(inv.invoiceNumber).trim())) {
     return String(inv.invoiceNumber).trim();
   }
-  const matchInv = String(inv.invoiceNumber || '').match(/^INV-(\d{8,11})$/i);
+  const matchInv = String(inv.invoiceNumber || '').match(/^INV-(\d{10})$/i);
   if (matchInv) {
     return matchInv[1];
   }
 
   const { y, m, d } = extractInvoiceDateParts(inv);
-  const prefix = `${y}${m}${d}`;
+  const mm = String(m).padStart(2, '0');
+  const dd = String(d).padStart(2, '0');
+  const dateKey = `${y}${mm}${dd}`;
 
   const invoices = (Array.isArray(allInvoices) && allInvoices.length > 0)
     ? allInvoices
     : cachedInvoicesList;
 
   if (invoices && invoices.length > 0) {
-    const sorted = [...invoices].sort((a, b) => (Number(a.id) || 0) - (Number(b.id) || 0));
+    const sameDayInvoices = invoices.filter(item => {
+      const parts = extractInvoiceDateParts(item);
+      const itemKey = `${parts.y}${String(parts.m).padStart(2, '0')}${String(parts.d).padStart(2, '0')}`;
+      return itemKey === dateKey;
+    }).sort((a, b) => {
+      const timeA = new Date(a.invoiceDate || a.createdAt || 0).getTime();
+      const timeB = new Date(b.invoiceDate || b.createdAt || 0).getTime();
+      if (timeA !== timeB) return timeA - timeB;
+      const numA = Number(a.id);
+      const numB = Number(b.id);
+      if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+      return String(a.id || '').localeCompare(String(b.id || ''));
+    });
 
-    const idx = sorted.findIndex(i =>
+    const idx = sameDayInvoices.findIndex(i =>
       (inv.id && i.id === inv.id) ||
       (inv.invoiceNumber && i.invoiceNumber === inv.invoiceNumber)
     );
 
     if (idx !== -1) {
-      const docNo = `${prefix}${String(idx + 1).padStart(2, '0')}`;
+      const docNo = `${dateKey}${String(idx + 1).padStart(2, '0')}`;
       inv.docNo = docNo;
       return docNo;
     }
 
-    // New invoice being created (cumulative counter is total existing + 1)
-    const docNo = `${prefix}${String(sorted.length + 1).padStart(2, '0')}`;
+    // New invoice being created on that day
+    const docNo = `${dateKey}${String(sameDayInvoices.length + 1).padStart(2, '0')}`;
     inv.docNo = docNo;
     return docNo;
   }
 
-  return `${prefix}01`;
+  return `${dateKey}01`;
 }

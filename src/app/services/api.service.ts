@@ -1488,6 +1488,17 @@ export class ApiService {
         if (Array.isArray(res) && !params?.customerId) {
           this.applyInvoiceOverrides(res);
           this.offlineStorage.setCache('invoices_list', res);
+          // 为每个包含 items 的发票直接写入 inv_detail_ 缓存，确保脱机离线时即刻可见完整商品清单
+          for (const inv of res) {
+            const items = inv.items || inv.Items;
+            if (inv && inv.id && Array.isArray(items) && items.length > 0) {
+              this.offlineStorage.setCache('inv_detail_' + inv.id, {
+                ...inv,
+                docNo: formatDocNo(inv),
+                items: items
+              });
+            }
+          }
           // 在后台静默预抓取发票明细到本地缓存
           this.prefetchInvoiceDetails(res).catch(() => { });
         }

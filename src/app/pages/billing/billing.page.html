@@ -1010,113 +1010,218 @@
     </ng-template>
   </ion-modal>
 
-  <!-- Multi Invoice Selection Page View -->
-  <div *ngIf="currentView==='selectInvoices'" class="page-container"
-    style="display:flex; flex-direction:column; min-height:100vh;">
-    <!-- Top Bar -->
-    <div class="top-bar" style="margin-bottom:16px;">
-      <ion-button fill="clear" class="back-btn" (click)="currentView = 'newPayment'">
-        <ion-icon name="chevron-back-outline"></ion-icon> Back
-      </ion-button>
-      <span class="page-title">Select Invoices</span>
-      <div style="width: 48px;"></div> <!-- Spacer to center title -->
-    </div>
+  <!-- Multi Invoice Selection Page View (Responsive for Phone, Tablet, PC) -->
+  <div *ngIf="currentView==='selectInvoices'" class="page-container select-invoices-view">
+    <div class="select-invoices-content-wrapper">
+      <!-- Top Bar -->
+      <div class="top-bar">
+        <ion-button fill="clear" class="back-btn" (click)="currentView = 'newPayment'">
+          <ion-icon name="chevron-back-outline"></ion-icon> Back
+        </ion-button>
+        <span class="page-title">Select Invoices</span>
+        <div style="width: 48px;"></div> <!-- Spacer to center title -->
+      </div>
 
-    <!-- Search Box -->
-    <div class="search-box premium-search-box"
-      style="margin-bottom:16px; background:#fff; border-radius:16px; padding:6px 16px; display:flex; align-items:center; border: 1px solid #eee;">
-      <ion-icon name="search-outline" style="color:#a4b0be; font-size:24px;"></ion-icon>
-      <input type="text" [(ngModel)]="invoiceSearchTerm" (input)="filterInvoicesForSelection()"
-        placeholder="Search invoice number..."
-        style="border:none; background:transparent; padding:12px; flex:1; outline:none; font-size:15px; color:#2f3542;" />
-    </div>
+      <!-- Search Box (Matching Invoices Report) -->
+      <div class="select-search-container">
+        <ion-searchbar [(ngModel)]="invoiceSearchTerm"
+          (ionInput)="onInvoiceSearchInput()"
+          (ionClear)="clearInvoiceSearch()"
+          placeholder="Search DOC NO or customer..."
+          class="custom-report-searchbar">
+        </ion-searchbar>
 
-    <!-- Invoice List -->
-    <div style="flex:1; overflow-y:auto; padding-bottom:100px; padding-right:6px; -webkit-overflow-scrolling:touch;">
-      <!-- Empty State -->
-      <div *ngIf="filteredPaymentInvoices?.length === 0" style="text-align:center; padding:60px 20px; color:#888;">
-        <ion-icon name="document-text-outline" style="font-size:56px; color:#ccc; margin-bottom:16px;"></ion-icon>
-        <div style="font-size:16px; font-weight:600; color:#666;">No unpaid invoices found.</div>
-        <div style="font-size:13px; color:#999; margin-top:4px;" *ngIf="paymentForm.customerId">
-          Filtered for {{ getSelectedCustomerName() }}
-        </div>
-        <div style="margin-top:16px;" *ngIf="paymentForm.customerId">
-          <button type="button" (click)="loadInvoicesByCustomer(0)" style="background:#6c5ce7; color:#fff; border:none; border-radius:10px; padding:8px 18px; font-size:13px; font-weight:700; cursor:pointer;">
-            Show Invoices For All Customers
+        <!-- Active Keyword Filter Chip (when a keyword is selected) -->
+        <div class="active-keyword-chip-bar" *ngIf="selectedSearchKeyword">
+          <div class="chip-content">
+            <ion-icon name="funnel-outline"></ion-icon>
+            <span class="chip-label">Filtered by Keyword:</span>
+            <strong class="chip-val">{{ selectedSearchKeyword }}</strong>
+          </div>
+          <button type="button" class="chip-close-btn" (click)="clearSelectedKeyword()" title="Clear keyword filter">
+            <ion-icon name="close-circle"></ion-icon>
           </button>
         </div>
+
+        <!-- Keyword Suggestions Dropdown Panel -->
+        <div class="search-suggestions-panel" *ngIf="showSearchSuggestions && searchSuggestions.length > 0">
+          <div class="suggestions-header">
+            <div class="s-head-title">
+              <ion-icon name="sparkles-outline"></ion-icon>
+              <span>Select Keyword ({{ searchSuggestions.length }})</span>
+            </div>
+            <button type="button" class="close-suggestions-btn" (click)="showSearchSuggestions = false">
+              <ion-icon name="close-outline"></ion-icon>
+            </button>
+          </div>
+          <div class="suggestions-list">
+            <div *ngFor="let s of searchSuggestions" class="suggestion-item" (click)="selectKeywordSuggestion(s)">
+              <div class="suggestion-icon" [class.customer]="s.type === 'customer'" [class.doc]="s.type === 'docNo'">
+                <ion-icon [name]="s.type === 'customer' ? 'business-outline' : 'receipt-outline'"></ion-icon>
+              </div>
+              <div class="suggestion-info">
+                <div class="suggestion-title">{{ s.displayTitle }}</div>
+                <div class="suggestion-sub">{{ s.subtitle }}</div>
+              </div>
+              <div class="suggestion-right">
+                <span class="suggestion-badge" *ngIf="s.count > 0">{{ s.count }} inv</span>
+                <ion-icon name="chevron-forward-outline" class="suggestion-arrow"></ion-icon>
+              </div>
+            </div>
+
+            <!-- View All Invoices Option -->
+            <div class="suggestion-item view-all" (click)="viewAllSearchMatches()">
+              <div class="suggestion-icon all">
+                <ion-icon name="search-outline"></ion-icon>
+              </div>
+              <div class="suggestion-info">
+                <div class="suggestion-title">Show all invoices for "{{ invoiceSearchTerm }}"</div>
+                <div class="suggestion-sub">Display all matching invoices without keyword filter</div>
+              </div>
+              <ion-icon name="arrow-forward-outline" class="suggestion-arrow"></ion-icon>
+            </div>
+          </div>
+        </div>
       </div>
 
-      <!-- Cards List -->
-      <div *ngFor="let inv of filteredPaymentInvoices" (click)="toggleInvoiceSelection(inv)" class="invoice-select-card"
-        [class.selected]="isInvoiceSelected(inv)"
-        style="background:#fff; border-radius:20px; padding:20px; margin-bottom:16px; border:1px solid #f1f2f6; transition:all 0.2s ease; cursor:pointer; display:flex; align-items:center; gap:16px; position:relative; box-shadow:0 4px 12px rgba(0,0,0,0.02);"
-        [style.border-color]="isInvoiceSelected(inv) ? '#6c5ce7' : '#f1f2f6'"
-        [style.background]="isInvoiceSelected(inv) ? '#fbfaff' : '#fff'">
+      <!-- Date Filter Card (Matching Invoices Report) -->
+      <div class="date-filter-card">
+        <div class="date-filter-header">
+          <div class="df-title">
+            <ion-icon name="calendar-outline"></ion-icon>
+            <span>Filter by Date Range</span>
+          </div>
+          <button type="button" class="clear-btn" *ngIf="selectInvoiceStartDate || selectInvoiceEndDate" (click)="clearSelectInvoiceDateFilter()">
+            Clear Filter
+          </button>
+        </div>
+        <div class="date-inputs">
+          <div class="date-input-wrapper">
+            <span class="input-label">FROM</span>
+            <input type="date" [(ngModel)]="selectInvoiceStartDate" (change)="selectInvoiceActivePreset = ''; filterInvoicesForSelection()" class="premium-date-input">
+          </div>
+          <div class="date-separator">
+            <ion-icon name="arrow-forward-outline"></ion-icon>
+          </div>
+          <div class="date-input-wrapper">
+            <span class="input-label">TO</span>
+            <input type="date" [(ngModel)]="selectInvoiceEndDate" (change)="selectInvoiceActivePreset = ''; filterInvoicesForSelection()" class="premium-date-input">
+          </div>
+        </div>
+        <div class="preset-chips-container">
+          <button type="button" class="preset-chip" [class.active]="selectInvoiceActivePreset === 'today'" (click)="setSelectInvoicePreset('today')">Today</button>
+          <button type="button" class="preset-chip" [class.active]="selectInvoiceActivePreset === 'yesterday'" (click)="setSelectInvoicePreset('yesterday')">Yesterday</button>
+          <button type="button" class="preset-chip" [class.active]="selectInvoiceActivePreset === 'week'" (click)="setSelectInvoicePreset('week')">This Week</button>
+          <button type="button" class="preset-chip" [class.active]="selectInvoiceActivePreset === 'month'" (click)="setSelectInvoicePreset('month')">This Month</button>
+          <button type="button" class="preset-chip" [class.active]="selectInvoiceActivePreset === '30days'" (click)="setSelectInvoicePreset('30days')">Last 30 Days</button>
+        </div>
+      </div>
 
-        <!-- Checkbox -->
-        <div
-          style="width:24px; height:24px; border-radius:8px; border:2px solid #ddd; display:flex; align-items:center; justify-content:center; transition:0.2s;"
-          [style.background]="isInvoiceSelected(inv) ? '#6c5ce7' : 'transparent'"
-          [style.border-color]="isInvoiceSelected(inv) ? '#6c5ce7' : '#ddd'">
-          <ion-icon *ngIf="isInvoiceSelected(inv)" name="checkmark-outline"
-            style="color:#fff; font-size:16px;"></ion-icon>
+      <!-- Invoice List -->
+      <div class="select-invoices-list-body">
+        <!-- Keyword Selection Prompt (when user is typing and suggestions are shown) -->
+        <div *ngIf="showSearchSuggestions && !selectedSearchKeyword && searchSuggestions.length > 0" class="keyword-select-prompt">
+          <div class="prompt-icon-bubble">
+            <ion-icon name="search-outline"></ion-icon>
+          </div>
+          <div class="prompt-title">Please Select a Keyword Above</div>
+          <div class="prompt-desc">Tap a customer or document number above to view all its invoices.</div>
         </div>
 
-        <!-- Invoice Details -->
-        <div style="flex:1;">
-          <div style="display:flex; justify-content:space-between; margin-bottom:4px; align-items:center;">
-            <span style="font-size:15px; font-weight:800; color:#2f3542;" class="invoice-num">{{ getDocNo(inv) }}</span>
-            <span class="invoice-status-badge"
-              style="font-size:11px; padding:4px 10px; border-radius:8px; background:#fff3cd; color:#d35400; font-weight:700; text-transform:uppercase; letter-spacing:0.5px;">{{
-              inv.status || 'UNPAID' }}</span>
+        <!-- Empty State -->
+        <div *ngIf="(!showSearchSuggestions || selectedSearchKeyword || searchSuggestions.length === 0) && filteredPaymentInvoices?.length === 0" class="empty-unpaid-invoices">
+          <ion-icon name="document-text-outline" class="empty-icon"></ion-icon>
+          <div class="empty-msg">No unpaid invoices found.</div>
+          <div class="empty-sub" *ngIf="paymentForm.customerId">
+            Filtered for {{ getSelectedCustomerName() }}
           </div>
-          <div *ngIf="inv.customerName || inv.CustomerName" style="font-size:12px; font-weight:700; color:#6c5ce7; margin-bottom:6px;">
-            <ion-icon name="person-outline" style="vertical-align:middle; margin-right:3px;"></ion-icon>
-            {{ inv.customerName || inv.CustomerName }}
+          <div class="empty-action" *ngIf="paymentForm.customerId">
+            <button type="button" (click)="loadInvoicesByCustomer(0)" class="show-all-btn">
+              Show Invoices For All Customers
+            </button>
           </div>
-          <div style="display:flex; justify-content:space-between; font-size:13px; color:#747d8c; font-weight:600;"
-            class="invoice-meta-row">
-            <span>Total: RM {{ inv.totalAmount | number:'1.2-2' }}</span>
-            <span style="font-weight:800; color:#ff4757;" class="balance-due">Bal: RM {{ inv.balance | number:'1.2-2'
-              }}</span>
+        </div>
+
+        <!-- List Items (Matching Invoices Report exactly) -->
+        <div *ngFor="let inv of filteredPaymentInvoices"
+             class="list-item invoice-select-row"
+             [class.selected]="isInvoiceSelected(inv)"
+             (click)="toggleInvoiceSelection(inv)">
+          <div class="item-info">
+            <div class="item-avatar"
+                 [class.paid]="inv.status==='Paid'"
+                 [class.partial]="inv.status==='Partial'"
+                 [class.unpaid]="!inv.status || inv.status==='Unpaid'">
+              <ion-icon name="receipt-outline"></ion-icon>
+            </div>
+            <div class="item-info-content">
+              <div class="info-left">
+                <div class="item-name-row">
+                  <span class="item-name">{{ getInvoiceCustomerName(inv) }}</span>
+                </div>
+                <div class="item-sub">{{ getCustomerCode(inv) }}</div>
+                <div class="item-sub"># {{ getDocNo(inv) }}</div>
+                <div class="item-sub-date">{{ (inv.invoiceDate || inv.date) | date:'dd/MM/yyyy HH:mm' }}</div>
+              </div>
+
+              <div class="info-right">
+                <span class="status-badge"
+                      [class.paid]="inv.status==='Paid'"
+                      [class.partial]="inv.status==='Partial'"
+                      [class.unpaid]="inv.status==='Unpaid'||!inv.status">
+                  {{ inv.status || 'Unpaid' }}
+                </span>
+                <div class="amount-box">
+                  <!-- If invoice has CN, display CN amount right above total amount like Photo 1 & Photo 3 -->
+                  <span class="paid-amount" *ngIf="hasStandardCN(inv)">
+                    CN: - RM {{ getStandardCNDeduction(inv) | number:'1.2-2' }}
+                  </span>
+                  <span class="paid-amount" style="color: #e67e22;" *ngIf="(inv.hasCreditNote || inv.HasCreditNote) && !hasStandardCN(inv)">
+                    CN
+                  </span>
+                  <span class="item-amount">RM {{ getInvoiceDisplayTotal(inv) | number:'1.2-2' }}</span>
+                </div>
+              </div>
+            </div>
           </div>
 
-          <!-- Standard CN Details & Credit Used -->
-          <div *ngIf="hasStandardCN(inv) || getInvoiceCreditUsed(inv) > 0"
-            style="margin-top: 8px; padding-top: 8px; border-top: 1px dashed rgba(0,0,0,0.08); font-size: 12px; display: flex; flex-direction: column; gap: 4px;">
-            <div *ngIf="hasStandardCN(inv)"
-              style="display: flex; justify-content: space-between; color: #e67e22; font-weight: 700;">
-              <span>CN Deducted:</span>
-              <span>- RM {{ getStandardCNDeduction(inv) | number:'1.2-2' }}</span>
-            </div>
-            <div *ngIf="getInvoiceCNExcess(inv) > 0"
-              style="display: flex; justify-content: space-between; color: #27ae60; font-weight: 700;">
-              <span>CN Excess:</span>
-              <span>+ RM {{ getInvoiceCNExcess(inv) | number:'1.2-2' }}</span>
-            </div>
-            <div *ngIf="getInvoiceCreditUsed(inv) > 0"
-              style="display: flex; justify-content: space-between; color: #6c5ce7; font-weight: 700;">
-              <span>Credit Used:</span>
-              <span>- RM {{ getInvoiceCreditUsed(inv) | number:'1.2-2' }}</span>
-            </div>
-            <div style="display: flex; justify-content: space-between; color: #27ae60; font-weight: 700;">
-              <span>Net Amount:</span>
-              <span>RM {{ getInvoiceNetAmount(inv) | number:'1.2-2' }}</span>
+          <!-- Selection Checkmark Circle (Green circle matching Photo 3) -->
+          <div class="item-selection-check">
+            <div class="check-circle" [class.checked]="isInvoiceSelected(inv)">
+              <ion-icon *ngIf="isInvoiceSelected(inv)" name="checkmark-outline"></ion-icon>
             </div>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- Confirm Button -->
-    <div
-      style="position:fixed; bottom:0; left:0; right:0; padding:16px; border-top:1px solid #f1f2f6; background:#fff; z-index:10;"
-      class="confirm-footer">
-      <button (click)="confirmInvoiceSelection()"
-        style="width:100%; background:#6c5ce7; color:#fff; border:none; border-radius:16px; padding:16px; font-size:16px; font-weight:800; box-shadow:0 6px 20px rgba(108,92,231,0.3); transition:all 0.2s ease; cursor:pointer;">
-        Confirm Selection ({{ paymentForm.invoiceIds.length }})
-      </button>
+    <!-- Fixed Bottom Bar Showing Total Invoice Amount, Total CN Amount, Total Amount & Confirm Button -->
+    <div class="select-invoices-summary-footer">
+      <div class="footer-inner">
+        <div class="summary-amounts-card">
+          <div class="amounts-col">
+            <span class="amt-title">Total Invoice</span>
+            <span class="amt-val">RM {{ getBulkTotalAmount() | number:'1.2-2' }}</span>
+          </div>
+          <div class="amounts-divider"></div>
+          <div class="amounts-col">
+            <span class="amt-title">Total CN</span>
+            <span class="amt-val cn-amt" [class.has-cn]="getBulkCreditNotes() > 0">
+              {{ getBulkCreditNotes() > 0 ? '- RM ' + (getBulkCreditNotes() | number:'1.2-2') : 'RM 0.00' }}
+            </span>
+          </div>
+          <div class="amounts-divider"></div>
+          <div class="amounts-col">
+            <span class="amt-title">Total Amount</span>
+            <span class="amt-val net-amt">RM {{ getBulkBalance() | number:'1.2-2' }}</span>
+          </div>
+        </div>
+
+        <button (click)="confirmInvoiceSelection()" class="confirm-bar-btn" [disabled]="paymentForm.invoiceIds.length === 0">
+          <span>Confirm Selection ({{ paymentForm.invoiceIds.length }})</span>
+          <ion-icon name="arrow-forward-outline"></ion-icon>
+        </button>
+      </div>
     </div>
   </div>
 

@@ -12,7 +12,7 @@ import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../services/api.service';
 import { AppComponent } from '../../app.component';
 import { BluetoothPrintService } from '../../services/bluetooth-print.service';
-import { formatDocNo } from '../../utils/invoice-helper';
+import { formatDocNo, updateInvoiceDocNos } from '../../utils/invoice-helper';
 import { OfflineStorageService } from '../../services/offline-storage.service';
 import { SyncService } from '../../services/sync.service';
 
@@ -130,7 +130,13 @@ export class BillingPage implements OnInit, OnDestroy {
   showInvoiceSelectionModal = false;
   selectedInvoicesList: any[] = [];
   invoiceSearchTerm = '';
+  searchSuggestions: any[] = [];
+  showSearchSuggestions = false;
+  selectedSearchKeyword = '';
   filteredPaymentInvoices: any[] = [];
+  selectInvoiceStartDate = '';
+  selectInvoiceEndDate = '';
+  selectInvoiceActivePreset = '';
 
   deletePaymentButtons = [
     { text: 'Cancel', role: 'cancel' },
@@ -478,11 +484,17 @@ export class BillingPage implements OnInit, OnDestroy {
       this.cdr.detectChanges();
     });
 
+    let lastNotifiedSyncError = '';
     this.syncSub = this.syncService.syncCompleted$.subscribe(res => {
       if (res.successCount > 0) {
         this.loadPayments();
         this.loadCreditNotes();
         this.loadAllInvoices();
+        this.showToastMsg(`Auto-synced ${res.successCount} item(s) successfully!`);
+      }
+      if (res.failCount > 0 && res.lastError && res.lastError !== lastNotifiedSyncError) {
+        lastNotifiedSyncError = res.lastError;
+        this.showToastMsg(`Auto-sync error: ${res.lastError}`);
       }
     });
 
@@ -498,24 +510,63 @@ export class BillingPage implements OnInit, OnDestroy {
       });
     }
 
-    this.route.queryParams.subscribe(params => {
+    this.route.queryParams.subscribe(async (params) => {
       if (params['action'] === 'newCN') {
-        const custId = Number(params['customerId']);
-        const invId = Number(params['invoiceId']);
+        const rawInvId = params['invoiceId'];
+        const invId = (rawInvId !== undefined && rawInvId !== null && rawInvId !== '')
+          ? (isNaN(Number(rawInvId)) ? rawInvId : Number(rawInvId))
+          : null;
+        let custId = Number(params['customerId']) || 0;
 
-        // Short delay to ensure data is loaded
-        setTimeout(() => {
-          this.currentView = 'newCN';
-          this.cnForm.customerId = custId;
-          this.onCNCustomerChange();
-          this.cnForm.invoiceId = invId;
-          if (invId) {
-            this.promptCNInvoiceProducts(invId);
-          } else {
-            this.showCNInvoiceFinancials = false;
-            this.onCNInvoiceChange(false);
+        // 确保离线客户与发票缓存就绪
+        if (!this.customers || this.customers.length === 0) {
+          const cachedCust = await this.offlineStorage.getCache<any[]>('customers') || [];
+          if (cachedCust.length > 0) {
+            this.customers = cachedCust;
+            this.filteredCustomers = [...cachedCust];
           }
-        }, 300);
+        }
+        if (!this.invoices || this.invoices.length === 0) {
+          const cachedInv = await this.offlineStorage.getCache<any[]>('invoices_list') || [];
+          if (cachedInv.length > 0) {
+            this.invoices = cachedInv;
+            this.cnFilteredInvoices = [...cachedInv];
+          }
+        }
+
+        // 检查是否有来自发票报告/详情页带入的单据
+        const pendingCNInv = await this.offlineStorage.getCache<any>('pending_cn_invoice');
+        if (pendingCNInv && (!invId || String(pendingCNInv.id) === String(invId))) {
+          if (!custId && pendingCNInv.customerId) {
+            custId = Number(pendingCNInv.customerId);
+          }
+          if (!this.invoices.some((i: any) => String(i.id) === String(pendingCNInv.id))) {
+            this.invoices = [pendingCNInv, ...this.invoices];
+          }
+          this.selectedCNInvoiceDetail = pendingCNInv;
+        }
+
+        this.currentView = 'newCN';
+        this.cnForm.customerId = custId;
+        this.cnForm.invoiceId = invId;
+        this.cnForm.items = [];
+
+        if (custId && custId !== 0) {
+          this.cnFilteredInvoices = this.invoices.filter((inv: any) => String(inv.customerId) === String(custId));
+          this.loadCustomerProductPrices(custId);
+        } else {
+          this.cnFilteredInvoices = [...this.invoices];
+          this.customerProductPrices = [];
+        }
+
+        this.cdr.detectChanges();
+
+        if (invId) {
+          this.promptCNInvoiceProducts(invId);
+        } else {
+          this.showCNInvoiceFinancials = false;
+          this.onCNInvoiceChange(false);
+        }
       } else if (params['action'] === 'viewPayment') {
         const invNum = params['invoiceNumber'];
         this.isLoading = true;
@@ -590,7 +641,14 @@ export class BillingPage implements OnInit, OnDestroy {
           this.loadInvoicesByCustomer(this.customers[0].id);
         }
       },
-      error: () => { }
+      error: async () => {
+        const cached = await this.offlineStorage.getCache<any[]>('customers') || [];
+        if (cached.length > 0 && (!this.customers || this.customers.length === 0)) {
+          this.customers = cached;
+          this.filteredCustomers = [...cached];
+          this.cdr.detectChanges();
+        }
+      }
     });
   }
 
@@ -600,18 +658,119 @@ export class BillingPage implements OnInit, OnDestroy {
         this.invoices = Array.isArray(res) ? res : [];
         this.cnFilteredInvoices = [...this.invoices];
       },
-      error: () => { }
+      error: async () => {
+        const cached = await this.offlineStorage.getCache<any[]>('invoices_list') || [];
+        if (cached.length > 0 && (!this.invoices || this.invoices.length === 0)) {
+          this.invoices = cached;
+          this.cnFilteredInvoices = [...cached];
+          this.cdr.detectChanges();
+        }
+      }
     });
   }
 
   paymentInvoices: any[] = [];
 
+  async applyOfflineCreditNotesToInvoices(invoices: any[]) {
+    if (!Array.isArray(invoices) || invoices.length === 0) return;
+    try {
+      const cachedCNs = await this.offlineStorage.getCache<any[]>('credit_notes_list') || [];
+      const queue = await this.offlineStorage.getPendingQueue();
+      const queueCNs = queue
+        .filter(q => q.type === 'CREATE_CN' || q.type === 'CREATE_GLOBAL_CN')
+        .map(q => {
+          const items = q.payload?.data?.items || [];
+          const totalAmount = items.reduce((sum: number, it: any) => sum + ((Number(it.quantity) || 0) * (Number(it.unitPrice) || 0)), 0);
+          return {
+            id: q.id,
+            cnNumber: q.payload?.cnNumber || ('CN-OFFLINE-' + q.id),
+            invoiceId: q.payload?.invoiceId || q.payload?.data?.preferredInvoiceId || 0,
+            invoiceNumber: q.payload?.invoiceNumber || '',
+            customerId: q.payload?.customerId || 0,
+            customerName: q.payload?.customerName || '',
+            amount: totalAmount,
+            createdAt: new Date(q.createdAt).toISOString(),
+            reason: q.payload?.data?.reason || '',
+            items: items,
+            isOffline: true
+          };
+        });
+
+      const allOfflineCNs: any[] = [];
+      const seenCN = new Set<string>();
+      for (const cn of [...queueCNs, ...cachedCNs]) {
+        const key = String(cn.id || cn.cnNumber || '');
+        if (key && !seenCN.has(key)) {
+          seenCN.add(key);
+          allOfflineCNs.push(cn);
+        }
+      }
+
+      for (const inv of invoices) {
+        const invIdStr = String(inv.id || '');
+        const invDocStr = String(inv.invoiceNumber || inv.docNo || '').trim();
+        const invHelperDoc = this.getDocNo(inv).trim();
+        const invRefStr = String(inv.offlineReferenceId || '');
+
+        const invCustId = String(inv.customerId || inv.CustomerId || '');
+
+        const matchedCNs = allOfflineCNs.filter(cn => {
+          const cnInvId = String(cn.invoiceId || '');
+          const cnInvDoc = String(cn.invoiceNumber || '').trim();
+          const cnCustId = String(cn.customerId || '');
+          if (cnInvId && cnInvId !== '0' && (cnInvId === invIdStr || (invRefStr && cnInvId === invRefStr))) {
+            return true;
+          }
+          if (cnInvDoc && (cnInvDoc === invDocStr || cnInvDoc === invHelperDoc || (invDocStr && cnInvDoc.includes(invDocStr)) || (invDocStr && invDocStr.includes(cnInvDoc)))) {
+            return true;
+          }
+          if ((!cnInvId || cnInvId === '0') && !cnInvDoc && cnCustId && invCustId && cnCustId === invCustId) {
+            return true;
+          }
+          return false;
+        });
+
+        if (matchedCNs.length > 0) {
+          inv.creditNotes = inv.creditNotes || [];
+          for (const mcn of matchedCNs) {
+            const alreadyHas = inv.creditNotes.some((c: any) =>
+              String(c.id || '') === String(mcn.id || '') ||
+              (c.cnNumber && c.cnNumber === mcn.cnNumber)
+            );
+            if (!alreadyHas) {
+              inv.creditNotes.push(mcn);
+            }
+          }
+
+          inv.hasCreditNote = true;
+          inv.HasCreditNote = true;
+          const cnSum = inv.creditNotes
+            .filter((c: any) => !(c.cnNumber || '').startsWith('CN-CHG'))
+            .reduce((sum: number, c: any) => sum + (Number(c.amount) || 0), 0);
+          inv.cnTotal = cnSum;
+          inv.CNTotal = cnSum;
+
+          const total = Number(inv.totalAmount ?? inv.TotalAmount ?? 0);
+          const paid = Number(inv.paidAmount ?? inv.PaidAmount ?? 0);
+          const cred = Number(inv.creditUsed ?? inv.CreditUsed ?? 0);
+          inv.balance = Math.max(0, total - paid - cred - cnSum);
+          if (inv.balance <= 0.01 && (paid > 0 || cred > 0 || cnSum > 0 || inv.status === 'Paid')) {
+            inv.status = 'Paid';
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[Billing] Error applying offline CNs:', e);
+    }
+  }
+
   loadInvoicesByCustomer(customerId: any) {
     const cid = Number(customerId || 0);
     this.api.getInvoices({ _t: new Date().getTime() }).subscribe({
-      next: (res) => {
+      next: async (res) => {
         const list = Array.isArray(res) ? res : [];
-        console.log('API returned invoices count:', list.length);
+        updateInvoiceDocNos(list);
+        await this.applyOfflineCreditNotesToInvoices(list);
         this.paymentInvoices = list.filter((inv: any) => {
           const invCid = Number(inv.customerId ?? inv.CustomerId ?? 0);
           if (cid && cid !== 0 && invCid !== cid) {
@@ -625,21 +784,21 @@ export class BillingPage implements OnInit, OnDestroy {
               const tot = Number(inv.totalAmount || inv.TotalAmount || 0);
               const cred = Number(inv.creditUsed || inv.CreditUsed || 0);
               const paid = Number(inv.paidAmount || inv.PaidAmount || 0);
-              inv.balance = Math.max(0, tot - cred - paid);
+              const cn = Number(inv.cnTotal || inv.CNTotal || 0);
+              inv.balance = Math.max(0, tot - cred - paid - cn);
               inv.paidAmount = paid;
             }
           }
-          const bal = inv.balance ?? inv.Balance ?? (Number(inv.totalAmount || 0) - Number(inv.paidAmount || 0));
+          const bal = inv.balance ?? inv.Balance ?? (Number(inv.totalAmount || 0) - Number(inv.paidAmount || 0) - Number(inv.CNTotal || inv.cnTotal || 0) - Number(inv.creditUsed || inv.CreditUsed || 0));
           return inv.status !== 'Paid' && Number(bal) > 0.01;
         });
-        this.filteredPaymentInvoices = [...this.paymentInvoices];
-        this.invoiceSearchTerm = '';
-        console.log('Filtered payment invoices count:', this.paymentInvoices.length);
-        this.cdr.detectChanges(); // Force UI update
+        this.filterInvoicesForSelection();
       },
       error: async (err) => {
         console.error('API Error:', err);
         const cached = await this.offlineStorage.getCache<any[]>('invoices_list') || [];
+        updateInvoiceDocNos(cached);
+        await this.applyOfflineCreditNotesToInvoices(cached);
         this.paymentInvoices = cached.filter((inv: any) => {
           const invCid = Number(inv.customerId ?? inv.CustomerId ?? 0);
           if (cid && cid !== 0 && invCid !== cid) {
@@ -653,15 +812,15 @@ export class BillingPage implements OnInit, OnDestroy {
               const tot = Number(inv.totalAmount || inv.TotalAmount || 0);
               const cred = Number(inv.creditUsed || inv.CreditUsed || 0);
               const paid = Number(inv.paidAmount || inv.PaidAmount || 0);
-              inv.balance = Math.max(0, tot - cred - paid);
+              const cn = Number(inv.cnTotal || inv.CNTotal || 0);
+              inv.balance = Math.max(0, tot - cred - paid - cn);
               inv.paidAmount = paid;
             }
           }
-          const bal = inv.balance ?? inv.Balance ?? (Number(inv.totalAmount || 0) - Number(inv.paidAmount || 0));
+          const bal = inv.balance ?? inv.Balance ?? (Number(inv.totalAmount || 0) - Number(inv.paidAmount || 0) - Number(inv.CNTotal || inv.cnTotal || 0) - Number(inv.creditUsed || inv.CreditUsed || 0));
           return inv.status !== 'Paid' && Number(bal) > 0.01;
         });
-        this.filteredPaymentInvoices = [...this.paymentInvoices];
-        this.cdr.detectChanges();
+        this.filterInvoicesForSelection();
       }
     });
   }
@@ -914,23 +1073,202 @@ export class BillingPage implements OnInit, OnDestroy {
 
   openInvoiceModal() {
     this.invoiceSearchTerm = '';
+    this.selectInvoiceStartDate = '';
+    this.selectInvoiceEndDate = '';
+    this.selectInvoiceActivePreset = '';
     this.loadInvoicesByCustomer(this.paymentForm.customerId || 0);
     this.currentView = 'selectInvoices';
     this.cdr.detectChanges();
   }
 
-  filterInvoicesForSelection() {
-    const term = this.invoiceSearchTerm.trim().toLowerCase();
-    if (!term) {
-      this.filteredPaymentInvoices = [...this.paymentInvoices];
-    } else {
-      this.filteredPaymentInvoices = this.paymentInvoices.filter(inv =>
-        (inv.invoiceNumber || '').toLowerCase().includes(term) ||
-        (inv.docNo || '').toLowerCase().includes(term) ||
-        this.getDocNo(inv).toLowerCase().includes(term) ||
-        (inv.customerName || inv.CustomerName || '').toLowerCase().includes(term)
-      );
+  clearSelectInvoiceDateFilter() {
+    this.selectInvoiceStartDate = '';
+    this.selectInvoiceEndDate = '';
+    this.selectInvoiceActivePreset = '';
+    this.filterInvoicesForSelection();
+  }
+
+  setSelectInvoicePreset(preset: string) {
+    this.selectInvoiceActivePreset = preset;
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const fmt = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
+    if (preset === 'today') {
+      const todayStr = fmt(now);
+      this.selectInvoiceStartDate = todayStr;
+      this.selectInvoiceEndDate = todayStr;
+    } else if (preset === 'yesterday') {
+      const yesterday = new Date();
+      yesterday.setDate(now.getDate() - 1);
+      const yStr = fmt(yesterday);
+      this.selectInvoiceStartDate = yStr;
+      this.selectInvoiceEndDate = yStr;
+    } else if (preset === 'week') {
+      const day = now.getDay();
+      const diff = now.getDate() - day + (day === 0 ? -6 : 1);
+      const monday = new Date(now.setDate(diff));
+      this.selectInvoiceStartDate = fmt(monday);
+      this.selectInvoiceEndDate = fmt(new Date());
+    } else if (preset === 'month') {
+      const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+      this.selectInvoiceStartDate = fmt(firstDay);
+      this.selectInvoiceEndDate = fmt(new Date());
+    } else if (preset === '30days') {
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(now.getDate() - 30);
+      this.selectInvoiceStartDate = fmt(thirtyDaysAgo);
+      this.selectInvoiceEndDate = fmt(new Date());
     }
+
+    this.filterInvoicesForSelection();
+  }
+
+  onInvoiceSearchInput() {
+    const term = (this.invoiceSearchTerm || '').trim();
+    if (!term) {
+      this.searchSuggestions = [];
+      this.showSearchSuggestions = false;
+      this.selectedSearchKeyword = '';
+      this.filterInvoicesForSelection();
+      return;
+    }
+
+    if (this.selectedSearchKeyword && this.selectedSearchKeyword.toLowerCase() !== term.toLowerCase()) {
+      this.selectedSearchKeyword = '';
+    }
+
+    this.searchSuggestions = this.buildKeywordSuggestions(term, this.paymentInvoices || []);
+    this.showSearchSuggestions = this.searchSuggestions.length > 0;
+    this.filterInvoicesForSelection();
+  }
+
+  buildKeywordSuggestions(term: string, list: any[]): any[] {
+    const cleanTerm = term.toLowerCase();
+    const customerMap = new Map<string, { count: number; code: string; name: string }>();
+    const docList: { docNo: string; custName: string; total: number }[] = [];
+
+    for (const inv of list) {
+      const custName = (this.getInvoiceCustomerName(inv) || '').trim();
+      const custCode = (this.getCustomerCode(inv) || '').trim();
+      const docNo = (inv.docNo || this.getDocNo(inv) || inv.invoiceNumber || '').trim();
+
+      const matchesCust = custName.toLowerCase().includes(cleanTerm) || custCode.toLowerCase().includes(cleanTerm);
+      if (matchesCust) {
+        const key = custName || custCode;
+        if (key) {
+          const entry = customerMap.get(key) || { count: 0, code: custCode, name: custName };
+          entry.count++;
+          customerMap.set(key, entry);
+        }
+      }
+
+      if (docNo.toLowerCase().includes(cleanTerm)) {
+        docList.push({
+          docNo,
+          custName,
+          total: inv.totalAmount || inv.amount || 0
+        });
+      }
+    }
+
+    const suggestions: any[] = [];
+    customerMap.forEach(val => {
+      suggestions.push({
+        type: 'customer',
+        keyword: val.name,
+        displayTitle: val.name,
+        subtitle: val.code ? `${val.code} • ${val.count} invoice${val.count > 1 ? 's' : ''}` : `${val.count} invoice${val.count > 1 ? 's' : ''}`,
+        count: val.count
+      });
+    });
+
+    suggestions.sort((a, b) => b.count - a.count);
+
+    docList.slice(0, 5).forEach(d => {
+      suggestions.push({
+        type: 'docNo',
+        keyword: d.docNo,
+        displayTitle: `# ${d.docNo}`,
+        subtitle: d.custName ? `${d.custName} • RM ${Number(d.total).toFixed(2)}` : `RM ${Number(d.total).toFixed(2)}`,
+        count: 1
+      });
+    });
+
+    return suggestions;
+  }
+
+  selectKeywordSuggestion(suggestion: any) {
+    this.selectedSearchKeyword = suggestion.keyword;
+    this.invoiceSearchTerm = suggestion.keyword;
+    this.showSearchSuggestions = false;
+    this.filterInvoicesForSelection();
+  }
+
+  viewAllSearchMatches() {
+    this.selectedSearchKeyword = this.invoiceSearchTerm;
+    this.showSearchSuggestions = false;
+    this.filterInvoicesForSelection();
+  }
+
+  clearSelectedKeyword() {
+    this.selectedSearchKeyword = '';
+    this.invoiceSearchTerm = '';
+    this.showSearchSuggestions = false;
+    this.searchSuggestions = [];
+    this.filterInvoicesForSelection();
+  }
+
+  clearInvoiceSearch() {
+    this.clearSelectedKeyword();
+  }
+
+  filterInvoicesForSelection() {
+    // If suggestions are active and user has not selected a keyword yet, wait for keyword selection
+    if (this.showSearchSuggestions && !this.selectedSearchKeyword && this.searchSuggestions.length > 0) {
+      this.filteredPaymentInvoices = [];
+      this.cdr.detectChanges();
+      return;
+    }
+
+    const term = (this.selectedSearchKeyword || this.invoiceSearchTerm || '').trim().toLowerCase();
+    this.filteredPaymentInvoices = (this.paymentInvoices || []).filter(inv => {
+      const docNo = (inv.docNo || this.getDocNo(inv) || '').toLowerCase();
+      const invNum = (inv.invoiceNumber || '').toLowerCase();
+      const custName = (this.getInvoiceCustomerName(inv) || '').toLowerCase();
+      const custCode = (this.getCustomerCode(inv) || '').toLowerCase();
+
+      const matchesSearch = !term ||
+        docNo.includes(term) ||
+        invNum.includes(term) ||
+        custName.includes(term) ||
+        custCode.includes(term);
+
+      if (!matchesSearch) return false;
+
+      let matchesDate = true;
+      if (inv.invoiceDate) {
+        let invDateStr = '';
+        if (typeof inv.invoiceDate === 'string') {
+          invDateStr = inv.invoiceDate;
+        } else if (inv.invoiceDate instanceof Date) {
+          invDateStr = inv.invoiceDate.toISOString();
+        } else {
+          invDateStr = new Date(inv.invoiceDate).toISOString();
+        }
+        const invDatePart = invDateStr.substring(0, 10);
+        if (this.selectInvoiceStartDate && invDatePart < this.selectInvoiceStartDate) {
+          matchesDate = false;
+        }
+        if (this.selectInvoiceEndDate && invDatePart > this.selectInvoiceEndDate) {
+          matchesDate = false;
+        }
+      } else if (this.selectInvoiceStartDate || this.selectInvoiceEndDate) {
+        matchesDate = false;
+      }
+
+      return matchesDate;
+    });
     this.cdr.detectChanges();
   }
 
@@ -1266,10 +1604,19 @@ export class BillingPage implements OnInit, OnDestroy {
 
   getCNSelectedCustomerName(): string {
     if (!this.cnForm?.customerId || this.cnForm.customerId == 0) {
+      if (this.selectedCNInvoiceDetail) {
+        const name = this.selectedCNInvoiceDetail.customerName || this.selectedCNInvoiceDetail.CustomerName;
+        if (name) return name;
+      }
       return 'All Customers';
     }
-    const cust = this.customers.find((c: any) => c.id == this.cnForm.customerId);
-    return cust ? cust.name : 'Customer #' + this.cnForm.customerId;
+    const cust = this.customers.find((c: any) => String(c.id) === String(this.cnForm.customerId));
+    if (cust) return cust.name;
+    if (this.selectedCNInvoiceDetail) {
+      const name = this.selectedCNInvoiceDetail.customerName || this.selectedCNInvoiceDetail.CustomerName;
+      if (name) return name;
+    }
+    return 'Customer #' + this.cnForm.customerId;
   }
 
   isCustomerModalSelected(c: any): boolean {
@@ -1299,6 +1646,28 @@ export class BillingPage implements OnInit, OnDestroy {
     return cid ? ('Customer #' + cid) : '';
   }
 
+  getCustomerCode(invoice: any): string {
+    if (!invoice) return 'NO CODE';
+    if (invoice.customerCode) return invoice.customerCode;
+    if (invoice.CustomerCode) return invoice.CustomerCode;
+    const cid = Number(invoice.customerId ?? invoice.CustomerId ?? 0);
+    const c = this.customers.find(cust => cust.id === cid);
+    if (c) return c.customerCode || c.code || 'NO CODE';
+    return cid ? 'NO CODE' : 'CASH000001';
+  }
+
+  getInvoiceDisplayTotal(invoice: any): number {
+    if (!invoice) return 0;
+    const total = Number(invoice.totalAmount ?? invoice.TotalAmount ?? 0);
+    if (total > 0) return total;
+    const items = invoice.items || invoice.Items;
+    if (Array.isArray(items) && items.length > 0) {
+      const itemsTotal = items.reduce((sum: number, it: any) => sum + ((Number(it.unitPrice ?? it.UnitPrice) || 0) * (Number(it.quantity ?? it.Quantity) || 1)), 0);
+      return Math.round((itemsTotal + Number.EPSILON) * 100) / 100;
+    }
+    return total;
+  }
+
   // ─── Create CN Invoice Selector Modal ───
   async openCNInvoiceModal() {
     this.cnInvoiceSearchTerm = '';
@@ -1307,6 +1676,13 @@ export class BillingPage implements OnInit, OnDestroy {
       if (cachedCust.length > 0) {
         this.customers = cachedCust;
         this.filteredCustomers = [...cachedCust];
+      }
+    }
+    if (!this.invoices || this.invoices.length === 0) {
+      const cachedInv = await this.offlineStorage.getCache<any[]>('invoices_list') || [];
+      if (cachedInv.length > 0) {
+        this.invoices = cachedInv;
+        this.cnFilteredInvoices = [...cachedInv];
       }
     }
     for (const inv of this.cnFilteredInvoices) {
@@ -1343,6 +1719,9 @@ export class BillingPage implements OnInit, OnDestroy {
   selectCNInvoice(inv: any) {
     this.cnForm.invoiceId = inv ? inv.id : 0;
     this.cnForm.items = [];
+    if (inv) {
+      this.selectedCNInvoiceDetail = inv;
+    }
     this.closeCNInvoiceModal();
 
     if (!inv || !inv.id) {
@@ -1354,7 +1733,7 @@ export class BillingPage implements OnInit, OnDestroy {
     this.promptCNInvoiceProducts(inv.id);
   }
 
-  promptCNInvoiceProducts(invoiceId: number) {
+  promptCNInvoiceProducts(invoiceId: any) {
     this.cnForm.items = [];
     this.cdr.detectChanges();
     Swal.fire({
@@ -1380,7 +1759,7 @@ export class BillingPage implements OnInit, OnDestroy {
 
   getSelectedCNInvoice(): any {
     if (!this.cnForm?.invoiceId || this.cnForm.invoiceId === 0) return null;
-    return this.invoices.find((i: any) => i.id == this.cnForm.invoiceId) || this.selectedCNInvoiceDetail;
+    return this.invoices.find((i: any) => String(i.id) === String(this.cnForm.invoiceId)) || this.selectedCNInvoiceDetail;
   }
 
   get filteredCNItems(): any[] {
@@ -1470,81 +1849,82 @@ export class BillingPage implements OnInit, OnDestroy {
     }
   }
 
-  onCNInvoiceChange(loadProducts = true) {
+  async onCNInvoiceChange(loadProducts = true) {
     this.cnProductSearchTerm = '';
     if (this.cnForm.invoiceId && this.cnForm.invoiceId != 0) {
-      // 优先从已加载的发票列表提取（离线秒开且能查看明细）
-      const localInv = this.invoices.find((i: any) => String(i.id) === String(this.cnForm.invoiceId));
-      if (localInv) {
-        this.selectedCNInvoiceDetail = localInv;
-        const cid = localInv.customerId || (localInv.customer ? localInv.customer.id : 0);
+      // 1. 优先从内存或离线缓存中提取（离线秒开且能查看完整明细与商品）
+      let localInv = this.invoices.find((i: any) => String(i.id) === String(this.cnForm.invoiceId));
+      if (!localInv || !localInv.items || localInv.items.length === 0) {
+        if (this.selectedCNInvoiceDetail && String(this.selectedCNInvoiceDetail.id) === String(this.cnForm.invoiceId)) {
+          localInv = this.selectedCNInvoiceDetail;
+        }
+      }
+      if (!localInv || !localInv.items || localInv.items.length === 0) {
+        const pendingCNInv = await this.offlineStorage.getCache<any>('pending_cn_invoice');
+        if (pendingCNInv && String(pendingCNInv.id) === String(this.cnForm.invoiceId)) {
+          localInv = pendingCNInv;
+        }
+      }
+      if (!localInv || !localInv.items || localInv.items.length === 0) {
+        const cachedDetail = await this.offlineStorage.getCache<any>('inv_detail_' + this.cnForm.invoiceId);
+        if (cachedDetail) {
+          localInv = cachedDetail;
+        }
+      }
+
+      const applyInvoiceData = (inv: any, shouldLoadProds: boolean) => {
+        if (!inv) return;
+        this.selectedCNInvoiceDetail = inv;
+        const cid = inv.customerId || (inv.customer ? inv.customer.id : 0);
         if (cid) {
           this.cnForm.customerId = Number(cid);
           this.loadCustomerProductPrices(Number(cid));
         }
-        const sourceItems = localInv.items || localInv.Items || [];
-        if (loadProducts && sourceItems.length > 0) {
+        const sourceItems = inv.items || inv.Items || [];
+        if (shouldLoadProds && sourceItems.length > 0) {
           this.cnForm.items = sourceItems.map((item: any) => {
-            const remainingQty = (Number(item.quantity) || 1) - (Number(item.returnedQuantity) || 0);
+            const qty = Number(item.quantity ?? item.Quantity ?? 1) || 1;
+            const retQty = Number(item.returnedQuantity ?? item.ReturnedQuantity ?? 0) || 0;
+            const remainingQty = Math.max(1, qty - retQty);
+            const unitPrice = Number(item.unitPrice ?? item.UnitPrice ?? item.price ?? 0);
             return {
-              productId: item.productId,
-              productName: item.productName || this.getProductName(item.productId),
-              unitPrice: Number(item.unitPrice || item.price || 0),
-              maxQuantity: Math.max(1, remainingQty),
-              returnedQuantity: item.returnedQuantity || 0,
+              productId: item.productId ?? item.ProductId ?? 0,
+              productName: item.productName || item.ProductName || this.getProductName(item.productId ?? item.ProductId),
+              unitPrice: unitPrice,
+              maxQuantity: remainingQty,
+              returnedQuantity: retQty,
               returnQuantity: null,
               returnToStock: false
             };
           });
-        } else if (!loadProducts) {
+        } else if (!shouldLoadProds) {
           this.cnForm.items = [];
         }
         this.cdr.detectChanges();
+      };
+
+      if (localInv) {
+        applyInvoiceData(localInv, loadProducts);
       }
 
-      this.api.getInvoiceDetails(this.cnForm.invoiceId).subscribe({
-        next: (res: any) => {
-          if (!res) return;
-          this.selectedCNInvoiceDetail = res;
-          const cid = res.customerId || (res.customer ? res.customer.id : 0);
-          if (cid) {
-            this.cnForm.customerId = Number(cid);
-            this.loadCustomerProductPrices(Number(cid));
-          }
-          if (loadProducts) {
-            this.cnForm.items = [];
-            const fetchedItems = res.items || res.Items || [];
-            if (fetchedItems.length > 0) {
-              fetchedItems.forEach((item: any) => {
-                const remainingQty = (Number(item.quantity) || 1) - (Number(item.returnedQuantity) || 0);
-                if (remainingQty > 0) {
-                  this.cnForm.items.push({
-                    productId: item.productId,
-                    productName: item.productName || this.getProductName(item.productId),
-                    unitPrice: Number(item.unitPrice || item.price || 0),
-                    maxQuantity: remainingQty,
-                    returnedQuantity: item.returnedQuantity || 0,
-                    returnQuantity: null,
-                    returnToStock: false
-                  });
-                }
-              });
+      const isPureOffline = String(this.cnForm.invoiceId).startsWith('inv_') || 
+                            String(this.cnForm.invoiceId).startsWith('offline_') || 
+                            localInv?.isOffline;
+
+      if (this.api.isOnline() && !isPureOffline) {
+        this.api.getInvoiceDetails(this.cnForm.invoiceId).subscribe({
+          next: (res: any) => {
+            if (res) {
+              applyInvoiceData(res, loadProducts);
             }
-          } else {
-            this.cnForm.items = [];
+          },
+          error: () => {
+            if (localInv) {
+              applyInvoiceData(localInv, loadProducts);
+            }
           }
-          this.cdr.detectChanges();
-        },
-        error: () => {
-          if (!this.selectedCNInvoiceDetail && localInv) {
-            this.selectedCNInvoiceDetail = localInv;
-          }
-          if (!loadProducts) {
-            this.cnForm.items = [];
-          }
-          this.cdr.detectChanges();
-        }
-      });
+        });
+      }
     } else {
       this.selectedCNInvoiceDetail = null;
       this.cnForm.items = [];
@@ -1639,7 +2019,7 @@ export class BillingPage implements OnInit, OnDestroy {
   }
 
   getBulkTotalAmount(): number {
-    return this.selectedInvoicesList.reduce((sum, inv) => sum + (inv.totalAmount ?? inv.TotalAmount ?? 0), 0);
+    return this.selectedInvoicesList.reduce((sum, inv) => sum + this.getInvoiceDisplayTotal(inv), 0);
   }
 
   getBulkPaidAmount(): number {
@@ -1651,25 +2031,28 @@ export class BillingPage implements OnInit, OnDestroy {
   }
 
   getBulkCNExcess(): number {
-    const rawBalance = this.selectedInvoicesList.reduce((sum, inv) => sum + (inv.Balance ?? inv.balance ?? 0), 0);
-    const cnTotal = this.getBulkCreditNotes();
-    const excess = Math.round((cnTotal - rawBalance + Number.EPSILON) * 100) / 100;
-    return excess > 0.01 ? excess : 0;
+    const excess = this.selectedInvoicesList.reduce((sum, inv) => {
+      const grossBal = (Number(inv.totalAmount || inv.TotalAmount || 0)) - (Number(inv.paidAmount || inv.PaidAmount || 0)) - (Number(inv.creditUsed || inv.CreditUsed || 0));
+      const cn = Number(inv.CNTotal ?? inv.cnTotal ?? 0);
+      return sum + Math.max(0, cn - grossBal);
+    }, 0);
+    return Math.round((excess + Number.EPSILON) * 100) / 100;
   }
 
   getInvoiceCNExcess(inv: any): number {
-    const bal = inv.balance ?? inv.Balance ?? (Number(inv.totalAmount || 0) - Number(inv.paidAmount || 0));
-    const cn = inv.CNTotal ?? inv.cnTotal ?? 0;
-    const excess = Math.round((cn - bal + Number.EPSILON) * 100) / 100;
+    const grossBal = (Number(inv.totalAmount || inv.TotalAmount || 0)) - (Number(inv.paidAmount || inv.PaidAmount || 0)) - (Number(inv.creditUsed || inv.CreditUsed || 0));
+    const cn = Number(inv.CNTotal ?? inv.cnTotal ?? 0);
+    const excess = Math.round((cn - grossBal + Number.EPSILON) * 100) / 100;
     return excess > 0.01 ? excess : 0;
   }
 
   getInvoiceNetAmount(inv: any): number {
-    const bal = inv.balance ?? inv.Balance ?? (Number(inv.totalAmount || 0) - Number(inv.paidAmount || 0));
-    const cn = inv.CNTotal ?? inv.cnTotal ?? 0;
-    const cred = inv.CreditUsed ?? inv.creditUsed ?? 0;
-    const net = Math.round((bal - cn - cred + Number.EPSILON) * 100) / 100;
-    return net > 0.01 ? net : 0;
+    const tot = Number(inv.totalAmount || inv.TotalAmount || 0);
+    const paid = Number(inv.paidAmount || inv.PaidAmount || 0);
+    const cred = Number(inv.creditUsed || inv.CreditUsed || 0);
+    const cn = Number(inv.cnTotal || inv.CNTotal || 0);
+    const net = Math.max(0, tot - paid - cred - cn);
+    return Math.round((net + Number.EPSILON) * 100) / 100;
   }
 
   getBulkCreditUsed(): number {
@@ -1677,10 +2060,16 @@ export class BillingPage implements OnInit, OnDestroy {
   }
 
   getBulkBalance(): number {
-    const rawBalance = this.selectedInvoicesList.reduce((sum, inv) => sum + (inv.Balance ?? inv.balance ?? 0), 0);
-    const cnTotal = this.getBulkCreditNotes();
-    const netBal = Math.round((rawBalance - cnTotal + Number.EPSILON) * 100) / 100;
-    return netBal > 0.01 ? netBal : 0;
+    // inv.Balance / inv.balance 已经减去了 CNTotal、PaidAmount 与 CreditUsed
+    // 因此不能再减 cnTotal，否则 CN 会被扣除两次
+    const netBal = this.selectedInvoicesList.reduce((sum, inv) => {
+      let b = inv.Balance ?? inv.balance;
+      if (b === undefined || b === null) {
+        b = Math.max(0, (Number(inv.totalAmount || inv.TotalAmount || 0)) - (Number(inv.paidAmount || inv.PaidAmount || 0)) - (Number(inv.creditUsed || inv.CreditUsed || 0)) - (Number(inv.CNTotal || inv.cnTotal || 0)));
+      }
+      return sum + Number(b);
+    }, 0);
+    return Math.round((netBal + Number.EPSILON) * 100) / 100;
   }
 
   useCreditNote(cn: any) {

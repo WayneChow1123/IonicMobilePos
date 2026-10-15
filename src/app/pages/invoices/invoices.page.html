@@ -25,7 +25,66 @@
           </div>
         </div>
       </div>
-      <ion-searchbar [(ngModel)]="searchTerm" (ionInput)="filterInvoices()" placeholder="Search DOC NO or customer..." style="--background:#fff;--border-radius:16px;--box-shadow:none;padding:0;margin-bottom:0;"></ion-searchbar>
+      <div class="invoices-search-wrapper" style="position:relative; margin-bottom: 4px;">
+        <ion-searchbar [(ngModel)]="searchTerm"
+          (ionInput)="onInvoiceSearchInput()"
+          (ionClear)="clearInvoiceSearch()"
+          placeholder="Search DOC NO or customer..."
+          style="--background:#fff;--border-radius:16px;--box-shadow:none;padding:0;margin-bottom:0;">
+        </ion-searchbar>
+
+        <!-- Active Keyword Filter Chip (when a keyword is selected) -->
+        <div class="active-keyword-chip-bar" *ngIf="selectedSearchKeyword">
+          <div class="chip-content">
+            <ion-icon name="funnel-outline"></ion-icon>
+            <span class="chip-label">Filtered by Keyword:</span>
+            <strong class="chip-val">{{ selectedSearchKeyword }}</strong>
+          </div>
+          <button type="button" class="chip-close-btn" (click)="clearSelectedKeyword()" title="Clear keyword filter">
+            <ion-icon name="close-circle"></ion-icon>
+          </button>
+        </div>
+
+        <!-- Keyword Suggestions Dropdown Panel -->
+        <div class="search-suggestions-panel" *ngIf="showSearchSuggestions && searchSuggestions.length > 0">
+          <div class="suggestions-header">
+            <div class="s-head-title">
+              <ion-icon name="sparkles-outline"></ion-icon>
+              <span>Select Keyword ({{ searchSuggestions.length }})</span>
+            </div>
+            <button type="button" class="close-suggestions-btn" (click)="showSearchSuggestions = false">
+              <ion-icon name="close-outline"></ion-icon>
+            </button>
+          </div>
+          <div class="suggestions-list">
+            <div *ngFor="let s of searchSuggestions" class="suggestion-item" (click)="selectKeywordSuggestion(s)">
+              <div class="suggestion-icon" [class.customer]="s.type === 'customer'" [class.doc]="s.type === 'docNo'">
+                <ion-icon [name]="s.type === 'customer' ? 'business-outline' : 'receipt-outline'"></ion-icon>
+              </div>
+              <div class="suggestion-info">
+                <div class="suggestion-title">{{ s.displayTitle }}</div>
+                <div class="suggestion-sub">{{ s.subtitle }}</div>
+              </div>
+              <div class="suggestion-right">
+                <span class="suggestion-badge" *ngIf="s.count > 0">{{ s.count }} inv</span>
+                <ion-icon name="chevron-forward-outline" class="suggestion-arrow"></ion-icon>
+              </div>
+            </div>
+
+            <!-- View All Invoices Option -->
+            <div class="suggestion-item view-all" (click)="viewAllSearchMatches()">
+              <div class="suggestion-icon all">
+                <ion-icon name="search-outline"></ion-icon>
+              </div>
+              <div class="suggestion-info">
+                <div class="suggestion-title">Show all invoices for "{{ searchTerm }}"</div>
+                <div class="suggestion-sub">Display all matching invoices without keyword filter</div>
+              </div>
+              <ion-icon name="arrow-forward-outline" class="suggestion-arrow"></ion-icon>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
     <div class="scroll-content" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:20px;">
       <div class="date-filter-card">
@@ -64,6 +123,15 @@
     </div>
 
     <div *ngIf="!isLoading">
+      <!-- Keyword Selection Prompt -->
+      <div *ngIf="showSearchSuggestions && !selectedSearchKeyword && searchSuggestions.length > 0" class="keyword-select-prompt">
+        <div class="prompt-icon-bubble">
+          <ion-icon name="search-outline"></ion-icon>
+        </div>
+        <div class="prompt-title">Please Select a Keyword Above</div>
+        <div class="prompt-desc">Tap a customer or document number above to view all its invoices.</div>
+      </div>
+
       <div *ngFor="let invoice of displayedInvoices" class="list-item">
         <div class="item-info" (click)="openEditModal(invoice)">
           <div class="item-avatar" [class.paid]="invoice.status==='Paid'" [class.partial]="invoice.status==='Partial'" [class.unpaid]="!invoice.status || invoice.status==='Unpaid'">
@@ -72,7 +140,6 @@
           <div class="item-info-content">
             <div class="info-left">
               <div class="item-name-row">
-                <span *ngIf="invoice.hasCreditNote || invoice.HasCreditNote || (invoice.CNTotal || invoice.cnTotal || 0) > 0" class="cn-badge">CN</span>
                 <span class="item-name">{{ getInvoiceCustomerName(invoice) }}</span>
               </div>
               <div class="item-sub">{{ getCustomerCode(invoice) }}</div>
@@ -84,6 +151,7 @@
               <span class="status-badge" [class.paid]="invoice.status==='Paid'" [class.partial]="invoice.status==='Partial'" [class.unpaid]="invoice.status==='Unpaid'">{{ invoice.status || 'Unpaid' }}</span>
               <div class="amount-box">
                 <span class="paid-amount" style="color: #e67e22;" *ngIf="(invoice.CNTotal || invoice.cnTotal || 0) > 0">CN: - RM {{ (invoice.CNTotal || invoice.cnTotal) | number:'1.2-2' }}</span>
+                <span class="paid-amount" style="color: #e67e22;" *ngIf="(invoice.hasCreditNote || invoice.HasCreditNote) && !(invoice.CNTotal || invoice.cnTotal || 0)">CN</span>
                 <span class="item-amount">RM {{ getInvoiceDisplayTotal(invoice) | number:'1.2-2' }}</span>
               </div>
             </div>
@@ -100,7 +168,7 @@
         <div class="gs-left">
           <div class="gs-label">
             <span class="gs-dot"></span>
-            PAID NET TOTAL
+            NET TOTAL
           </div>
           <div class="gs-amount">
             <span class="gs-currency">RM</span> {{ getGrandNetTotal() | number:'1.2-2' }}
@@ -161,7 +229,7 @@
     <!-- Doc No Row -->
     <div class="ni-doc-row">
       <span class="ni-label">DOC NO:</span>
-      <span class="ni-value">S001-2026040303</span>
+      <span class="ni-value"># {{ getNewDocNoPreview() }}</span>
     </div>
 
     <!-- Scroll Content -->
