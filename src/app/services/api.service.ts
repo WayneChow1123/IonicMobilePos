@@ -1515,8 +1515,9 @@ export class ApiService {
   }
   getInvoiceDetails(id: any): Observable<any> {
     const fetchOfflineDetail = async () => {
-      const cached = await this.offlineStorage.getCache<any>('inv_detail_' + id);
-      if (cached) {
+      let cached = await this.offlineStorage.getCache<any>('inv_detail_' + id);
+      const cachedItems = cached?.items || cached?.Items;
+      if (cached && Array.isArray(cachedItems) && cachedItems.length > 0) {
         await this.applyOfflineCreditNotesToInvoicesList([cached]);
         return cached;
       }
@@ -1541,16 +1542,31 @@ export class ApiService {
             isOffline: true
           };
           await this.applyOfflineCreditNotesToInvoicesList([detailObj]);
+          if (Array.isArray(detailObj.items) && detailObj.items.length > 0) {
+            await this.offlineStorage.setCache('inv_detail_' + id, detailObj);
+          }
           return detailObj;
         }
       } catch { }
 
+      // 检查离线 invoices_list 缓存
       const cachedInvoices = await this.offlineStorage.getCache<any[]>('invoices_list') || [];
       const found = cachedInvoices.find((i: any) => String(i.id) === String(id)) || null;
-      if (found) {
-        await this.applyOfflineCreditNotesToInvoicesList([found]);
+      const foundItems = found?.items || found?.Items;
+      if (found && Array.isArray(foundItems) && foundItems.length > 0) {
+        const merged = { ...(cached || {}), ...found, items: foundItems };
+        await this.applyOfflineCreditNotesToInvoicesList([merged]);
+        await this.offlineStorage.setCache('inv_detail_' + id, merged);
+        return merged;
       }
-      return found;
+
+      // 若均无 items，则返回已有基础信息（避免完全无数据）
+      const fallback = cached || found;
+      if (fallback) {
+        await this.applyOfflineCreditNotesToInvoicesList([fallback]);
+        return fallback;
+      }
+      return null;
     };
 
     if (!this.isOnline()) {
@@ -1563,7 +1579,10 @@ export class ApiService {
         if (res) {
           this.applyInvoiceOverrideToItem(res);
           res.docNo = formatDocNo(res);
-          this.offlineStorage.setCache('inv_detail_' + id, res);
+          const resItems = res.items || res.Items;
+          if (Array.isArray(resItems) && resItems.length > 0) {
+            this.offlineStorage.setCache('inv_detail_' + id, res);
+          }
         }
         return res;
       }),

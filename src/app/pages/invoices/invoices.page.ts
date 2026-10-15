@@ -1509,7 +1509,7 @@ export class InvoicesPage implements OnInit, OnDestroy {
       if ((!details.items || details.items.length === 0) && (!details.Items || details.Items.length === 0)) {
         const cachedInvoices = await this.offlineStorage.getCache<any[]>('invoices_list') || [];
         const found = cachedInvoices.find((i: any) => String(i.id) === String(invoice.id));
-        if (found && (found.items || found.Items)) {
+        if (found && (found.items || found.Items) && (found.items || found.Items).length > 0) {
           details = { ...details, items: found.items || found.Items };
         }
       }
@@ -1519,10 +1519,16 @@ export class InvoicesPage implements OnInit, OnDestroy {
         try {
           const pending = await this.localDb.getPendingOrders();
           const match = pending.find((o: any) => String(o.clientId) === String(invoice.id) || String(o.serverId) === String(invoice.id));
-          if (match && match.items) {
+          if (match && match.items && match.items.length > 0) {
             details = { ...details, items: match.items };
           }
         } catch { }
+      }
+
+      // 自愈缓存：若提取到 items，立即修补 inv_detail_ 离线缓存
+      const resolvedFallbackItems = details.items || details.Items;
+      if (Array.isArray(resolvedFallbackItems) && resolvedFallbackItems.length > 0) {
+        await this.offlineStorage.setCache('inv_detail_' + invoice.id, details);
       }
 
       const custId = details.customerId ?? details.CustomerId ?? invoice.customerId ?? invoice.CustomerId ?? 0;
@@ -1566,12 +1572,42 @@ export class InvoicesPage implements OnInit, OnDestroy {
 
     this.isLoading = true;
     this.api.getInvoiceDetails(invoice.id).subscribe({
-      next: (res: any) => {
+      next: async (res: any) => {
         this.isLoading = false;
         if (res && res.creditNotes) {
           res.creditNotes = this.mergeInvoiceCreditNotes(res.creditNotes);
         }
-        const details = res || invoice;
+        let details = res || invoice;
+        let rawSuccessItems = details.items || details.Items;
+
+        // 若 res 中无 items，但外部 invoice (列表卡片) 含有 items，立即回填
+        if ((!rawSuccessItems || rawSuccessItems.length === 0) && (invoice.items || invoice.Items)) {
+          details = { ...details, items: invoice.items || invoice.Items };
+          rawSuccessItems = details.items;
+        }
+
+        // 若仍无 items，从 cached invoices_list 中深入检索
+        if (!rawSuccessItems || rawSuccessItems.length === 0) {
+          const cachedInvoices = await this.offlineStorage.getCache<any[]>('invoices_list') || [];
+          const found = cachedInvoices.find((i: any) => String(i.id) === String(invoice.id));
+          if (found && (found.items || found.Items) && (found.items || found.Items).length > 0) {
+            details = { ...details, items: found.items || found.Items };
+            rawSuccessItems = details.items;
+          }
+        }
+
+        // 若仍无 items，从 localDb 中检索
+        if (!rawSuccessItems || rawSuccessItems.length === 0) {
+          try {
+            const pending = await this.localDb.getPendingOrders();
+            const match = pending.find((o: any) => String(o.clientId) === String(invoice.id) || String(o.serverId) === String(invoice.id));
+            if (match && match.items && match.items.length > 0) {
+              details = { ...details, items: match.items };
+              rawSuccessItems = details.items;
+            }
+          } catch { }
+        }
+
         const custId = details.customerId ?? details.CustomerId ?? invoice.customerId ?? invoice.CustomerId ?? 0;
         this.selectedCustomerDetail = this.customers.find(c => c.id === custId);
         this.selectedInvoice = { ...details, customerName: details.customerName || invoice.customerName, customerId: custId };
@@ -1580,7 +1616,6 @@ export class InvoicesPage implements OnInit, OnDestroy {
         if (customerId) {
           this.loadCustomerProductPrices(customerId);
         }
-        const rawSuccessItems = (details.items || details.Items);
         const hasSuccessItems = Array.isArray(rawSuccessItems) && rawSuccessItems.length > 0;
         const invNum = details.docNo || details.invoiceNumber || invoice.docNo || invoice.invoiceNumber || this.getDocNo(details);
         const term = details.termType || details.TermType || invoice.termType || 'CASH SALE';
@@ -1639,8 +1674,10 @@ export class InvoicesPage implements OnInit, OnDestroy {
           matchingInList.totalAmount = tot;
         }
 
-        // 保存至本地离线缓存
-        this.offlineStorage.setCache('inv_detail_' + invoice.id, details);
+        // 自愈保存至本地离线缓存（仅当存在 items 时保存，避免覆盖有效数据）
+        if (hasSuccessItems) {
+          await this.offlineStorage.setCache('inv_detail_' + invoice.id, details);
+        }
 
         this.showModal = true;
         this.cdr.detectChanges();
