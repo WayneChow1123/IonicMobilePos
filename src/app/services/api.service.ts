@@ -102,14 +102,31 @@ export class ApiService {
       const cnNumber = 'CN-OFFLINE-' + String(Date.now()).slice(-6);
       const totalAmount = (data?.items || []).reduce((sum: number, it: any) => sum + ((Number(it.quantity) || 0) * (Number(it.unitPrice) || 0)), 0);
 
+      let custName = extraInfo?.customerName || '';
+      let custId = Number(extraInfo?.customerId || 0);
+
+      if (!custName || !custId) {
+        const cachedInvoices = await this.offlineStorage.getCache<any[]>('invoices_list') || [];
+        const inv = cachedInvoices.find((i: any) => String(i.id) === String(invoiceId) || (extraInfo?.invoiceNumber && (i.invoiceNumber === extraInfo.invoiceNumber || i.docNo === extraInfo.invoiceNumber)));
+        if (inv) {
+          if (!custId) custId = Number(inv.customerId || inv.CustomerId || (inv.customer ? inv.customer.id : 0)) || 0;
+          if (!custName) custName = inv.customerName || inv.CustomerName || (inv.customer ? inv.customer.name : '');
+        }
+      }
+      if ((!custName || custName.startsWith('Customer #')) && custId) {
+        const cachedCusts = await this.offlineStorage.getCache<any[]>('customers') || [];
+        const c = cachedCusts.find((cust: any) => String(cust.id) === String(custId));
+        if (c && c.name) custName = c.name;
+      }
+
       const cached = await this.offlineStorage.getCache<any[]>('credit_notes_list') || [];
       const newEntry = {
         id: offlineId,
         cnNumber,
         invoiceId,
         invoiceNumber: extraInfo?.invoiceNumber || '',
-        customerId: extraInfo?.customerId || 0,
-        customerName: extraInfo?.customerName || '',
+        customerId: custId,
+        customerName: custName,
         amount: totalAmount,
         createdAt: new Date().toISOString(),
         reason: data?.reason || '',
@@ -126,8 +143,8 @@ export class ApiService {
         data,
         offlineId,
         cnNumber,
-        customerName: extraInfo?.customerName,
-        customerId: extraInfo?.customerId
+        customerName: custName,
+        customerId: custId
       }, offlineId);
 
       await this.applyOfflineCNDeductionToInvoice(newEntry);
@@ -136,7 +153,7 @@ export class ApiService {
         message: 'Credit Note created offline (Queued for sync)',
         id: offlineId,
         cnNumber,
-        customerName: extraInfo?.customerName,
+        customerName: custName,
         amount: totalAmount,
         isOffline: true
       };
@@ -162,14 +179,36 @@ export class ApiService {
       const targetInvId = extraInfo?.invoiceId || data?.preferredInvoiceId || 0;
       const targetInvDoc = extraInfo?.invoiceNumber || '';
 
+      let custId = Number(customerId || extraInfo?.customerId || 0);
+      let custName = extraInfo?.customerName || '';
+
+      if ((!custName || custName.startsWith('Customer #')) && custId) {
+        const cachedCusts = await this.offlineStorage.getCache<any[]>('customers') || [];
+        const c = cachedCusts.find((cust: any) => String(cust.id) === String(custId));
+        if (c && c.name) custName = c.name;
+      }
+      if (!custName && (targetInvId || targetInvDoc)) {
+        const cachedInvoices = await this.offlineStorage.getCache<any[]>('invoices_list') || [];
+        const inv = cachedInvoices.find((i: any) => (targetInvId && String(i.id) === String(targetInvId)) || (targetInvDoc && (i.invoiceNumber === targetInvDoc || i.docNo === targetInvDoc)));
+        if (inv) {
+          if (!custId) custId = Number(inv.customerId || inv.CustomerId || 0) || 0;
+          custName = inv.customerName || inv.CustomerName || (inv.customer ? inv.customer.name : '');
+        }
+      }
+      if ((!custName || custName.startsWith('Customer #')) && custId) {
+        const cachedCusts = await this.offlineStorage.getCache<any[]>('customers') || [];
+        const c = cachedCusts.find((cust: any) => String(cust.id) === String(custId));
+        if (c && c.name) custName = c.name;
+      }
+
       const cached = await this.offlineStorage.getCache<any[]>('credit_notes_list') || [];
       const newEntry = {
         id: offlineId,
         cnNumber,
         invoiceId: targetInvId,
         invoiceNumber: targetInvDoc,
-        customerId,
-        customerName: extraInfo?.customerName || '',
+        customerId: custId,
+        customerName: custName,
         amount: totalAmount,
         createdAt: new Date().toISOString(),
         reason: data?.reason || '',
@@ -181,11 +220,11 @@ export class ApiService {
       await this.offlineStorage.setCache('credit_notes_list', [newEntry, ...filteredList]);
 
       await this.offlineStorage.enqueue('CREATE_GLOBAL_CN', {
-        customerId,
+        customerId: custId,
         data,
         offlineId,
         cnNumber,
-        customerName: extraInfo?.customerName,
+        customerName: custName,
         invoiceId: targetInvId,
         invoiceNumber: targetInvDoc
       }, offlineId);
@@ -198,7 +237,7 @@ export class ApiService {
         message: 'Global Credit Note created offline (Queued for sync)',
         id: offlineId,
         cnNumber,
-        customerName: extraInfo?.customerName,
+        customerName: custName,
         amount: totalAmount,
         isOffline: true
       };
@@ -339,18 +378,31 @@ export class ApiService {
   }
 
   getAllCreditNotes(): Observable<any> {
-    const mapOfflineCNs = (queue: any[]) => {
+    const mapOfflineCNs = (queue: any[], cachedCusts: any[] = [], cachedInvs: any[] = []) => {
       return queue
         .filter(q => q.type === 'CREATE_CN' || q.type === 'CREATE_GLOBAL_CN')
         .map(q => {
           const items = q.payload?.data?.items || [];
           const totalAmount = items.reduce((sum: number, it: any) => sum + ((Number(it.quantity) || 0) * (Number(it.unitPrice) || 0)), 0);
+          let custName = q.payload?.customerName || '';
+          const cid = q.payload?.customerId || 0;
+          if ((!custName || custName.startsWith('Customer #')) && cid && cachedCusts.length) {
+            const foundC = cachedCusts.find(c => String(c.id) === String(cid));
+            if (foundC && foundC.name) custName = foundC.name;
+          }
+          if ((!custName || custName.startsWith('Customer #')) && (q.payload?.invoiceId || q.payload?.invoiceNumber) && cachedInvs.length) {
+            const foundInv = cachedInvs.find(i => String(i.id) === String(q.payload.invoiceId) || (q.payload.invoiceNumber && (i.invoiceNumber === q.payload.invoiceNumber || i.docNo === q.payload.invoiceNumber)));
+            if (foundInv) {
+              const invCust = foundInv.customerName || foundInv.CustomerName || (foundInv.customer ? foundInv.customer.name : '');
+              if (invCust) custName = invCust;
+            }
+          }
           return {
             id: q.id,
             cnNumber: q.payload?.cnNumber || ('CN-OFFLINE-' + q.id),
             invoiceId: q.payload?.invoiceId || 0,
-            customerId: q.payload?.customerId || 0,
-            customerName: q.payload?.customerName || '',
+            customerId: cid,
+            customerName: custName,
             amount: totalAmount,
             createdAt: new Date(q.createdAt).toISOString(),
             reason: q.payload?.data?.reason || '',
@@ -364,7 +416,9 @@ export class ApiService {
     const fetchOfflineFallback = async () => {
       const cached = await this.offlineStorage.getCache<any[]>('credit_notes_list') || [];
       const queue = await this.offlineStorage.getPendingQueue();
-      const offlineCNs = mapOfflineCNs(queue);
+      const cachedCusts = await this.offlineStorage.getCache<any[]>('customers') || [];
+      const cachedInvs = await this.offlineStorage.getCache<any[]>('invoices_list') || [];
+      const offlineCNs = mapOfflineCNs(queue, cachedCusts, cachedInvs);
       const deletedCNIds = queue
         .filter(q => q.type === 'DELETE_CN')
         .map(q => String(q.payload?.cnId));
@@ -380,6 +434,19 @@ export class ApiService {
         if (cnum && seenNumbers.has(cnum)) continue;
         if (cid) seenIds.add(cid);
         if (cnum) seenNumbers.add(cnum);
+
+        if ((!item.customerName || item.customerName.startsWith('Customer #')) && (item.customerId || item.CustomerId)) {
+          const custId = item.customerId || item.CustomerId;
+          const foundC = cachedCusts.find(c => String(c.id) === String(custId));
+          if (foundC && foundC.name) item.customerName = foundC.name;
+        }
+        if ((!item.customerName || item.customerName.startsWith('Customer #')) && (item.invoiceId || item.invoiceNumber)) {
+          const foundInv = cachedInvs.find(i => String(i.id) === String(item.invoiceId) || (item.invoiceNumber && (i.invoiceNumber === item.invoiceNumber || i.docNo === item.invoiceNumber)));
+          if (foundInv) {
+            const invCust = foundInv.customerName || foundInv.CustomerName || (foundInv.customer ? foundInv.customer.name : '');
+            if (invCust) item.customerName = invCust;
+          }
+        }
         uniqueList.push(item);
       }
       return uniqueList;
@@ -398,7 +465,9 @@ export class ApiService {
       }),
       switchMap((serverList: any) => from((async () => {
         const queue = await this.offlineStorage.getPendingQueue();
-        const offlineCNs = mapOfflineCNs(queue);
+        const cachedCusts = await this.offlineStorage.getCache<any[]>('customers') || [];
+        const cachedInvs = await this.offlineStorage.getCache<any[]>('invoices_list') || [];
+        const offlineCNs = mapOfflineCNs(queue, cachedCusts, cachedInvs);
         const deletedCNIds = queue
           .filter(q => q.type === 'DELETE_CN')
           .map(q => String(q.payload?.cnId));
@@ -414,6 +483,19 @@ export class ApiService {
           if (cnum && seenNumbers.has(cnum)) continue;
           if (cid) seenIds.add(cid);
           if (cnum) seenNumbers.add(cnum);
+
+          if ((!item.customerName || item.customerName.startsWith('Customer #')) && (item.customerId || item.CustomerId)) {
+            const custId = item.customerId || item.CustomerId;
+            const foundC = cachedCusts.find(c => String(c.id) === String(custId));
+            if (foundC && foundC.name) item.customerName = foundC.name;
+          }
+          if ((!item.customerName || item.customerName.startsWith('Customer #')) && (item.invoiceId || item.invoiceNumber)) {
+            const foundInv = cachedInvs.find(i => String(i.id) === String(item.invoiceId) || (item.invoiceNumber && (i.invoiceNumber === item.invoiceNumber || i.docNo === item.invoiceNumber)));
+            if (foundInv) {
+              const invCust = foundInv.customerName || foundInv.CustomerName || (foundInv.customer ? foundInv.customer.name : '');
+              if (invCust) item.customerName = invCust;
+            }
+          }
           uniqueList.push(item);
         }
         return uniqueList;
@@ -1101,7 +1183,7 @@ export class ApiService {
     }
 
     return this.http.post(this.baseUrl + '/Invoice/CreateInvoice/invoices', data).pipe(
-      timeout(4000),
+      timeout(12000),
       tap((res: any) => {
         this.clearCustomerCache();
         const serverId = res?.invoiceId || res?.id;
@@ -1458,17 +1540,31 @@ export class ApiService {
         }
       }
       const seenIds = new Set<string>();
-      const seenDocs = new Set<string>();
-      let result: any[] = [];
-      for (const inv of combined) {
-        const idKey = String(inv.id || '');
-        const docKey = String(inv.invoiceNumber || inv.docNo || '').trim();
-        if (idKey && seenIds.has(idKey)) continue;
-        if (docKey && !docKey.startsWith('INV-OFFLINE') && !docKey.startsWith('OFFLINE') && seenDocs.has(docKey)) continue;
-        if (idKey) seenIds.add(idKey);
-        if (docKey && !docKey.startsWith('INV-OFFLINE') && !docKey.startsWith('OFFLINE')) seenDocs.add(docKey);
-        result.push(inv);
+      const serverInvNumbers = new Set<string>();
+      const uniqueList: any[] = [];
+
+      for (const inv of cached) {
+        if (!inv || !inv.id) continue;
+        const idKey = String(inv.id);
+        if (seenIds.has(idKey)) continue;
+        if (deletedIds.includes(inv.id) || deletedIds.includes(idKey)) continue;
+        seenIds.add(idKey);
+        if (inv.invoiceNumber) serverInvNumbers.add(String(inv.invoiceNumber).trim().toLowerCase());
+        if (inv.offlineReferenceId) serverInvNumbers.add(String(inv.offlineReferenceId).trim().toLowerCase());
+        uniqueList.push(inv);
       }
+
+      for (const pending of pendingInvoices) {
+        if (!pending || !pending.id) continue;
+        const pId = String(pending.id);
+        const pNum = String(pending.invoiceNumber || '').trim().toLowerCase();
+        if (seenIds.has(pId)) continue;
+        if (pNum && serverInvNumbers.has(pNum)) continue;
+        if (deletedIds.includes(pending.id) || deletedIds.includes(pId)) continue;
+        seenIds.add(pId);
+        uniqueList.push(pending);
+      }
+      let result: any[] = uniqueList;
       if (params?.customerId) {
         result = result.filter(inv => Number(inv.customerId) === Number(params.customerId));
       }
@@ -1483,7 +1579,7 @@ export class ApiService {
     }
 
     return this.http.get(this.baseUrl + '/Invoice/GetInvoices/invoices', { params }).pipe(
-      timeout(5000),
+      timeout(12000),
       tap((res: any) => {
         if (Array.isArray(res) && !params?.customerId) {
           this.applyInvoiceOverrides(res);
@@ -1696,10 +1792,24 @@ export class ApiService {
     }
 
     return this.http.patch(this.baseUrl + '/Invoice/UpdateInvoice/invoices/' + id, data).pipe(
-      timeout(4000),
+      timeout(10000),
       tap(() => {
         this.clearCustomerCache();
         updateCachesLocally();
+        try {
+          const map = this.getInvoiceOverridesMap();
+          if (map[String(id)]) {
+            delete map[String(id)];
+            localStorage.setItem(this.INV_DATA_OVERRIDES_KEY, JSON.stringify(map));
+          }
+          const custOverrides = localStorage.getItem('invoice_customer_overrides');
+          if (custOverrides) {
+            const cMap = JSON.parse(custOverrides);
+            delete cMap[id];
+            delete cMap[String(id)];
+            localStorage.setItem('invoice_customer_overrides', JSON.stringify(cMap));
+          }
+        } catch { }
       }),
       catchError((err: any) => {
         console.warn('[Offline Fallback] Update invoice network failed, falling back to offline update:', err);

@@ -44,6 +44,16 @@ export class AlertService {
     });
   }
 
+  alert(title: string, text: string = '', icon: 'success' | 'error' | 'warning' | 'info' = 'warning'): Promise<any> {
+    return Swal.fire({
+      title: title,
+      text: text,
+      icon: icon,
+      confirmButtonColor: '#1a1a1a',
+      confirmButtonText: 'OK'
+    });
+  }
+
   confirm(
     title: string,
     text: string = "You won't be able to revert this!",

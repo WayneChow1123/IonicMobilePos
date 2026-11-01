@@ -381,18 +381,30 @@ export class BillingPage implements OnInit, OnDestroy {
 
   selectHistoryItem(item: any) {
     this.cnForm.customerId = Number(item.customerId) || this.cnForm.customerId;
+    if (!this.cnForm.customerName) {
+      const c = this.customers?.find((cust: any) => String(cust.id) === String(this.cnForm.customerId));
+      if (c && c.name) this.cnForm.customerName = c.name;
+    }
     this.showHistoryModal = false;
     this.clearHistorySearch();
+
+    let price = Number(item.unitPrice ?? item.UnitPrice ?? item.price ?? 0);
+    if (!price) {
+      const custPrice = this.getCustomerSpecialPrice(item.productId);
+      price = this.getDiscountedPrice(custPrice != null ? custPrice : this.getOriginalUnitPrice(item.productId));
+    }
 
     // Check if item already exists in the list
     const found = this.cnForm.items.find((i: any) => i.productId === item.productId);
     if (found) {
-      found.returnQuantity += 1;
+      found.returnQuantity = (Number(found.returnQuantity) || 0) + 1;
       if (found.returnQuantity > found.maxQuantity) found.returnQuantity = found.maxQuantity;
+      if (!found.unitPrice) found.unitPrice = price;
     } else {
       this.cnForm.items.push({
         productId: item.productId,
         productName: item.productName,
+        unitPrice: price,
         maxQuantity: item.remaining,
         returnedQuantity: item.totalReturned,
         returnQuantity: null,
@@ -640,12 +652,49 @@ export class BillingPage implements OnInit, OnDestroy {
           this.paymentForm.customerId = this.customers[0].id;
           this.loadInvoicesByCustomer(this.customers[0].id);
         }
+        if (this.creditNotes && this.creditNotes.length > 0) {
+          let updated = false;
+          for (const cn of this.creditNotes) {
+            if (!cn.customerName || cn.customerName.startsWith('Customer #') || cn.customerName === 'Customer #?') {
+              const cid = cn.customerId;
+              if (cid) {
+                const c = this.customers.find((cust: any) => String(cust.id) === String(cid));
+                if (c && c.name) {
+                  cn.customerName = c.name;
+                  updated = true;
+                }
+              }
+            }
+          }
+          if (updated) {
+            this.filterCreditNotes();
+            this.cdr.detectChanges();
+          }
+        }
       },
       error: async () => {
         const cached = await this.offlineStorage.getCache<any[]>('customers') || [];
         if (cached.length > 0 && (!this.customers || this.customers.length === 0)) {
           this.customers = cached;
           this.filteredCustomers = [...cached];
+          if (this.creditNotes && this.creditNotes.length > 0) {
+            let updated = false;
+            for (const cn of this.creditNotes) {
+              if (!cn.customerName || cn.customerName.startsWith('Customer #') || cn.customerName === 'Customer #?') {
+                const cid = cn.customerId;
+                if (cid) {
+                  const c = this.customers.find((cust: any) => String(cust.id) === String(cid));
+                  if (c && c.name) {
+                    cn.customerName = c.name;
+                    updated = true;
+                  }
+                }
+              }
+            }
+            if (updated) {
+              this.filterCreditNotes();
+            }
+          }
           this.cdr.detectChanges();
         }
       }
@@ -866,9 +915,16 @@ export class BillingPage implements OnInit, OnDestroy {
       const amount = Number(item.amount ?? item.Amount ?? 0);
       const customerId = item.customerId ?? item.CustomerId ?? 0;
       let customerName = item.customerName || item.CustomerName;
-      if (!customerName && customerId && this.customers?.length) {
-        const c = this.customers.find((cust: any) => cust.id == customerId);
-        if (c) customerName = c.name;
+      if ((!customerName || customerName.startsWith('Customer #') || customerName === 'Customer #?') && customerId && this.customers?.length) {
+        const c = this.customers.find((cust: any) => String(cust.id) === String(customerId));
+        if (c && c.name) customerName = c.name;
+      }
+      if ((!customerName || customerName.startsWith('Customer #') || customerName === 'Customer #?') && (item.invoiceId || item.invoiceNumber) && this.invoices?.length) {
+        const inv = this.invoices.find((i: any) => String(i.id) === String(item.invoiceId) || (item.invoiceNumber && (i.invoiceNumber === item.invoiceNumber || i.docNo === item.invoiceNumber)));
+        if (inv) {
+          const invName = this.getInvoiceCustomerName(inv);
+          if (invName && !invName.startsWith('Customer #') && invName !== 'Customer #?') customerName = invName;
+        }
       }
       const rawItems = item.items || item.Items || [];
       const normalizedItems = rawItems.map((it: any) => ({
@@ -948,17 +1004,41 @@ export class BillingPage implements OnInit, OnDestroy {
     try {
       let cached = await this.offlineStorage.getCache<any[]>('credit_notes_list') || [];
       const queue = await this.offlineStorage.getPendingQueue();
+      const cachedCusts = await this.offlineStorage.getCache<any[]>('customers') || [];
+      if (!this.customers || this.customers.length === 0) {
+        if (cachedCusts.length > 0) {
+          this.customers = cachedCusts;
+          this.filteredCustomers = [...cachedCusts];
+        }
+      }
+      const cachedInvs = await this.offlineStorage.getCache<any[]>('invoices_list') || [];
+      if (!this.invoices || this.invoices.length === 0) {
+        if (cachedInvs.length > 0) {
+          this.invoices = cachedInvs;
+        }
+      }
+
       const offlineCNs = queue
         .filter(q => q.type === 'CREATE_CN' || q.type === 'CREATE_GLOBAL_CN')
         .map(q => {
           const items = q.payload?.data?.items || [];
           const totalAmount = items.reduce((sum: number, it: any) => sum + ((Number(it.quantity) || 0) * (Number(it.unitPrice) || 0)), 0);
+          let cName = q.payload?.customerName || '';
+          const cid = q.payload?.customerId || 0;
+          if ((!cName || cName.startsWith('Customer #')) && cid && this.customers?.length) {
+            const foundC = this.customers.find((c: any) => String(c.id) === String(cid));
+            if (foundC && foundC.name) cName = foundC.name;
+          }
+          if ((!cName || cName.startsWith('Customer #')) && (q.payload?.invoiceId || q.payload?.invoiceNumber) && this.invoices?.length) {
+            const foundInv = this.invoices.find((i: any) => String(i.id) === String(q.payload.invoiceId) || (q.payload.invoiceNumber && (i.invoiceNumber === q.payload.invoiceNumber || i.docNo === q.payload.invoiceNumber)));
+            if (foundInv) cName = this.getInvoiceCustomerName(foundInv);
+          }
           return {
             id: q.id,
             cnNumber: q.payload?.cnNumber || ('CN-OFFLINE-' + q.id),
             invoiceId: q.payload?.invoiceId || 0,
-            customerId: q.payload?.customerId || 0,
-            customerName: q.payload?.customerName || '',
+            customerId: cid,
+            customerName: cName,
             amount: totalAmount,
             createdAt: new Date(q.createdAt).toISOString(),
             reason: q.payload?.data?.reason || '',
@@ -1287,7 +1367,7 @@ export class BillingPage implements OnInit, OnDestroy {
       }
     }
     this.loadAllInvoices();
-    this.cnForm = { customerId: 0, invoiceId: 0, reason: '', items: [] };
+    this.cnForm = { customerId: 0, customerName: '', invoiceId: 0, reason: '', items: [] };
     this.cnFilteredInvoices = [...this.invoices];
     this.selectedCNInvoiceDetail = null;
     this.showCNInvoiceFinancials = true;
@@ -1591,6 +1671,7 @@ export class BillingPage implements OnInit, OnDestroy {
 
   selectCNCustomer(customer: any) {
     this.cnForm.customerId = customer ? customer.id : 0;
+    this.cnForm.customerName = customer ? customer.name : '';
     this.onCNCustomerChange();
     this.closeCustomerModal();
   }
@@ -1602,8 +1683,41 @@ export class BillingPage implements OnInit, OnDestroy {
     this.closeCustomerModal();
   }
 
+  getCNTotalRefundAmount(): number {
+    if (!this.cnForm?.items) return 0;
+    return this.cnForm.items.reduce((sum: number, it: any) => {
+      const qty = Number(it.returnQuantity) || 0;
+      const price = Number(it.unitPrice) || 0;
+      return sum + (qty * price);
+    }, 0);
+  }
+
+  getCNDisplayCustomerName(cn: any): string {
+    if (!cn) return '';
+    const name = cn.customerName || cn.CustomerName;
+    if (name && typeof name === 'string' && name.trim() && !name.trim().startsWith('Customer #') && name.trim() !== 'Customer #?') {
+      return name.trim();
+    }
+    const cid = cn.customerId ?? cn.CustomerId ?? cn.customer_id;
+    if (cid && this.customers?.length) {
+      const c = this.customers.find((cust: any) => String(cust.id) === String(cid));
+      if (c && c.name && c.name.trim()) return c.name.trim();
+    }
+    if (cn.invoiceId || cn.invoiceNumber) {
+      const inv = this.invoices?.find((i: any) => String(i.id) === String(cn.invoiceId) || (cn.invoiceNumber && (i.invoiceNumber === cn.invoiceNumber || i.docNo === cn.invoiceNumber)));
+      if (inv) {
+        const invCustName = this.getInvoiceCustomerName(inv);
+        if (invCustName && !invCustName.startsWith('Customer #') && invCustName !== 'Customer #?') return invCustName;
+      }
+    }
+    return name || (cid ? ('Customer #' + cid) : 'Customer #?');
+  }
+
   getCNSelectedCustomerName(): string {
     if (!this.cnForm?.customerId || this.cnForm.customerId == 0) {
+      if (this.cnForm?.customerName && !this.cnForm.customerName.startsWith('Customer #')) {
+        return this.cnForm.customerName;
+      }
       if (this.selectedCNInvoiceDetail) {
         const name = this.selectedCNInvoiceDetail.customerName || this.selectedCNInvoiceDetail.CustomerName;
         if (name) return name;
@@ -1612,6 +1726,9 @@ export class BillingPage implements OnInit, OnDestroy {
     }
     const cust = this.customers.find((c: any) => String(c.id) === String(this.cnForm.customerId));
     if (cust) return cust.name;
+    if (this.cnForm?.customerName && !this.cnForm.customerName.startsWith('Customer #')) {
+      return this.cnForm.customerName;
+    }
     if (this.selectedCNInvoiceDetail) {
       const name = this.selectedCNInvoiceDetail.customerName || this.selectedCNInvoiceDetail.CustomerName;
       if (name) return name;
@@ -1721,6 +1838,11 @@ export class BillingPage implements OnInit, OnDestroy {
     this.cnForm.items = [];
     if (inv) {
       this.selectedCNInvoiceDetail = inv;
+      const cid = inv.customerId || inv.CustomerId || (inv.customer ? inv.customer.id : 0);
+      if (cid) {
+        this.cnForm.customerId = Number(cid);
+      }
+      this.cnForm.customerName = this.getInvoiceCustomerName(inv);
     }
     this.closeCNInvoiceModal();
 
@@ -1880,13 +2002,20 @@ export class BillingPage implements OnInit, OnDestroy {
           this.cnForm.customerId = Number(cid);
           this.loadCustomerProductPrices(Number(cid));
         }
+        if (!this.cnForm.customerName) {
+          this.cnForm.customerName = this.getInvoiceCustomerName(inv);
+        }
         const sourceItems = inv.items || inv.Items || [];
         if (shouldLoadProds && sourceItems.length > 0) {
           this.cnForm.items = sourceItems.map((item: any) => {
             const qty = Number(item.quantity ?? item.Quantity ?? 1) || 1;
             const retQty = Number(item.returnedQuantity ?? item.ReturnedQuantity ?? 0) || 0;
             const remainingQty = Math.max(1, qty - retQty);
-            const unitPrice = Number(item.unitPrice ?? item.UnitPrice ?? item.price ?? 0);
+            let unitPrice = Number(item.unitPrice ?? item.UnitPrice ?? item.price ?? 0);
+            if (!unitPrice) {
+              const custPrice = this.getCustomerSpecialPrice(item.productId ?? item.ProductId);
+              unitPrice = this.getDiscountedPrice(custPrice != null ? custPrice : this.getOriginalUnitPrice(item.productId ?? item.ProductId));
+            }
             return {
               productId: item.productId ?? item.ProductId ?? 0,
               productName: item.productName || item.ProductName || this.getProductName(item.productId ?? item.ProductId),
@@ -2257,10 +2386,10 @@ export class BillingPage implements OnInit, OnDestroy {
     }
 
     if (!this.cnForm.customerId || this.cnForm.customerId == 0) {
-      // If no customer selected, try to get from items
-      if (this.cnForm.items.length > 0) {
-        // Already set in selectHistoryItem
-      } else {
+      if (this.selectedCNInvoiceDetail?.customerId) {
+        this.cnForm.customerId = Number(this.selectedCNInvoiceDetail.customerId);
+      }
+      if (!this.cnForm.customerId || this.cnForm.customerId == 0) {
         this.showToastMsg('Please select a customer'); return;
       }
     }
@@ -2303,13 +2432,26 @@ export class BillingPage implements OnInit, OnDestroy {
     );
     const useGlobalMode = !this.cnForm.invoiceId || this.cnForm.invoiceId == 0 || hasGlobalItems || isOfflineInvoice;
 
-    const customer = this.customers.find((c: any) => c.id == this.cnForm.customerId);
-    const customerName = customer ? customer.name : (this.cnForm.customerName || '');
+    const cid = Number(this.cnForm.customerId || (this.selectedCNInvoiceDetail?.customerId) || 0);
+    let customerName = this.cnForm.customerName;
+    if ((!customerName || customerName.startsWith('Customer #') || customerName === 'Customer #?') && cid && this.customers?.length) {
+      const cust = this.customers.find((c: any) => String(c.id) === String(cid));
+      if (cust && cust.name) customerName = cust.name;
+    }
+    if ((!customerName || customerName.startsWith('Customer #') || customerName === 'Customer #?') && this.selectedCNInvoiceDetail) {
+      customerName = this.getInvoiceCustomerName(this.selectedCNInvoiceDetail);
+    }
+    if (!customerName && cid) {
+      const cust = this.customers?.find((c: any) => String(c.id) === String(cid));
+      if (cust && cust.name) customerName = cust.name;
+    }
+    this.cnForm.customerName = customerName;
+
     const selectedInv = this.getSelectedCNInvoice();
     const invDocNo = selectedInv ? (selectedInv.invoiceNumber || selectedInv.docNo || this.getDocNo(selectedInv)) : '';
     const extraInfo = {
-      customerName,
-      customerId: this.cnForm.customerId,
+      customerName: customerName || (cid ? ('Customer #' + cid) : ''),
+      customerId: cid,
       invoiceId: this.cnForm.invoiceId || null,
       invoiceNumber: invDocNo || null
     };

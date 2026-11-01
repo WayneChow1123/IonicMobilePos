@@ -647,6 +647,41 @@ export class SyncService {
             console.log('[SyncService] Processing UPDATE_INVOICE:', task.id, task.payload);
             const rawData = task.payload?.data || task.payload || {};
             const invId = task.payload?.invoiceId || task.payload?.id || String(task.id).replace('upd_inv_', '');
+            
+            // 解析真实的 Server 发票 ID
+            let realInvId: any = invId;
+            if (isNaN(Number(invId)) || Number(invId) >= 100000000) {
+              const strId = String(invId);
+              const order = await this.localDb.getOrderByClientId(strId);
+              if (order && order.serverId) {
+                realInvId = order.serverId;
+              } else {
+                const cachedInvs = await this.offlineStorage.getCache<any[]>('invoices_list') || [];
+                const matched = cachedInvs.find(inv =>
+                  String(inv.id) === strId ||
+                  inv.offlineId === strId ||
+                  inv.clientId === strId ||
+                  inv.docNo === strId ||
+                  inv.invoiceNumber === strId
+                );
+                if (matched && matched.serverId) {
+                  realInvId = matched.serverId;
+                } else if (matched && typeof matched.id === 'number' && matched.id > 0 && matched.id < 100000000) {
+                  realInvId = matched.id;
+                }
+              }
+            }
+
+            // 如果 customerId 是离线客户 ID，映射为服务端真实 ID
+            let custId = rawData.customerId;
+            if (typeof custId === 'string' && custId.startsWith('cust_')) {
+              const cachedCustomers = await this.offlineStorage.getCache<any[]>('customers') || [];
+              const matchedC = cachedCustomers.find(c => String(c.id) === String(custId) || c.offlineId === custId);
+              if (matchedC && typeof matchedC.id === 'number') {
+                custId = matchedC.id;
+              }
+            }
+
             const cachedProds = await this.offlineStorage.getCache<any[]>('products') || [];
             const cleanItems = (rawData.items || []).map((it: any) => {
               let p = it.unitPrice != null ? Number(it.unitPrice) : null;
@@ -666,20 +701,36 @@ export class SyncService {
               };
             });
             const cleanData: any = {
-              customerId: rawData.customerId,
+              customerId: custId != null ? Number(custId) : undefined,
               customerName: rawData.customerName,
               invoiceDate: rawData.invoiceDate,
               remark: rawData.remark,
               termType: rawData.termType,
               items: cleanItems
             };
-            console.log('[SyncService] Sending clean UPDATE_INVOICE payload to invId:', invId, cleanData);
-            await firstValueFrom(this.api.updateInvoiceDirect(invId, cleanData));
+            console.log('[SyncService] Sending clean UPDATE_INVOICE payload to invId:', realInvId, cleanData);
+            await firstValueFrom(this.api.updateInvoiceDirect(realInvId, cleanData));
+            // 同步成功后清理本地 overrides 缓存，确保多端以服务器为准
+            try {
+              const overrides = JSON.parse(localStorage.getItem('invoice_customer_overrides') || '{}');
+              delete overrides[realInvId];
+              delete overrides[invId];
+              localStorage.setItem('invoice_customer_overrides', JSON.stringify(overrides));
+            } catch { }
             await this.offlineStorage.removeQueueItem(task.id);
             successCount++;
           } else if (task.type === 'DELETE_INVOICE') {
             try {
-              await firstValueFrom(this.api.deleteInvoiceDirect(task.payload.invoiceId));
+              const targetInvId = task.payload.invoiceId;
+              let realDeleteId = targetInvId;
+              if (isNaN(Number(targetInvId)) || Number(targetInvId) >= 100000000) {
+                const strId = String(targetInvId);
+                const order = await this.localDb.getOrderByClientId(strId);
+                if (order && order.serverId) {
+                  realDeleteId = order.serverId;
+                }
+              }
+              await firstValueFrom(this.api.deleteInvoiceDirect(realDeleteId));
             } catch (err: any) {
               if (err?.status !== 404) throw err;
             }

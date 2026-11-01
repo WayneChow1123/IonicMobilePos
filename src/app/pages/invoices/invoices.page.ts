@@ -488,18 +488,30 @@ export class InvoicesPage implements OnInit, OnDestroy {
             });
           }
         }
-        const combined = [...pendingInvoices, ...serverInvoices].filter(inv => !deletedIds.includes(inv.id));
-        const seenIds = new Set<string>();
-        const seenDocs = new Set<string>();
+        const serverIds = new Set<string>();
+        const serverInvNumbers = new Set<string>();
         const uniqueInvoices: any[] = [];
-        for (const inv of combined) {
-          const idKey = String(inv.id || '');
-          const docKey = String(inv.invoiceNumber || inv.docNo || '').trim();
-          if (idKey && seenIds.has(idKey)) continue;
-          if (docKey && !docKey.startsWith('INV-OFFLINE') && !docKey.startsWith('OFFLINE') && seenDocs.has(docKey)) continue;
-          if (idKey) seenIds.add(idKey);
-          if (docKey && !docKey.startsWith('INV-OFFLINE') && !docKey.startsWith('OFFLINE')) seenDocs.add(docKey);
+
+        for (const inv of serverInvoices) {
+          if (!inv || !inv.id) continue;
+          const idStr = String(inv.id);
+          if (serverIds.has(idStr)) continue;
+          if (deletedIds.includes(inv.id) || deletedIds.includes(idStr)) continue;
+          serverIds.add(idStr);
+          if (inv.invoiceNumber) serverInvNumbers.add(String(inv.invoiceNumber).trim().toLowerCase());
+          if (inv.offlineReferenceId) serverInvNumbers.add(String(inv.offlineReferenceId).trim().toLowerCase());
           uniqueInvoices.push(inv);
+        }
+
+        for (const pending of pendingInvoices) {
+          if (!pending || !pending.id) continue;
+          const pId = String(pending.id);
+          const pNum = String(pending.invoiceNumber || '').trim().toLowerCase();
+          if (serverIds.has(pId)) continue;
+          if (pNum && serverInvNumbers.has(pNum)) continue;
+          if (deletedIds.includes(pending.id) || deletedIds.includes(pId)) continue;
+          serverIds.add(pId);
+          uniqueInvoices.push(pending);
         }
         uniqueInvoices.sort((a, b) => {
           const timeA = this.getInvoiceTimestamp(a);
@@ -537,18 +549,30 @@ export class InvoicesPage implements OnInit, OnDestroy {
           if (timeB !== timeA) return timeB - timeA;
           return (Number(b.id) || 0) - (Number(a.id) || 0);
         });
-        const combined = [...pendingInvoices, ...cachedList].filter(inv => !deletedIds.includes(inv.id));
-        const seenIds = new Set<string>();
-        const seenDocs = new Set<string>();
+        const cachedIds = new Set<string>();
+        const cachedInvNumbers = new Set<string>();
         const uniqueInvoices: any[] = [];
-        for (const inv of combined) {
-          const idKey = String(inv.id || '');
-          const docKey = String(inv.invoiceNumber || inv.docNo || '').trim();
-          if (idKey && seenIds.has(idKey)) continue;
-          if (docKey && !docKey.startsWith('INV-OFFLINE') && !docKey.startsWith('OFFLINE') && seenDocs.has(docKey)) continue;
-          if (idKey) seenIds.add(idKey);
-          if (docKey && !docKey.startsWith('INV-OFFLINE') && !docKey.startsWith('OFFLINE')) seenDocs.add(docKey);
+
+        for (const inv of cachedList) {
+          if (!inv || !inv.id) continue;
+          const idStr = String(inv.id);
+          if (cachedIds.has(idStr)) continue;
+          if (deletedIds.includes(inv.id) || deletedIds.includes(idStr)) continue;
+          cachedIds.add(idStr);
+          if (inv.invoiceNumber) cachedInvNumbers.add(String(inv.invoiceNumber).trim().toLowerCase());
+          if (inv.offlineReferenceId) cachedInvNumbers.add(String(inv.offlineReferenceId).trim().toLowerCase());
           uniqueInvoices.push(inv);
+        }
+
+        for (const pending of pendingInvoices) {
+          if (!pending || !pending.id) continue;
+          const pId = String(pending.id);
+          const pNum = String(pending.invoiceNumber || '').trim().toLowerCase();
+          if (cachedIds.has(pId)) continue;
+          if (pNum && cachedInvNumbers.has(pNum)) continue;
+          if (deletedIds.includes(pending.id) || deletedIds.includes(pId)) continue;
+          cachedIds.add(pId);
+          uniqueInvoices.push(pending);
         }
         uniqueInvoices.sort((a, b) => {
           const timeA = this.getInvoiceTimestamp(a);
@@ -759,21 +783,10 @@ export class InvoicesPage implements OnInit, OnDestroy {
       this.loadInvoices();
     } else if (res.failCount > 0) {
       const errDetail = res.lastError ? `\n\nDetails: ${res.lastError}` : '';
-      this.alertService.confirm(
-        'Sync Failed',
-        `Server temporarily returned an error while syncing ${res.failCount} task(s). Your offline data is safely preserved. Clear from queue only if you want to permanently discard it.${errDetail}`,
-        'Discard Task',
-        'Keep & Retry Later'
-      ).then(async (clear) => {
-        if (clear) {
-          const pending = await this.offlineStorage.getPendingQueue();
-          for (const t of pending) {
-            await this.offlineStorage.removeQueueItem(t.id);
-          }
-          await this.offlineStorage.refreshQueueCount();
-          this.showToastMsg('Offline queue cleared.');
-        }
-      });
+      this.alertService.alert(
+        'Sync Incomplete',
+        `Could not sync ${res.failCount} task(s). Your offline data is safely preserved on this device and will automatically retry when reconnected.${errDetail}`
+      );
     } else {
       this.showToastMsg('All invoices are already synced.');
     }
@@ -798,6 +811,16 @@ export class InvoicesPage implements OnInit, OnDestroy {
           }
         }
         if (this.invoices && this.invoices.length > 0) {
+          for (const inv of this.invoices) {
+            const cid = inv.customerId ?? inv.CustomerId;
+            if (cid && (!inv.customerName || String(inv.customerName).startsWith('Customer #'))) {
+              const matchedC = this.customers.find(c => c.id == cid);
+              if (matchedC?.name) {
+                inv.customerName = matchedC.name;
+                inv.customerCode = matchedC.customerCode || matchedC.code || '';
+              }
+            }
+          }
           this.filterInvoices();
         }
       },
@@ -1031,13 +1054,6 @@ export class InvoicesPage implements OnInit, OnDestroy {
   }
 
   filterInvoices() {
-    if (this.showSearchSuggestions && !this.selectedSearchKeyword && this.searchSuggestions.length > 0) {
-      this.filteredInvoices = [];
-      this.currentPage = 1;
-      this.displayedInvoices = [];
-      return;
-    }
-
     const term = (this.selectedSearchKeyword || this.searchTerm || '').toLowerCase().trim();
     this.filteredInvoices = this.invoices.filter(inv => {
       // Search term filtering
@@ -1045,12 +1061,17 @@ export class InvoicesPage implements OnInit, OnDestroy {
       const custCode = (this.getCustomerCode(inv) || '').toLowerCase();
       const invNum = (inv.invoiceNumber || '').toLowerCase();
       const docNo = (inv.docNo || this.getDocNo(inv) || '').toLowerCase();
+      const rawCustName = (inv.customerName || inv.CustomerName || '').toLowerCase();
+      const custIdStr = String(inv.customerId ?? inv.CustomerId ?? '');
 
       const matchesSearch = !term ||
         invNum.includes(term) ||
         docNo.includes(term) ||
         custName.includes(term) ||
-        custCode.includes(term);
+        custCode.includes(term) ||
+        rawCustName.includes(term) ||
+        (term === custIdStr) ||
+        ('customer #' + custIdStr).includes(term);
 
       if (!matchesSearch) return false;
 

@@ -123,14 +123,6 @@
     </div>
 
     <div *ngIf="!isLoading">
-      <!-- Keyword Selection Prompt -->
-      <div *ngIf="showSearchSuggestions && !selectedSearchKeyword && searchSuggestions.length > 0" class="keyword-select-prompt">
-        <div class="prompt-icon-bubble">
-          <ion-icon name="search-outline"></ion-icon>
-        </div>
-        <div class="prompt-title">Please Select a Keyword Above</div>
-        <div class="prompt-desc">Tap a customer or document number above to view all its invoices.</div>
-      </div>
 
       <div *ngFor="let invoice of displayedInvoices" class="list-item">
         <div class="item-info" (click)="openEditModal(invoice)">
