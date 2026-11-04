@@ -1,3 +1,5 @@
+import { inject } from '@angular/core';
+import { ProfileSettingsService } from '../../services/profile-settings.service';
 import { AlertService } from '../../services/alert.service';
 import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
 import { NavController } from '@ionic/angular';
@@ -17,6 +19,7 @@ import { ApiService } from '../../services/api.service';
   styleUrls: ['./home.page.scss'],
 })
 export class HomePage implements OnInit {
+  readonly profileSettings = inject(ProfileSettingsService);
   totalCustomers = 0;
   totalProducts = 0;
 

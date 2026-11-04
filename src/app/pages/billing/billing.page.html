@@ -21,8 +21,8 @@
         <img src="assets/image/PosSystem.png" alt="PosSystem Logo" class="app-logo-img" />
       </div>
       <div>
-        <div class="app-title-text">TD Mobile POS</div>
-        <div class="app-company-text">B JAYA TRADING</div>
+        <div class="app-title-text">{{ profileSettings.profile().appName }}</div>
+        <div class="app-company-text">{{ profileSettings.profile().companyName }}</div>
       </div>
     </div>
     <div class="header">
@@ -731,10 +731,10 @@
         <div class="receipt-header" *ngIf="isOptionEnabled('Print Company Logo')">
           <span class="receipt-type">CREDIT NOTE</span>
           <div class="receipt-divider"></div>
-          <h2 class="receipt-company">B JAYA TRADING</h2>
+          <h2 class="receipt-company">{{ profileSettings.profile().companyName }}</h2>
           <span class="receipt-co-reg">(001188861-T)</span>
-          <span class="receipt-address">NO. 467, JALAN PALAS 13, TAMAN PELANGI,</span>
-          <span class="receipt-address">70400 SEREMBAN N.S, MALAYSIA</span>
+          <span class="receipt-address">{{ profileSettings.profile().address }}</span>
+          <span class="receipt-address">{{ profileSettings.profile().city }}</span>
           <span class="receipt-contact">TEL: 012-6988080</span>
         </div>
         <div class="receipt-doc-info">
@@ -1386,10 +1386,10 @@
         <div class="receipt-header" *ngIf="isOptionEnabled('Print Company Logo')">
           <span class="receipt-type">OFFICIAL RECEIPT</span>
           <div class="receipt-divider"></div>
-          <h2 class="receipt-company">B JAYA TRADING</h2>
+          <h2 class="receipt-company">{{ profileSettings.profile().companyName }}</h2>
           <span class="receipt-co-reg">(001188861-T)</span>
-          <span class="receipt-address">NO. 467, JALAN PALAS 13, TAMAN PELANGI,</span>
-          <span class="receipt-address">70400 SEREMBAN N.S, SEREMBAN, N.S, MALAYSIA</span>
+          <span class="receipt-address">{{ profileSettings.profile().address }}</span>
+          <span class="receipt-address">{{ profileSettings.profile().city }}</span>
           <span class="receipt-contact">TEL: 012-6988080</span>
         </div>
 

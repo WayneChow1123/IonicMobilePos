@@ -1,3 +1,5 @@
+import { inject } from '@angular/core';
+import { ProfileSettingsService } from '../../services/profile-settings.service';
 ﻿import { AlertService } from '../../services/alert.service';
 import { Component, ChangeDetectorRef } from '@angular/core';
 import { NavController } from '@ionic/angular';
@@ -5,15 +7,34 @@ import { Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { IonicModule } from '@ionic/angular';
 import { AuthService } from '../../services/auth.service';
+import { FormsModule } from '@angular/forms';
 
 @Component({
   standalone: true,
-  imports: [CommonModule, IonicModule],
+  imports: [CommonModule, IonicModule, FormsModule],
   selector: 'app-setting',
   templateUrl: './setting.page.html',
   styleUrls: ['./setting.page.scss'],
 })
 export class SettingPage {
+  readonly profileSettings = inject(ProfileSettingsService);
+  editingProfile = false;
+  profileDraft = { ...this.profileSettings.profile() };
+
+  editProfile() {
+    this.profileDraft = { ...this.profileSettings.profile() };
+    this.editingProfile = true;
+  }
+
+  saveProfile() {
+    try {
+      this.profileSettings.save(this.profileDraft);
+      this.editingProfile = false;
+      this.alertService.toast('Profile saved successfully!', 'success');
+    } catch {
+      this.alertService.toast('Unable to save. Check all fields and device storage.', 'error');
+    }
+  }
   deviceAutoBlocking = false;
   trainingMode = false;
   isDarkMode = false;
@@ -27,6 +48,7 @@ export class SettingPage {
   ) {}
 
   ionViewWillEnter() {
+    this.editingProfile = false;
     try {
       this.isDarkMode = localStorage.getItem('pos-dark-mode') === 'true';
     } catch (e) {}

@@ -12,6 +12,29 @@
       </ion-button>
     </div>
 
+    <div class="section-label">PROFILE SYSTEM SETTING</div>
+    <div class="profile-section">
+      <div *ngIf="!editingProfile">
+        <h3>{{ profileSettings.profile().appName }}</h3>
+        <strong>{{ profileSettings.profile().companyName }}</strong>
+        <p>{{ profileSettings.profile().address }}<br>{{ profileSettings.profile().city }}</p>
+        <ion-button (click)="editProfile()" expand="block">Edit Profile</ion-button>
+      </div>
+      <form *ngIf="editingProfile" #profileForm="ngForm" (ngSubmit)="saveProfile()">
+        <ion-input label="App / Display Name" labelPlacement="stacked" name="appName"
+          [(ngModel)]="profileDraft.appName" required maxlength="80"></ion-input>
+        <ion-input label="Company Name" labelPlacement="stacked" name="companyName"
+          [(ngModel)]="profileDraft.companyName" required maxlength="80"></ion-input>
+        <ion-input label="Address Line 1" labelPlacement="stacked" name="address"
+          [(ngModel)]="profileDraft.address" required maxlength="200"></ion-input>
+        <ion-input label="Address Line 2 / City / Postcode" labelPlacement="stacked" name="city"
+          [(ngModel)]="profileDraft.city" required maxlength="200"></ion-input>
+        <p class="profile-note">Saved on this device. Used for app headers and receipt printing.</p>
+        <ion-button type="submit" [disabled]="profileForm.invalid || !profileDraft.appName.trim() || !profileDraft.companyName.trim() || !profileDraft.address.trim() || !profileDraft.city.trim()">Save Profile</ion-button>
+        <ion-button type="button" fill="outline" (click)="editingProfile = false">Cancel</ion-button>
+      </form>
+    </div>
+
     <!-- DEVICE CONTROL Section -->
     <div class="section-label">DEVICE CONTROL</div>
 
@@ -113,7 +136,7 @@
 
     <div class="setting-grid">
 
-      <div class="setting-card setting-card--disabled">
+      <div class="setting-card" role="button" tabindex="0" (click)="editProfile()" (keydown.enter)="editProfile()">
         <ion-icon name="business-outline" class="setting-card-icon"></ion-icon>
         <span class="setting-card-label">MY COMPANY</span>
       </div>

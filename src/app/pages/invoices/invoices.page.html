@@ -815,10 +815,10 @@
         <div class="receipt-header" *ngIf="isOptionEnabled('Print Company Logo')">
           <span class="receipt-type">TAX INVOICE</span>
           <div class="receipt-divider"></div>
-          <h2 class="receipt-company">{{ previewData?.companyName || 'B JAYA TRADING' }}</h2>
+          <h2 class="receipt-company">{{ profileSettings.profile().companyName }}</h2>
           <span class="receipt-co-reg">({{ previewData?.companyReg || '001188861-T' }})</span>
-          <span class="receipt-address">{{ previewData?.companyAddress || 'NO. 467, JALAN PALAS 13, TAMAN PELANGI,' }}</span>
-          <span class="receipt-address">{{ previewData?.companyCity || '70400 SEREMBAN N.S, SEREMBAN, N.S, MALAYSIA' }}</span>
+          <span class="receipt-address">{{ profileSettings.profile().address }}</span>
+          <span class="receipt-address">{{ profileSettings.profile().city }}</span>
           <span class="receipt-contact">TEL: {{ previewData?.companyTel || '012-6988080' }}&nbsp;&nbsp;&nbsp;GST: {{ previewData?.companyGst || '000134806856' }}</span>
         </div>
 

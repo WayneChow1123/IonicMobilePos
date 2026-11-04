@@ -1,3 +1,5 @@
+import { inject } from '@angular/core';
+import { ProfileSettingsService } from '../../services/profile-settings.service';
 import { AlertService } from '../../services/alert.service';
 import Swal from 'sweetalert2';
 import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
@@ -22,6 +24,7 @@ import { LocalDbService } from '../../services/local-db.service';
   styleUrls: ['./invoices.page.scss'],
 })
 export class InvoicesPage implements OnInit, OnDestroy {
+  readonly profileSettings = inject(ProfileSettingsService);
   invoices: any[] = [];
   filteredInvoices: any[] = [];
   displayedInvoices: any[] = [];
@@ -3012,10 +3015,10 @@ export class InvoicesPage implements OnInit, OnDestroy {
     let companyHeaderHtml = '';
     if (this.isOptionEnabled('Print Company Logo')) {
       companyHeaderHtml = `
-        <div class="company">${pd?.companyName || 'B JAYA TRADING'}</div>
+        <div class="company">${this.profileSettings.html(this.profileSettings.profile().companyName)}</div>
         <span class="co-reg">(${pd?.companyReg || '001188861-T'})</span>
-        <span class="address">${pd?.companyAddress || 'NO. 467, JALAN PALAS 13, TAMAN PELANGI,'}</span>
-        <span class="address">${pd?.companyCity || '70400 SEREMBAN N.S, SEREMBAN, N.S, MALAYSIA'}</span>
+        <span class="address">${this.profileSettings.html(this.profileSettings.profile().address)}</span>
+        <span class="address">${this.profileSettings.html(this.profileSettings.profile().city)}</span>
         <span class="contact">TEL: ${pd?.companyTel || '012-6988080'} GST: ${pd?.companyGst || '000134806856'}</span>
       `;
     }

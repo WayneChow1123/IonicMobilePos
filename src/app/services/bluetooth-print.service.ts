@@ -1,3 +1,5 @@
+import { inject } from '@angular/core';
+import { ProfileSettingsService } from './profile-settings.service';
 import { Injectable } from '@angular/core';
 import { AlertService } from './alert.service';
 import { formatDocNo } from '../utils/invoice-helper';
@@ -37,6 +39,7 @@ export function sanitizePrintText(str: string): string {
   providedIn: 'root'
 })
 export class BluetoothPrintService {
+  readonly profileSettings = inject(ProfileSettingsService);
   private isPrinting = false;
   private disconnectTimer: any = null;
   private currentConnectedMac: string | null = null;
@@ -505,7 +508,7 @@ export class BluetoothPrintService {
       builder.append(CMD_ALIGN_CENTER);
       builder.append(CMD_BOLD_ON);
       builder.append(CMD_DOUBLE_HEIGHT);
-      builder.appendText((pd?.companyName || 'B JAYA TRADING') + "\n");
+      builder.appendText((this.profileSettings.profile().companyName) + "\n");
       builder.append(CMD_NORMAL_SIZE);
       builder.append(CMD_BOLD_OFF);
 
@@ -513,12 +516,12 @@ export class BluetoothPrintService {
 
       const headerWrapWidth = width <= 40 ? 30 : 44;
 
-      const addr1 = pd?.companyAddress || 'NO. 467, JALAN PALAS 13, TAMAN PELANGI,';
+      const addr1 = this.profileSettings.profile().address;
       this.wrapText(addr1, headerWrapWidth).forEach(line => {
         builder.appendText(line.trim() + "\n");
       });
 
-      const city = pd?.companyCity || '70400 SEREMBAN N.S, SEREMBAN, N.S, MALAYSIA';
+      const city = this.profileSettings.profile().city;
       this.wrapText(city, headerWrapWidth).forEach(line => {
         builder.appendText(line.trim() + "\n");
       });
@@ -852,15 +855,15 @@ export class BluetoothPrintService {
       builder.append(CMD_ALIGN_CENTER);
       builder.append(CMD_BOLD_ON);
       builder.append(CMD_DOUBLE_HEIGHT);
-      builder.appendText("B JAYA TRADING\n");
+      builder.appendText(this.profileSettings.profile().companyName + "\n");
       builder.append(CMD_NORMAL_SIZE);
       builder.append(CMD_BOLD_OFF);
       const headerWrapWidth = width <= 40 ? 30 : 44;
       builder.appendText("(001188861-T)\n");
-      this.wrapText("NO. 467, JALAN PALAS 13, TAMAN PELANGI,", headerWrapWidth).forEach(line => {
+      this.wrapText(this.profileSettings.profile().address, headerWrapWidth).forEach(line => {
         builder.appendText(line.trim() + "\n");
       });
-      this.wrapText("70400 SEREMBAN N.S, MALAYSIA", headerWrapWidth).forEach(line => {
+      this.wrapText(this.profileSettings.profile().city, headerWrapWidth).forEach(line => {
         builder.appendText(line.trim() + "\n");
       });
       builder.appendText("TEL: 012-6988080\n");
@@ -1087,15 +1090,15 @@ export class BluetoothPrintService {
       builder.append(CMD_ALIGN_CENTER);
       builder.append(CMD_BOLD_ON);
       builder.append(CMD_DOUBLE_HEIGHT);
-      builder.appendText("B JAYA TRADING\n");
+      builder.appendText(this.profileSettings.profile().companyName + "\n");
       builder.append(CMD_NORMAL_SIZE);
       builder.append(CMD_BOLD_OFF);
       const headerWrapWidth = width <= 40 ? 30 : 44;
       builder.appendText("(001188861-T)\n");
-      this.wrapText("NO. 467, JALAN PALAS 13, TAMAN PELANGI,", headerWrapWidth).forEach(line => {
+      this.wrapText(this.profileSettings.profile().address, headerWrapWidth).forEach(line => {
         builder.appendText(line.trim() + "\n");
       });
-      this.wrapText("70400 SEREMBAN N.S, MALAYSIA", headerWrapWidth).forEach(line => {
+      this.wrapText(this.profileSettings.profile().city, headerWrapWidth).forEach(line => {
         builder.appendText(line.trim() + "\n");
       });
       builder.appendText("TEL: 012-6988080\n");

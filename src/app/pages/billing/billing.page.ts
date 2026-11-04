@@ -1,3 +1,5 @@
+import { inject } from '@angular/core';
+import { ProfileSettingsService } from '../../services/profile-settings.service';
 import { AlertService } from '../../services/alert.service';
 import Swal from 'sweetalert2';
 import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
@@ -24,6 +26,7 @@ import { SyncService } from '../../services/sync.service';
   styleUrls: ['./billing.page.scss'],
 })
 export class BillingPage implements OnInit, OnDestroy {
+  readonly profileSettings = inject(ProfileSettingsService);
   pendingOfflineCount: number = 0;
   isSyncing: boolean = false;
   private queueCountSub?: Subscription;
@@ -1504,10 +1507,10 @@ export class BillingPage implements OnInit, OnDestroy {
     let companyHeaderHtml = '';
     if (this.isOptionEnabled('Print Company Logo')) {
       companyHeaderHtml = `
-        <div class="company">B JAYA TRADING</div>
+        <div class="company">${this.profileSettings.html(this.profileSettings.profile().companyName)}</div>
         <span class="co-reg">(001188861-T)</span>
-        <span class="address">NO. 467, JALAN PALAS 13, TAMAN PELANGI,</span>
-        <span class="address">70400 SEREMBAN N.S, SEREMBAN, N.S, MALAYSIA</span>
+        <span class="address">${this.profileSettings.html(this.profileSettings.profile().address)}</span>
+        <span class="address">${this.profileSettings.html(this.profileSettings.profile().city)}</span>
         <span class="contact">TEL: 012-6988080</span>
       `;
     }
@@ -2876,10 +2879,10 @@ export class BillingPage implements OnInit, OnDestroy {
     let companyHeaderHtml = '';
     if (this.isOptionEnabled('Print Company Logo')) {
       companyHeaderHtml = `
-        <div class="company">B JAYA TRADING</div>
+        <div class="company">${this.profileSettings.html(this.profileSettings.profile().companyName)}</div>
         <span class="co-reg">(001188861-T)</span>
-        <span class="address">NO. 467, JALAN PALAS 13, TAMAN PELANGI,</span>
-        <span class="address">70400 SEREMBAN N.S, SEREMBAN, N.S, MALAYSIA</span>
+        <span class="address">${this.profileSettings.html(this.profileSettings.profile().address)}</span>
+        <span class="address">${this.profileSettings.html(this.profileSettings.profile().city)}</span>
         <span class="contact">TEL: 012-6988080</span>
       `;
     }
