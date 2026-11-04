@@ -11,6 +11,8 @@ export interface SyncQueueItem<T = any> {
   status: QueueItemStatus;
   retryCount: number;
   lastError?: string;
+  operationId?: string;
+  attemptedAt?: number;
 }
 
 export interface CacheEntry<T = any> {
@@ -29,6 +31,16 @@ export class OfflineStorageService {
   private readonly STORE_CACHE = 'master_cache';
 
   private memoryCache = new Map<string, any>();
+  private attemptedOperations = new Map<string, number>();
+
+  public wasAttempted(operationId: string): boolean { return this.attemptedOperations.has(operationId); }
+
+  public registerAttempt(operationId: string): void {
+    this.attemptedOperations.set(operationId, Date.now());
+    if (this.attemptedOperations.size > 1000) {
+      this.attemptedOperations.delete(this.attemptedOperations.keys().next().value!);
+    }
+  }
   private dbPromise: Promise<IDBDatabase> | null = null;
   private queueCountSubject = new BehaviorSubject<number>(0);
   public queueCount$: Observable<number> = this.queueCountSubject.asObservable();
@@ -87,6 +99,74 @@ export class OfflineStorageService {
     return 'offline_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
   }
 
+  public async resolveServerId(type: string, id: any): Promise<number> {
+    const map = await this.getCache<Record<string, number>>('server_id_map') || {};
+    const value = map[`${type}:${id}`] ?? Number(id);
+    if (!Number.isSafeInteger(value) || value <= 0) {
+      throw new Error(`Waiting for ${type} ${id} to sync`);
+    }
+    return value;
+  }
+
+  /** Persist identity mappings before removing creates, including dependent caches. */
+  public async mapServerId(type: 'invoice' | 'customer' | 'product' | 'category' | 'cn' | 'payment', oldId: any, serverId: number): Promise<void> {
+    if (!Number.isSafeInteger(Number(serverId)) || Number(serverId) <= 0) {
+      throw new Error(`Missing server ID for ${type}`);
+    }
+    const map = await this.getCache<Record<string, number>>('server_id_map') || {};
+    map[`${type}:${oldId}`] = Number(serverId);
+    await this.setCache('server_id_map', map);
+    const foreignKey = { invoice: 'invoiceId', customer: 'customerId', product: 'productId',
+      category: 'categoryId', cn: 'cnId', payment: 'paymentId' }[type];
+    const entityCache = { invoice: 'invoices_list', customer: 'customers', product: 'products',
+      category: 'categories', cn: 'credit_notes_list', payment: 'payments_list' }[type];
+    const replace = (value: any, ownIds: boolean): any => {
+      if (Array.isArray(value)) return value.map(v => replace(v, ownIds));
+      if (!value || typeof value !== 'object') return value;
+      const result: any = {};
+      for (const [key, child] of Object.entries(value)) {
+        const isId = key.toLowerCase() === foreignKey?.toLowerCase() ||
+          (ownIds && key.toLowerCase() === 'id');
+        result[key] = isId && String(child) === String(oldId) ? Number(serverId) : replace(child, false);
+      }
+      if (ownIds && String(value.id) === String(oldId)) {
+        result.offlineId = oldId;
+        result.isOffline = false;
+      }
+      return result;
+    };
+    for (const task of await this.getAllQueue()) {
+      const ownIds = task.type.endsWith('_' + type.toUpperCase());
+      task.payload = replace(task.payload, ownIds);
+      await this.updateQueueItem(task);
+    }
+    const keys = new Set(this.memoryCache.keys());
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key?.startsWith('td_cache_')) keys.add(key.slice(9));
+      }
+      const db = await this.getDB();
+      const storedKeys = await new Promise<IDBValidKey[]>((resolve, reject) => {
+        const req = db.transaction(this.STORE_CACHE, 'readonly').objectStore(this.STORE_CACHE).getAllKeys();
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+      storedKeys.forEach(key => keys.add(String(key)));
+    } catch { /* localStorage and in-memory keys remain available */ }
+    for (const key of keys) {
+      if (key === 'server_id_map') continue;
+      const detailPrefix = { invoice: 'inv_detail_', customer: 'customer_detail_', cn: 'cn_detail_', product: '', category: '', payment: 'payment_detail_' }[type];
+      const ownIds = key === entityCache || (type === 'cn' && key.startsWith('available_credits_')) || (!!detailPrefix && key === detailPrefix + oldId);
+      const data = replace(await this.getCache(key), ownIds);
+      await this.setCache(key, data);
+      if (detailPrefix && key === detailPrefix + oldId) await this.setCache(detailPrefix + serverId, data);
+      if (type === 'customer' && key === 'customer_prices_' + oldId) {
+        await this.setCache('customer_prices_' + serverId, data);
+      }
+    }
+  }
+
   /**
    * 获取或初始化本机台唯一编号 (Terminal ID)，防止多台设备离线开单冲突
    */
@@ -138,14 +218,19 @@ export class OfflineStorageService {
    * 将待同步任务加入本地离线队列
    */
   public async enqueue<T>(type: string, payload: T, customId?: string): Promise<SyncQueueItem<T>> {
+    // A request whose response was lost must be replayed with its original payload.
+    const previous = customId ? await this.getQueueItemById(customId) : null;
+    if (previous?.attemptedAt) customId += '_' + this.generateId();
     const item: SyncQueueItem<T> = {
       id: customId || this.generateId(),
       type,
       payload,
       createdAt: Date.now(),
       status: 'pending',
-      retryCount: 0
+      retryCount: 0,
+      operationId: (payload as any)?._offlineOperationId || (payload as any)?.data?._offlineOperationId || this.generateId()
     };
+    item.attemptedAt = this.attemptedOperations.get(item.operationId!);
 
     try {
       const db = await this.getDB();
@@ -153,7 +238,8 @@ export class OfflineStorageService {
         const tx = db.transaction(this.STORE_QUEUE, 'readwrite');
         const store = tx.objectStore(this.STORE_QUEUE);
         const req = store.put(item);
-        req.onsuccess = () => resolve();
+        tx.oncomplete = () => resolve();
+        tx.onabort = () => reject(tx.error || new Error('Offline transaction aborted'));
         req.onerror = () => reject(req.error);
       });
     } catch {
@@ -222,7 +308,8 @@ export class OfflineStorageService {
         const tx = db.transaction(this.STORE_QUEUE, 'readwrite');
         const store = tx.objectStore(this.STORE_QUEUE);
         const req = store.put(item);
-        req.onsuccess = () => resolve();
+        tx.oncomplete = () => resolve();
+        tx.onabort = () => reject(tx.error || new Error('Offline transaction aborted'));
         req.onerror = () => reject(req.error);
       });
     } catch {
@@ -248,7 +335,8 @@ export class OfflineStorageService {
         const tx = db.transaction(this.STORE_QUEUE, 'readwrite');
         const store = tx.objectStore(this.STORE_QUEUE);
         const req = store.delete(id);
-        req.onsuccess = () => resolve();
+        tx.oncomplete = () => resolve();
+        tx.onabort = () => reject(tx.error || new Error('Offline transaction aborted'));
         req.onerror = () => reject(req.error);
       });
     } catch {
@@ -269,7 +357,8 @@ export class OfflineStorageService {
         const tx = db.transaction(this.STORE_QUEUE, 'readwrite');
         const store = tx.objectStore(this.STORE_QUEUE);
         const req = store.clear();
-        req.onsuccess = () => resolve();
+        tx.oncomplete = () => resolve();
+        tx.onabort = () => reject(tx.error || new Error('Offline transaction aborted'));
         req.onerror = () => reject(req.error);
       });
     } catch {
@@ -296,31 +385,25 @@ export class OfflineStorageService {
    * 保存离线基础数据缓存（如商品列表、客户列表等）
    */
   public async setCache<T>(key: string, data: T): Promise<void> {
-    this.memoryCache.set(key, data);
-    const entry: CacheEntry<T> = {
-      key,
-      data,
-      updatedAt: Date.now()
-    };
+    const entry: CacheEntry<T> = { key, data, updatedAt: Date.now() };
+    let persisted = false;
     try {
       localStorage.setItem('td_cache_' + key, JSON.stringify(entry));
-    } catch (e) {
-      console.warn('LocalStorage cache set failed:', e);
-    }
+      persisted = true;
+    } catch { /* IndexedDB can still store this entry. */ }
     try {
       const db = await this.getDB();
-      if (db.objectStoreNames.contains(this.STORE_CACHE)) {
-        await new Promise<void>((resolve, reject) => {
-          const tx = db.transaction(this.STORE_CACHE, 'readwrite');
-          const store = tx.objectStore(this.STORE_CACHE);
-          const req = store.put(entry);
-          req.onsuccess = () => resolve();
-          req.onerror = () => reject(req.error);
-        });
-      }
-    } catch (e) {
-      console.warn('IndexedDB setCache failed:', e);
-    }
+      await new Promise<void>((resolve, reject) => {
+        const tx = db.transaction(this.STORE_CACHE, 'readwrite');
+        tx.objectStore(this.STORE_CACHE).put(entry);
+        tx.oncomplete = () => resolve();
+        tx.onabort = () => reject(tx.error || new Error('Cache transaction aborted'));
+        tx.onerror = () => reject(tx.error);
+      });
+      persisted = true;
+    } catch { /* localStorage is a persistent fallback. */ }
+    if (!persisted) throw new Error('Unable to save offline data. Device storage may be full.');
+    this.memoryCache.set(key, structuredClone(data));
   }
 
   /**
@@ -328,7 +411,7 @@ export class OfflineStorageService {
    */
   public async getCache<T>(key: string): Promise<T | null> {
     if (this.memoryCache.has(key)) {
-      return this.memoryCache.get(key) as T;
+      return structuredClone(this.memoryCache.get(key)) as T;
     }
     try {
       const raw = localStorage.getItem('td_cache_' + key);
@@ -376,7 +459,8 @@ export class OfflineStorageService {
           const tx = db.transaction(this.STORE_CACHE, 'readwrite');
           const store = tx.objectStore(this.STORE_CACHE);
           const req = store.delete(key);
-          req.onsuccess = () => resolve();
+          tx.oncomplete = () => resolve();
+        tx.onabort = () => reject(tx.error || new Error('Offline transaction aborted'));
           req.onerror = () => reject(req.error);
         });
       }

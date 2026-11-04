@@ -20,20 +20,47 @@ export class SettingPage {
   readonly profileSettings = inject(ProfileSettingsService);
   editingProfile = false;
   profileDraft = { ...this.profileSettings.profile() };
+  isSavingProfile = false;
+  private profileEditVersion = 0;
 
   editProfile() {
     this.profileDraft = { ...this.profileSettings.profile() };
+    this.profileEditVersion = this.profileSettings.serverVersion();
     this.editingProfile = true;
   }
 
-  saveProfile() {
+  async saveProfile() {
+    if (this.isSavingProfile) return;
+    this.isSavingProfile = true;
     try {
-      this.profileSettings.save(this.profileDraft);
+      const synced = await this.profileSettings.save(this.profileDraft, this.profileEditVersion);
       this.editingProfile = false;
-      this.alertService.toast('Profile saved successfully!', 'success');
-    } catch {
-      this.alertService.toast('Unable to save. Check all fields and device storage.', 'error');
+      this.alertService.toast(synced ? 'Profile saved to API successfully!' : 'Profile saved on device. Waiting to sync with API.', synced ? 'success' : 'warning');
+    } catch (error: any) {
+      this.alertService.toast(error?.message || 'Unable to save company profile.', 'error');
+    } finally {
+      this.isSavingProfile = false;
+      this.cdr.detectChanges();
     }
+  }
+
+  get profileStatusText(): string {
+    const status = this.profileSettings.syncStatus();
+    return {
+      loading: 'Loading company profile from API...',
+      synced: 'Saved to API. Shared across your devices.',
+      pending: 'Pending API sync. Other devices will update after syncing.',
+      offline: 'Offline: showing the last profile available on this device.',
+      conflict: 'Another device changed this profile. Reload before editing.',
+      'local-only': 'Not saved to API yet. Edit and Save to publish these company details.',
+      error: 'Unable to load or save the company profile through API.'
+    }[status];
+  }
+
+  async reloadProfile() {
+    await this.profileSettings.refresh(true);
+    if (this.profileSettings.syncStatus() === 'synced') this.editingProfile = false;
+    this.cdr.detectChanges();
   }
   deviceAutoBlocking = false;
   trainingMode = false;
@@ -49,6 +76,7 @@ export class SettingPage {
 
   ionViewWillEnter() {
     this.editingProfile = false;
+    void this.profileSettings.refresh();
     try {
       this.isDarkMode = localStorage.getItem('pos-dark-mode') === 'true';
     } catch (e) {}

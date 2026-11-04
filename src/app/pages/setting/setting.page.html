@@ -14,6 +14,9 @@
 
     <div class="section-label">PROFILE SYSTEM SETTING</div>
     <div class="profile-section">
+      <p class="profile-note" role="status">{{ profileStatusText }}</p>
+      <p class="profile-note" *ngIf="profileSettings.errorMessage()">{{ profileSettings.errorMessage() }}</p>
+      <ion-button *ngIf="profileSettings.syncStatus() === 'conflict'" fill="outline" (click)="reloadProfile()">Reload API Profile</ion-button>
       <div *ngIf="!editingProfile">
         <h3>{{ profileSettings.profile().appName }}</h3>
         <strong>{{ profileSettings.profile().companyName }}</strong>
@@ -29,9 +32,9 @@
           [(ngModel)]="profileDraft.address" required maxlength="200"></ion-input>
         <ion-input label="Address Line 2 / City / Postcode" labelPlacement="stacked" name="city"
           [(ngModel)]="profileDraft.city" required maxlength="200"></ion-input>
-        <p class="profile-note">Saved on this device. Used for app headers and receipt printing.</p>
-        <ion-button type="submit" [disabled]="profileForm.invalid || !profileDraft.appName.trim() || !profileDraft.companyName.trim() || !profileDraft.address.trim() || !profileDraft.city.trim()">Save Profile</ion-button>
-        <ion-button type="button" fill="outline" (click)="editingProfile = false">Cancel</ion-button>
+        <p class="profile-note">Company details are shared through API. Offline changes wait for synchronization.</p>
+        <ion-button type="submit" [disabled]="isSavingProfile || profileSettings.syncStatus() === 'conflict' || profileForm.invalid || !profileDraft.appName.trim() || !profileDraft.companyName.trim() || !profileDraft.address.trim() || !profileDraft.city.trim()">{{ isSavingProfile ? 'Saving...' : 'Save Profile' }}</ion-button>
+        <ion-button type="button" fill="outline" [disabled]="isSavingProfile" (click)="editingProfile = false">Cancel</ion-button>
       </form>
     </div>
 

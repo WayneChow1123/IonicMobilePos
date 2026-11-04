@@ -9,7 +9,8 @@
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
-    "lint": "ng lint"
+    "lint": "ng lint",
+    "test:offline": "ng test --watch=false --browsers=ChromeHeadless --include=src/app/services/offline-crud.spec.ts --include=src/app/services/profile-settings.spec.ts --progress=false --include=src/app/services/invoice-receipt.spec.ts"
   },
   "private": true,
   "dependencies": {

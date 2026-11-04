@@ -56,7 +56,7 @@ export class SyncService {
       Network.addListener('networkStatusChange', (status: any) => {
         if (status.connected) {
           console.log('[SyncService] Network restored (Capacitor), triggering sync with forceRetry...');
-          this.syncPendingOrders(true).catch(e => console.error('[SyncService] Network trigger error:', e));
+          this.syncPendingOrders().catch(e => console.error('[SyncService] Network trigger error:', e));
         }
       });
     } catch (e) {
@@ -68,7 +68,7 @@ export class SyncService {
       App.addListener('appStateChange', state => {
         if (state.isActive) {
           console.log('[SyncService] App resumed to foreground, triggering sync check...');
-          this.syncPendingOrders(true).catch(e => console.error('[SyncService] AppState trigger error:', e));
+          this.syncPendingOrders().catch(e => console.error('[SyncService] AppState trigger error:', e));
         }
       });
     } catch (e) {
@@ -79,10 +79,10 @@ export class SyncService {
     if (typeof window !== 'undefined') {
       window.addEventListener('online', () => {
         console.log('[SyncService] Window online event fired, triggering sync...');
-        this.syncPendingOrders(true).catch(e => console.error('[SyncService] Window online trigger error:', e));
+        this.syncPendingOrders().catch(e => console.error('[SyncService] Window online trigger error:', e));
       });
       window.addEventListener('focus', () => {
-        this.syncPendingOrders(true).catch(e => console.error('[SyncService] Focus trigger error:', e));
+        this.syncPendingOrders().catch(e => console.error('[SyncService] Focus trigger error:', e));
       });
     }
 
@@ -92,7 +92,7 @@ export class SyncService {
         this.offlineStorage.getPendingQueue().then(queue => {
           if (queue && queue.length > 0) {
             console.log('[SyncService] Heartbeat auto-sync trigger: pending items =', queue.length);
-            this.syncPendingOrders(true).catch(e => console.warn('[SyncService] Heartbeat sync error:', e));
+            this.syncPendingOrders().catch(e => console.warn('[SyncService] Heartbeat sync error:', e));
           }
         });
       }
@@ -118,71 +118,28 @@ export class SyncService {
       return { successCount: 0, failCount: 0, totalProcessed: 0 };
     }
 
-    // 检查网络状态
-    const status = await this.checkNetworkConnected();
-    if (!status) {
-      return { successCount: 0, failCount: 0, totalProcessed: 0 };
-    }
-
+    // Acquire the mutex before awaiting network checks.
     this.isSyncing = true;
     this.isSyncingSubject.next(true);
-
     let successCount = 0;
     let failCount = 0;
     let lastError: string | undefined;
 
     try {
-      // 0. 优先同步离线创建的商品与客户，确保获取到真实的服务端自增 ID，并完成所有待发票订单的 ID 回填
-      const priorityRes = await this.syncPriorityEntities(forceRetry);
-      successCount += priorityRes.successCount;
-      failCount += priorityRes.failCount;
-      if (priorityRes.lastError && !lastError) {
-        lastError = priorityRes.lastError;
+      if (!await this.checkNetworkConnected()) return { successCount: 0, failCount: 0, totalProcessed: 0 };
+      if (!(await this.offlineStorage.getPendingQueue()).length && !(await this.localDb.getPendingOrders()).length) {
+        return { successCount: 0, failCount: 0, totalProcessed: 0 };
       }
+      try { await this.api.verifyOfflineSyncSupport(); }
+      catch { return { successCount: 0, failCount: 1, totalProcessed: 0, lastError: 'Offline sync needs the updated API and database schema. Local changes are retained.' }; }
 
       // 1. 从 LocalDbService 获取所有 PENDING 订单（已按 created_at 升序排列）
       const pendingOrders = await this.localDb.getPendingOrders();
 
       for (const order of pendingOrders) {
-        if (order.sync_retry_count >= this.MAX_RETRY_LIMIT && order.last_sync_error?.includes('400')) {
-          continue;
-        }
-
-        const payload = await this.buildInvoicePayload(order);
-
-        try {
-          const res = await firstValueFrom(this.api.postInvoiceDirect(payload));
-          const serverId = res?.invoiceId || res?.id || (order.serverId || 0);
-          await this.localDb.markAsSynced(order.clientId, serverId);
-          await this.offlineStorage.removeQueueItem(order.clientId);
-
-          successCount++;
-          this.backoffDelayMs = 2000;
-        } catch (err: any) {
-          failCount++;
-          const errorType = this.classifyError(err);
-
-          if (errorType === 'AUTH_ERROR') {
-            console.warn('[SyncService] 401 Unauthorized encountered. Halting queue.');
-            this.authErrorSubject.next('Session expired or unauthorized. Please re-login.');
-            break;
-          }
-
-          if (errorType === 'NETWORK_ERROR') {
-            console.warn(`[SyncService] Network/Server unavailable. Applying backoff (${this.backoffDelayMs}ms):`, err);
-            await this.localDb.markSyncFailed(order.clientId, 'Network error / server unavailable');
-            await this.sleep(this.backoffDelayMs);
-            this.backoffDelayMs = Math.min(this.backoffDelayMs * 2, this.MAX_BACKOFF_DELAY_MS);
-            break;
-          }
-
-          if (errorType === 'CLIENT_DATA_ERROR') {
-            const errMsg = err?.error?.message || (typeof err?.error === 'string' ? err?.error : null) || 'Bad Request (400)';
-            lastError = errMsg;
-            console.error('[SyncService] Client data error on order:', order.clientId, errMsg);
-            await this.localDb.markSyncFailed(order.clientId, `Data Error: ${errMsg}`);
-          }
-        }
+        // One authoritative upload path. Recover older local orders that have no queue entry.
+        const queued = await this.offlineStorage.getQueueItemById(order.clientId);
+        if (!queued) await this.offlineStorage.enqueue('CREATE_INVOICE', await this.buildInvoicePayload(order), order.clientId);
       }
 
       // 2. 全量同步 offlineStorage 中的各类任务（发票创建、发票修改、发票删除、CN操作等）
@@ -225,13 +182,16 @@ export class SyncService {
     }
 
     return {
-      customerId: Number(customerId) || 0,
+      customerId,
       invoiceDate: order.orderDate,
       remark: order.remark || '',
-      useCreditBalance: false,
-      selectedCreditNoteId: null,
+      useCreditBalance: !!order.useCreditBalance,
+      selectedCreditNoteId: order.selectedCreditNoteId ?? null,
+      selectedCreditNoteIds: order.selectedCreditNoteIds ?? null,
       termType: order.termType || 'Cash Sale',
-      paidAmount: order.paidAmount || 0,
+      paidAmount: order.inputPaidAmount ?? order.paidAmount ?? 0,
+      offlineCreditReservations: order.offlineCreditReservations,
+      offlineChangeCreditNoteId: order.offlineChangeCreditNoteId,
       paymentMethod: order.paymentMethod || 'CASH',
       clientId: order.clientId,           // 关键客户端 Guid 幂等主键
       offlineReferenceId: order.clientId, // 兼容字段
@@ -245,7 +205,7 @@ export class SyncService {
           }
         }
         return {
-          productId: Number(pid) || 0,
+          productId: pid,
           quantity: it.quantity,
           unitPrice: it.unitPrice,
           remark: it.remark || ''
@@ -272,7 +232,7 @@ export class SyncService {
     if (err?.message?.includes('timeout') || err?.message?.includes('Network')) {
       return 'NETWORK_ERROR';
     }
-    return 'NETWORK_ERROR';
+    return 'CLIENT_DATA_ERROR';
   }
 
   /**
@@ -296,171 +256,50 @@ export class SyncService {
    * 保证在同步发票或订单之前，获取到后端分配的真实自增数字 ID，
    * 并级联更新本地缓存、Dexie 订单明细及待同步队列中的临时外键引用。
    */
-  public async syncPriorityEntities(forceRetry: boolean = false): Promise<{ successCount: number; failCount: number; lastError?: string }> {
+  public async syncPriorityEntities(forceRetry = false): Promise<{ successCount: number; failCount: number; lastError?: string }> {
     let successCount = 0;
     let failCount = 0;
     let lastError: string | undefined;
     const baseUrl = (this.api as any).baseUrl;
-
-    try {
-      const pending = await this.offlineStorage.getPendingQueue();
-      const priorityTasks = pending.filter(t => t.type === 'CREATE_PRODUCT' || t.type === 'CREATE_CUSTOMER');
-
-      for (const task of priorityTasks) {
-        if (!forceRetry && (task.status === 'failed' || task.retryCount >= this.MAX_RETRY_LIMIT)) {
-          continue;
+    const queue = await this.offlineStorage.getPendingQueue();
+    const tasks = queue.filter(q => ['CREATE_CATEGORY', 'CREATE_PRODUCT', 'CREATE_CUSTOMER'].includes(q.type));
+    tasks.sort((a, b) => Number(b.type === 'CREATE_CATEGORY') - Number(a.type === 'CREATE_CATEGORY'));
+    for (let task of tasks) {
+      if (!forceRetry && (task.status === 'failed' || task.retryCount >= this.MAX_RETRY_LIMIT)) continue;
+      try {
+        const latest = await this.offlineStorage.getQueueItemById(task.id);
+        if (!latest) continue;
+        task = latest;
+        if (!task.operationId) {
+          task.operationId = this.offlineStorage.generateId();
+          await this.offlineStorage.updateQueueItem(task);
         }
-
-        try {
-          if (task.type === 'CREATE_PRODUCT') {
-            const url = `${baseUrl}/Product/CreateProducts/createproducts`;
-            const payload = task.payload?.data || task.payload;
-            const res: any = await firstValueFrom(this.api.postDirect(url, payload));
-            const serverId = res?.id || res?.data?.id || res?.productId || 0;
-
-            if (serverId) {
-              // 1. 更新商品缓存
-              const cachedProducts = await this.offlineStorage.getCache<any[]>('products') || [];
-              const matched = cachedProducts.find(p => String(p.id) === String(task.id) || p.offlineId === task.id);
-              if (matched) {
-                matched.id = serverId;
-                matched.isOffline = false;
-                await this.offlineStorage.setCache('products', cachedProducts);
-              }
-
-              // 2. 级联更新 Dexie 本地订单明细中的临时 productId
-              try {
-                await this.localDb.updateProductIdInOrderItems(task.id, serverId);
-              } catch (dexErr) {
-                console.warn('[SyncService] Failed updating Dexie order_items productId:', dexErr);
-              }
-
-              // 3. 级联更新待同步队列中的外键引用
-              const pendingQueue = await this.offlineStorage.getPendingQueue();
-              for (const q of pendingQueue) {
-                // 发票创建
-                if (q.type === 'CREATE_INVOICE' && q.payload?.items && Array.isArray(q.payload.items)) {
-                  let changed = false;
-                  for (const it of q.payload.items) {
-                    if (String(it.productId) === String(task.id)) {
-                      it.productId = serverId;
-                      changed = true;
-                    }
-                  }
-                  if (changed) await this.offlineStorage.updateQueueItem(q);
-                }
-                // 发票更新
-                if (q.type === 'UPDATE_INVOICE' && q.payload) {
-                  const itList = q.payload.data?.items || q.payload.items;
-                  if (Array.isArray(itList)) {
-                    let changed = false;
-                    for (const it of itList) {
-                      if (String(it.productId) === String(task.id)) {
-                        it.productId = serverId;
-                        changed = true;
-                      }
-                    }
-                    if (changed) await this.offlineStorage.updateQueueItem(q);
-                  }
-                }
-                // 退货单
-                if (q.type === 'CREATE_CN' || q.type === 'CREATE_GLOBAL_CN' || q.type === 'UPDATE_CN') {
-                  const itList = q.payload?.items || q.payload?.data?.items;
-                  if (Array.isArray(itList)) {
-                    let changed = false;
-                    for (const it of itList) {
-                      if (String(it.productId) === String(task.id)) {
-                        it.productId = serverId;
-                        changed = true;
-                      }
-                    }
-                    if (changed) await this.offlineStorage.updateQueueItem(q);
-                  }
-                }
-                // 客户特价
-                if ((q.type === 'CREATE_CUSTOMER_PRICE' || q.type === 'UPDATE_CUSTOMER_PRICE' || q.type === 'DELETE_CUSTOMER_PRICE') && q.payload) {
-                  if (String(q.payload.productId) === String(task.id) || String(q.payload.data?.productId) === String(task.id)) {
-                    if (q.payload.productId) q.payload.productId = serverId;
-                    if (q.payload.data?.productId) q.payload.data.productId = serverId;
-                    await this.offlineStorage.updateQueueItem(q);
-                  }
-                }
-                // 商品后续操作
-                if ((q.type === 'UPDATE_PRODUCT' || q.type === 'DELETE_PRODUCT' || q.type === 'ACTIVATE_PRODUCT' || q.type === 'DEACTIVATE_PRODUCT' || q.type === 'ADD_STOCK') && q.payload) {
-                  if (String(q.payload.id) === String(task.id)) {
-                    q.payload.id = serverId;
-                    await this.offlineStorage.updateQueueItem(q);
-                  }
-                }
-              }
-            }
-
-            await this.offlineStorage.removeQueueItem(task.id);
-            successCount++;
-
-          } else if (task.type === 'CREATE_CUSTOMER') {
-            const url = `${baseUrl}/Customer/CreateCustomers/createcustomers`;
-            const payload = task.payload?.data || task.payload;
-            const res: any = await firstValueFrom(this.api.postDirect(url, payload));
-            const serverId = res?.data?.id || res?.id || 0;
-
-            if (serverId) {
-              const cachedCustomers = await this.offlineStorage.getCache<any[]>('customers') || [];
-              const matched = cachedCustomers.find(c => String(c.id) === String(task.id) || c.offlineId === task.id);
-              if (matched) {
-                matched.id = serverId;
-                matched.isOffline = false;
-                await this.offlineStorage.setCache('customers', cachedCustomers);
-              }
-
-              // 级联更新 Dexie 本地订单主体中的临时 customerId
-              try {
-                await this.localDb.updateCustomerIdInOrders(task.id, serverId);
-              } catch (dexErr) {
-                console.warn('[SyncService] Failed updating Dexie orders customerId:', dexErr);
-              }
-
-              // 同步更新队列中依赖该离线 customerId 的发票和特价任务
-              const pendingQueue = await this.offlineStorage.getPendingQueue();
-              for (const q of pendingQueue) {
-                if (q.type === 'CREATE_INVOICE' && q.payload && String(q.payload.customerId) === String(task.id)) {
-                  q.payload.customerId = serverId;
-                  await this.offlineStorage.updateQueueItem(q);
-                }
-                if ((q.type === 'CREATE_CUSTOMER_PRICE' || q.type === 'UPDATE_CUSTOMER_PRICE' || q.type === 'DELETE_CUSTOMER_PRICE') && q.payload && String(q.payload.customerId) === String(task.id)) {
-                  q.payload.customerId = serverId;
-                  await this.offlineStorage.updateQueueItem(q);
-                }
-              }
-            }
-
-            await this.offlineStorage.removeQueueItem(task.id);
-            successCount++;
-          }
-        } catch (err: any) {
-          failCount++;
-          const errorType = this.classifyError(err);
-          if (errorType === 'AUTH_ERROR') {
-            this.authErrorSubject.next('Session expired or unauthorized. Please re-login.');
-            break;
-          }
-          if (errorType === 'NETWORK_ERROR') {
-            break;
-          }
-          if (errorType === 'CLIENT_DATA_ERROR') {
-            const errMsg = err?.error?.message || (typeof err?.error === 'string' ? err?.error : null) || 'Bad Request (400)';
-            lastError = errMsg;
-            task.status = 'failed';
-            task.retryCount = (task.retryCount || 0) + 1;
-            task.lastError = errMsg;
-            await this.offlineStorage.updateQueueItem(task);
-          }
-        }
+        task.attemptedAt = Date.now();
+        await this.offlineStorage.updateQueueItem(task);
+        const type = task.type === 'CREATE_CATEGORY' ? 'category' : task.type === 'CREATE_PRODUCT' ? 'product' : 'customer';
+        const endpoint = { category: '/Category/CreateCategory/createcategory', product: '/Product/CreateProducts/createproducts', customer: '/Customer/CreateCustomers/createcustomers' }[type];
+        const payload = task.payload?.data || task.payload;
+        if (type === 'product' && payload.categoryId != null) payload.categoryId = await this.resolveId('category', payload.categoryId);
+        const result: any = await firstValueFrom(this.api.postDirect(baseUrl + endpoint, payload, task.operationId));
+        const id = result?.id || result?.data?.id || result?.productId || result?.customerId;
+        await this.offlineStorage.mapServerId(type, task.id, id);
+        if (type === 'product') await this.localDb.updateProductIdInOrderItems(task.id, id);
+        if (type === 'customer') await this.localDb.updateCustomerIdInOrders(task.id, id);
+        this.api.clearAllCache();
+        await this.offlineStorage.removeQueueItem(task.id);
+        successCount++;
+      } catch (error: any) {
+        failCount++;
+        lastError = error?.error?.message || (typeof error?.error === 'string' ? error.error : error?.message) || 'Unable to sync';
+        task.retryCount++;
+        task.lastError = lastError;
+        if (task.retryCount >= this.MAX_RETRY_LIMIT) task.status = 'failed';
+        await this.offlineStorage.updateQueueItem(task);
+        const kind = this.classifyError(error);
+        if (kind === 'AUTH_ERROR') this.authErrorSubject.next('Session expired or unauthorized. Please re-login.');
+        if (kind === 'AUTH_ERROR' || kind === 'NETWORK_ERROR') break;
       }
-    } catch (e: any) {
-      lastError = e?.message;
     }
-
     return { successCount, failCount, lastError };
   }
 
@@ -497,31 +336,56 @@ export class SyncService {
       const baseUrl = (this.api as any).baseUrl;
 
       // 过滤掉已由 syncPriorityEntities 处理的 CREATE_PRODUCT 和 CREATE_CUSTOMER
-      const remainingTasks = pending.filter(t => t.type !== 'CREATE_PRODUCT' && t.type !== 'CREATE_CUSTOMER');
+      const remainingTasks = pending.filter(t => t.type !== 'CREATE_CATEGORY' && t.type !== 'CREATE_PRODUCT' && t.type !== 'CREATE_CUSTOMER');
 
       // 关键依赖排序：保证发票在退货单之前同步，以便退货单在服务端有发票可以挂靠 (Anchor)
       const getTaskPriority = (t: string): number => {
+        if (t === 'UPDATE_CATEGORY') return 0;
         if (t === 'CREATE_INVOICE') return 1;
         if (t === 'UPDATE_INVOICE') return 2;
         if (t.startsWith('UPDATE_PROD') || t.startsWith('ACTIVATE') || t.startsWith('DEACTIVATE') || t.startsWith('ADD_STOCK')) return 3;
         if (t === 'CREATE_CN' || t === 'CREATE_GLOBAL_CN') return 4;
         if (t === 'UPDATE_CN') return 5;
         if (t === 'CREATE_BULK_PAYMENT') return 6;
+        if (t === 'USE_CN') return 7;
         return 10;
       };
       remainingTasks.sort((a, b) => getTaskPriority(a.type) - getTaskPriority(b.type));
 
-      for (const task of remainingTasks) {
+      for (let task of remainingTasks) {
         if (!forceRetry && (task.status === 'failed' || task.retryCount >= this.MAX_RETRY_LIMIT)) {
           continue;
         }
 
         try {
-          if (task.type === 'UPDATE_PRODUCT') {
+          const latest = await this.offlineStorage.getQueueItemById(task.id);
+          if (!latest) continue;
+          task = latest;
+          if (!task.operationId) { task.operationId = this.offlineStorage.generateId(); await this.offlineStorage.updateQueueItem(task); }
+          task.attemptedAt = Date.now();
+          await this.offlineStorage.updateQueueItem(task);
+          if (task.type === 'UPDATE_CATEGORY' || task.type === 'DELETE_CATEGORY') {
+            const id = await this.resolveId('category', task.payload.id);
+            if (task.type === 'UPDATE_CATEGORY') await firstValueFrom(this.api.putDirect(baseUrl + '/Category/EditCategory/editcategory/' + id, task.payload.data, task.operationId));
+            else {
+              try { await firstValueFrom(this.api.deleteDirect(baseUrl + '/Category/DeleteCategory/deletecategory/' + id, task.operationId)); }
+              catch (err: any) { if (err?.status !== 404) throw err; }
+            }
+            await this.offlineStorage.removeQueueItem(task.id);
+            successCount++;
+          } else if (task.type === 'USE_CN') {
+            const invoiceId = await this.resolveId('invoice', task.payload.requestedInvoiceId || task.payload.invoiceId);
+            const cnId = await this.resolveId('cn', task.payload.cnId);
+            await firstValueFrom(this.api.patchDirect(baseUrl + '/Credit/UseCreditNote/invoices/' + invoiceId + '/credit-notes/' + cnId + '/use', task.payload.requestBody || {
+              expectedInvoiceId: invoiceId, expectedAmount: task.payload.amount
+            }, task.operationId));
+            await this.offlineStorage.removeQueueItem(task.id);
+            successCount++;
+          } else if (task.type === 'UPDATE_PRODUCT') {
             const pid = task.payload?.id || String(task.id).replace('upd_prod_', '');
             const url = `${baseUrl}/Product/EditProduct/editproduct/${pid}`;
             const payload = task.payload?.data || task.payload;
-            await firstValueFrom(this.api.putDirect(url, payload));
+            await firstValueFrom(this.api.putDirect(url, payload, task.operationId));
             const cachedProducts = await this.offlineStorage.getCache<any[]>('products') || [];
             const matched = cachedProducts.find(p => String(p.id) === String(pid));
             if (matched) {
@@ -534,7 +398,7 @@ export class SyncService {
             const pid = task.payload?.id || String(task.id).replace('del_prod_', '');
             const url = `${baseUrl}/Product/DeleteProduct/deleteproduct/${pid}`;
             try {
-              await firstValueFrom(this.api.deleteDirect(url));
+              await firstValueFrom(this.api.deleteDirect(url, task.operationId));
             } catch (err: any) {
               if (err?.status !== 404) throw err;
             }
@@ -543,7 +407,7 @@ export class SyncService {
           } else if (task.type === 'ACTIVATE_PRODUCT') {
             const pid = task.payload?.id || String(task.id).replace('act_prod_', '');
             const url = `${baseUrl}/Product/ActivateProduct/activateproduct/${pid}`;
-            await firstValueFrom(this.api.patchDirect(url, {}));
+            await firstValueFrom(this.api.patchDirect(url, {}, task.operationId));
             const cachedProducts = await this.offlineStorage.getCache<any[]>('products') || [];
             const matched = cachedProducts.find(p => String(p.id) === String(pid));
             if (matched) {
@@ -555,7 +419,7 @@ export class SyncService {
           } else if (task.type === 'DEACTIVATE_PRODUCT') {
             const pid = task.payload?.id || String(task.id).replace('deact_prod_', '');
             const url = `${baseUrl}/Product/DeactivateProduct/deactivateproduct/${pid}`;
-            await firstValueFrom(this.api.patchDirect(url, {}));
+            await firstValueFrom(this.api.patchDirect(url, {}, task.operationId));
             const cachedProducts = await this.offlineStorage.getCache<any[]>('products') || [];
             const matched = cachedProducts.find(p => String(p.id) === String(pid));
             if (matched) {
@@ -568,7 +432,7 @@ export class SyncService {
             const pid = task.payload?.id || String(task.id).replace('stock_prod_', '').split('_')[0];
             const url = `${baseUrl}/Product/AddStock/addstock/${pid}`;
             const payload = { quantity: Number(task.payload?.quantity || 0) };
-            await firstValueFrom(this.api.patchDirect(url, payload));
+            await firstValueFrom(this.api.patchDirect(url, payload, task.operationId));
             const cachedProducts = await this.offlineStorage.getCache<any[]>('products') || [];
             const matched = cachedProducts.find(p => String(p.id) === String(pid));
             if (matched) {
@@ -580,33 +444,33 @@ export class SyncService {
           } else if (task.type === 'CREATE_CUSTOMER_PRICE') {
             const cid = task.payload?.customerId;
             const url = `${baseUrl}/Customer/CreateCustomerProductPrice/customers/${cid}/product-prices`;
-            await firstValueFrom(this.api.postDirect(url, task.payload?.data || task.payload));
+            await firstValueFrom(this.api.postDirect(url, task.payload?.data || task.payload, task.operationId));
             await this.offlineStorage.removeQueueItem(task.id);
             successCount++;
           } else if (task.type === 'UPDATE_CUSTOMER_PRICE') {
             const cid = task.payload?.customerId;
             const pid = task.payload?.productId;
             const url = `${baseUrl}/Customer/UpdateCustomerProductPrice/customers/${cid}/product-prices/${pid}`;
-            await firstValueFrom(this.api.patchDirect(url, task.payload?.data || task.payload));
+            await firstValueFrom(this.api.patchDirect(url, task.payload?.data || task.payload, task.operationId));
             await this.offlineStorage.removeQueueItem(task.id);
             successCount++;
           } else if (task.type === 'DELETE_CUSTOMER_PRICE') {
             const cid = task.payload?.customerId;
             const pid = task.payload?.productId;
             const url = `${baseUrl}/Customer/DeleteCustomerProductPrice/customers/${cid}/product-prices/${pid}`;
-            await firstValueFrom(this.api.deleteDirect(url));
+            await firstValueFrom(this.api.deleteDirect(url, task.operationId));
             await this.offlineStorage.removeQueueItem(task.id);
             successCount++;
           } else if (task.type === 'UPDATE_CUSTOMER') {
             const cid = task.payload?.id;
             const url = `${baseUrl}/Customer/EditCustomer/editcustomers/${cid}`;
-            await firstValueFrom(this.api.putDirect(url, task.payload?.data || task.payload));
+            await firstValueFrom(this.api.putDirect(url, task.payload?.data || task.payload, task.operationId));
             await this.offlineStorage.removeQueueItem(task.id);
             successCount++;
           } else if (task.type === 'DELETE_CUSTOMER') {
             const cid = task.payload?.id;
             const url = `${baseUrl}/Customer/DeleteCustomer/deletecustomer/${cid}`;
-            await firstValueFrom(this.api.deleteDirect(url));
+            await firstValueFrom(this.api.deleteDirect(url, task.operationId));
             await this.offlineStorage.removeQueueItem(task.id);
             successCount++;
           } else if (task.type === 'CREATE_INVOICE') {
@@ -630,8 +494,18 @@ export class SyncService {
                 }
               }
             }
-            const res = await firstValueFrom(this.api.postInvoiceDirect(task.payload));
+            task.payload.customerId = await this.resolveId('customer', task.payload.customerId);
+            for (const item of task.payload.items || []) item.productId = await this.resolveId('product', item.productId);
+            if (task.payload.selectedCreditNoteId) task.payload.selectedCreditNoteId = await this.resolveId('cn', task.payload.selectedCreditNoteId);
+            if (Array.isArray(task.payload.selectedCreditNoteIds)) {
+              task.payload.selectedCreditNoteIds = await Promise.all(task.payload.selectedCreditNoteIds.map((id: any) => this.resolveId('cn', id)));
+            }
+            const res = await firstValueFrom(this.api.postInvoiceDirect(task.payload, task.operationId));
             const serverId = res?.invoiceId || res?.id || 0;
+            await this.offlineStorage.mapServerId('invoice', task.id, serverId);
+            if (task.payload.offlineChangeCreditNoteId) {
+              await this.offlineStorage.mapServerId('cn', task.payload.offlineChangeCreditNoteId, res?.changeCreditNoteId);
+            }
             try { await this.localDb.markAsSynced(task.id, serverId); } catch { }
             if (serverId) {
               const cachedInvs = await this.offlineStorage.getCache<any[]>('invoices_list') || [];
@@ -649,7 +523,7 @@ export class SyncService {
             const invId = task.payload?.invoiceId || task.payload?.id || String(task.id).replace('upd_inv_', '');
             
             // 解析真实的 Server 发票 ID
-            let realInvId: any = invId;
+            let realInvId: any = await this.resolveId('invoice', invId).catch(() => invId);
             if (isNaN(Number(invId)) || Number(invId) >= 100000000) {
               const strId = String(invId);
               const order = await this.localDb.getOrderByClientId(strId);
@@ -682,34 +556,14 @@ export class SyncService {
               }
             }
 
-            const cachedProds = await this.offlineStorage.getCache<any[]>('products') || [];
-            const cleanItems = (rawData.items || []).map((it: any) => {
-              let p = it.unitPrice != null ? Number(it.unitPrice) : null;
-              if (p !== null && p <= 0) {
-                p = null; // 转换为 null，使后端自动按特价/原价取值，避免 400 校验错误
-              }
-              let pid = it.productId;
-              if (typeof pid === 'string' && pid.startsWith('prod_')) {
-                const mp = cachedProds.find(cp => String(cp.id) === String(pid) || cp.offlineId === pid);
-                if (mp && typeof mp.id === 'number') pid = mp.id;
-              }
-              return {
-                productId: Number(pid) || 0,
-                quantity: Number(it.quantity || 1),
-                unitPrice: p,
-                remark: it.remark || ''
-              };
-            });
-            const cleanData: any = {
-              customerId: custId != null ? Number(custId) : undefined,
-              customerName: rawData.customerName,
-              invoiceDate: rawData.invoiceDate,
-              remark: rawData.remark,
-              termType: rawData.termType,
-              items: cleanItems
-            };
-            console.log('[SyncService] Sending clean UPDATE_INVOICE payload to invId:', realInvId, cleanData);
-            await firstValueFrom(this.api.updateInvoiceDirect(realInvId, cleanData));
+            const cleanData = { ...rawData };
+            if (custId != null) cleanData.customerId = await this.resolveId('customer', custId);
+            if (Array.isArray(rawData.items)) {
+              cleanData.items = [];
+              for (const item of rawData.items) cleanData.items.push({ ...item, productId: await this.resolveId('product', item.productId) });
+            }
+            realInvId = await this.resolveId('invoice', realInvId);
+            await firstValueFrom(this.api.updateInvoiceDirect(realInvId, cleanData, task.operationId));
             // 同步成功后清理本地 overrides 缓存，确保多端以服务器为准
             try {
               const overrides = JSON.parse(localStorage.getItem('invoice_customer_overrides') || '{}');
@@ -722,7 +576,7 @@ export class SyncService {
           } else if (task.type === 'DELETE_INVOICE') {
             try {
               const targetInvId = task.payload.invoiceId;
-              let realDeleteId = targetInvId;
+              let realDeleteId = await this.resolveId('invoice', targetInvId).catch(() => targetInvId);
               if (isNaN(Number(targetInvId)) || Number(targetInvId) >= 100000000) {
                 const strId = String(targetInvId);
                 const order = await this.localDb.getOrderByClientId(strId);
@@ -730,165 +584,37 @@ export class SyncService {
                   realDeleteId = order.serverId;
                 }
               }
-              await firstValueFrom(this.api.deleteInvoiceDirect(realDeleteId));
+              await firstValueFrom(this.api.deleteInvoiceDirect(realDeleteId, task.operationId));
             } catch (err: any) {
               if (err?.status !== 404) throw err;
             }
             await this.offlineStorage.removeQueueItem(task.id);
             successCount++;
-          } else if (task.type === 'CREATE_CN') {
-            let invId = task.payload?.invoiceId;
-            let realServerInvId: number | null = null;
-
-            // 1. Check if invId is already a valid server integer ID
-            const numInvId = Number(invId);
-            if (!isNaN(numInvId) && numInvId > 0 && numInvId < 100000000) {
-              realServerInvId = numInvId;
+          } else if (task.type === 'CREATE_CN' || task.type === 'CREATE_GLOBAL_CN') {
+            const data = { ...task.payload.data };
+            for (const item of data.items || []) item.productId = await this.resolveId('product', item.productId);
+            let response: any;
+            if (task.type === 'CREATE_CN') {
+              const invoiceId = await this.resolveId('invoice', task.payload.invoiceId);
+              response = await firstValueFrom(this.api.postDirect(baseUrl + '/Credit/CreateCreditNote/invoices/' + invoiceId + '/credit-notes', data, task.operationId));
+            } else {
+              const customerId = await this.resolveId('customer', task.payload.customerId);
+              const preferred = data.preferredInvoiceId || task.payload.invoiceId;
+              if (preferred) data.preferredInvoiceId = await this.resolveId('invoice', preferred);
+              response = await firstValueFrom(this.api.postDirect(baseUrl + '/Credit/CreateGlobalCreditNote/customers/' + customerId + '/credit-notes-global', data, task.operationId));
             }
-
-            // 2. If it's an offline ID (UUID, offline_, inv_, OFFLINE-), look up the serverId
-            if (!realServerInvId && invId) {
-              const strInvId = String(invId);
-              const order = await this.localDb.getOrderByClientId(strInvId);
-              if (order && order.serverId) {
-                realServerInvId = order.serverId;
-              } else {
-                const cachedInvs = await this.offlineStorage.getCache<any[]>('invoices_list') || [];
-                const matched = cachedInvs.find(inv =>
-                  String(inv.id) === strInvId ||
-                  inv.offlineId === strInvId ||
-                  inv.clientId === strInvId ||
-                  inv.docNo === strInvId ||
-                  inv.invoiceNumber === strInvId
-                );
-                if (matched && matched.serverId) {
-                  realServerInvId = matched.serverId;
-                } else if (matched && typeof matched.id === 'number' && matched.id > 0 && matched.id < 100000000) {
-                  realServerInvId = matched.id;
-                }
-              }
-            }
-
-            // 3. Try to sync via specific invoice endpoint if server ID is resolved
-            let synced = false;
-            if (realServerInvId) {
-              try {
-                const url = `${baseUrl}/Credit/CreateCreditNote/invoices/${realServerInvId}/credit-notes`;
-                await firstValueFrom(this.api.postDirect(url, task.payload.data));
-                synced = true;
-              } catch (err: any) {
-                console.warn('[SyncService] Specific invoice CN failed, attempting global fallback:', err);
-              }
-            }
-
-            // 4. Fallback to CreateGlobalCreditNote for the customer if invoice endpoint fails or ID not resolved
-            if (!synced) {
-              let custId = task.payload?.customerId || task.payload?.data?.customerId;
-              if (typeof custId === 'string' && custId.startsWith('cust_')) {
-                const cachedCustomers = await this.offlineStorage.getCache<any[]>('customers') || [];
-                const matched = cachedCustomers.find(c => String(c.id) === String(custId) || c.offlineId === custId);
-                if (matched && typeof matched.id === 'number') {
-                  custId = matched.id;
-                }
-              }
-              // If realServerInvId not found yet, check ANY valid server invoice for this customer in cache
-              if (!realServerInvId && custId) {
-                const cachedInvs = await this.offlineStorage.getCache<any[]>('invoices_list') || [];
-                const matched = cachedInvs.find(inv =>
-                  (String(inv.customerId) === String(custId) || String(inv.CustomerId) === String(custId)) &&
-                  ((typeof inv.id === 'number' && inv.id > 0 && inv.id < 100000000) || inv.serverId)
-                );
-                if (matched) {
-                  realServerInvId = matched.serverId || matched.id;
-                }
-              }
-
-              if (custId) {
-                const url = `${baseUrl}/Credit/CreateGlobalCreditNote/customers/${custId}/credit-notes-global`;
-                const globalData = {
-                  ...task.payload.data,
-                  preferredInvoiceId: realServerInvId || undefined
-                };
-                await firstValueFrom(this.api.postDirect(url, globalData));
-                synced = true;
-              } else {
-                throw new Error('Cannot sync CN: Missing valid customerId and invoiceId');
-              }
-            }
-
-            await this.offlineStorage.removeQueueItem(task.id);
-            successCount++;
-          } else if (task.type === 'CREATE_GLOBAL_CN') {
-            let custId = task.payload.customerId;
-            if (typeof custId === 'string' && custId.startsWith('cust_')) {
-              const cachedCustomers = await this.offlineStorage.getCache<any[]>('customers') || [];
-              const matched = cachedCustomers.find(c => String(c.id) === String(custId) || c.offlineId === custId);
-              if (matched && typeof matched.id === 'number') {
-                custId = matched.id;
-              }
-            }
-
-            const globalData = { ...(task.payload.data || {}) };
-            let prefInvId = globalData.preferredInvoiceId;
-
-            // 1. Resolve offline invoice ID if provided
-            const rawInvId = task.payload?.invoiceId || task.payload?.data?.invoiceId;
-            if (!prefInvId && rawInvId) {
-              const strInv = String(rawInvId);
-              const numInv = Number(strInv);
-              if (!isNaN(numInv) && numInv > 0 && numInv < 100000000) {
-                prefInvId = numInv;
-              } else {
-                const order = await this.localDb.getOrderByClientId(strInv);
-                if (order && order.serverId) {
-                  prefInvId = order.serverId;
-                } else {
-                  const cachedInvs = await this.offlineStorage.getCache<any[]>('invoices_list') || [];
-                  const matched = cachedInvs.find(inv =>
-                    String(inv.id) === strInv ||
-                    inv.offlineId === strInv ||
-                    inv.clientId === strInv ||
-                    inv.docNo === strInv ||
-                    inv.invoiceNumber === strInv
-                  );
-                  if (matched?.serverId) {
-                    prefInvId = matched.serverId;
-                  } else if (typeof matched?.id === 'number' && matched.id > 0 && matched.id < 100000000) {
-                    prefInvId = matched.id;
-                  }
-                }
-              }
-            }
-
-            // 2. If still no preferredInvoiceId, look for ANY valid server invoice for this customer in cache
-            if (!prefInvId && custId) {
-              const cachedInvs = await this.offlineStorage.getCache<any[]>('invoices_list') || [];
-              const matched = cachedInvs.find(inv =>
-                (String(inv.customerId) === String(custId) || String(inv.CustomerId) === String(custId)) &&
-                ((typeof inv.id === 'number' && inv.id > 0 && inv.id < 100000000) || inv.serverId)
-              );
-              if (matched) {
-                prefInvId = matched.serverId || matched.id;
-              }
-            }
-
-            if (prefInvId) {
-              globalData.preferredInvoiceId = prefInvId;
-            }
-
-            const url = `${baseUrl}/Credit/CreateGlobalCreditNote/customers/${custId}/credit-notes-global`;
-            await firstValueFrom(this.api.postDirect(url, globalData));
+            await this.offlineStorage.mapServerId('cn', task.id, response?.cnId || response?.data?.id || response?.id);
             await this.offlineStorage.removeQueueItem(task.id);
             successCount++;
           } else if (task.type === 'UPDATE_CN') {
             const url = `${baseUrl}/Credit/UpdateCreditNote/credit-notes/${task.payload.cnId}`;
-            await firstValueFrom(this.api.putDirect(url, task.payload.data));
+            await firstValueFrom(this.api.putDirect(url, task.payload.data, task.operationId));
             await this.offlineStorage.removeQueueItem(task.id);
             successCount++;
           } else if (task.type === 'DELETE_CN') {
             const url = `${baseUrl}/Credit/DeleteCreditNote/invoices/${task.payload.invoiceId}/credit-notes/${task.payload.cnId}`;
             try {
-              await firstValueFrom(this.api.deleteDirect(url));
+              await firstValueFrom(this.api.deleteDirect(url, task.operationId));
             } catch (err: any) {
               if (err?.status !== 404) throw err;
             }
@@ -898,46 +624,33 @@ export class SyncService {
             const url = `${baseUrl}/Payment/CreateBulkPayment/bulk-payments`;
             const payload = JSON.parse(JSON.stringify(task.payload?.data || task.payload));
 
-            // Map any offline invoiceId to real serverId if available
-            if (Array.isArray(payload?.payments)) {
-              for (const p of payload.payments) {
-                if (typeof p.invoiceId === 'string' && (p.invoiceId.startsWith('offline_') || p.invoiceId.startsWith('inv_'))) {
-                  const order = await this.localDb.getOrderByClientId(p.invoiceId);
-                  if (order && order.serverId) {
-                    p.invoiceId = order.serverId;
-                  } else {
-                    const cachedInvs = await this.offlineStorage.getCache<any[]>('invoices_list') || [];
-                    const matched = cachedInvs.find(inv => inv.id === p.invoiceId || inv.offlineId === p.invoiceId);
-                    if (matched && matched.serverId) {
-                      p.invoiceId = matched.serverId;
-                    }
-                  }
-                }
-                p.invoiceId = Number(p.invoiceId);
-              }
+            payload.customerId = await this.resolveId('customer', payload.customerId);
+            for (const payment of payload.payments || []) {
+              payment.invoiceId = await this.resolveId('invoice', payment.invoiceId);
             }
 
-            try {
-              await firstValueFrom(this.api.postDirect(url, payload));
-            } catch (payErr: any) {
-              const errMsg = payErr?.error?.message || (typeof payErr?.error === 'string' ? payErr?.error : payErr?.message) || '';
-              if (payErr?.status === 400 && String(errMsg).toLowerCase().includes('already fully paid')) {
-                console.log('[SyncService] Bulk payment invoice already settled on server, resolving task:', task.id);
-              } else {
-                throw payErr;
-              }
+            const response: any = await firstValueFrom(this.api.postDirect(url, payload, task.operationId));
+            for (const local of task.payload.createdPayments || []) {
+              const result = response?.payments?.find((p: any) => String(p.invoiceId) === String(local.invoiceId));
+              if (!result?.paymentId) throw new Error('API update required: missing synchronized payment ID');
+              await this.offlineStorage.mapServerId('payment', local.paymentId, result.paymentId);
+            }
+            if (task.payload.changeCreditNoteId) {
+              await this.offlineStorage.mapServerId('cn', task.payload.changeCreditNoteId, response?.changeCreditNoteId);
             }
             await this.offlineStorage.removeQueueItem(task.id);
             successCount++;
           } else if (task.type === 'DELETE_PAYMENT') {
             const url = `${baseUrl}/Payment/DeletePayment/payments/${task.payload.paymentId}`;
             try {
-              await firstValueFrom(this.api.deleteDirect(url));
+              await firstValueFrom(this.api.deleteDirect(url, task.operationId));
             } catch (err: any) {
               if (err?.status !== 404) throw err;
             }
             await this.offlineStorage.removeQueueItem(task.id);
             successCount++;
+          } else {
+            throw new Error('Unsupported sync task: ' + task.type);
           }
         } catch (e: any) {
           console.warn('[SyncService] Failed to sync task:', task.id, task.type, e);
@@ -965,6 +678,21 @@ export class SyncService {
     }
 
     return { successCount, failCount, lastError };
+  }
+
+  private async resolveId(type: 'invoice' | 'customer' | 'product' | 'category' | 'cn' | 'payment', id: any): Promise<number> {
+    try { return await this.offlineStorage.resolveServerId(type, id); }
+    catch (error) {
+      let serverId: number | undefined;
+      if (type === 'invoice') serverId = (await this.localDb.getOrderByClientId(String(id)))?.serverId;
+      const cacheKey = { invoice: 'invoices_list', customer: 'customers', product: 'products', category: 'categories', cn: 'credit_notes_list', payment: 'payments_list' }[type];
+      const list = await this.offlineStorage.getCache<any[]>(cacheKey) || [];
+      const match = list.find(item => String(item.offlineId) === String(id) || String(item.clientId) === String(id));
+      serverId = serverId || match?.serverId || (typeof match?.id === 'number' ? match.id : undefined);
+      if (!serverId) throw error;
+      await this.offlineStorage.mapServerId(type, id, serverId);
+      return serverId;
+    }
   }
 
   private sleep(ms: number): Promise<void> {

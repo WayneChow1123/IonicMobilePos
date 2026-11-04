@@ -1,3 +1,4 @@
+import { getInvoicePaymentSummary, drawInvoicePaymentSummaryPdf } from '../../utils/invoice-payment-summary';
 import { inject } from '@angular/core';
 import { ProfileSettingsService } from '../../services/profile-settings.service';
 import { AlertService } from '../../services/alert.service';
@@ -108,7 +109,7 @@ export class PreferencesPage implements OnInit {
 
   getFilteredCNs(details: any): any[] {
     if (!details?.creditNotes) return [];
-    return details.creditNotes.filter((cn: any) => !cn.createdAfterPayment);
+    return details.creditNotes.filter((cn: any) => !cn.createdAfterPayment && !(cn.cnNumber || cn.CNNumber || '').startsWith('CN-CHG'));
   }
 
   exportPDF() {
@@ -141,26 +142,19 @@ export class PreferencesPage implements OnInit {
           const customer = this.customers.find(c => c.id == this.selectedCustomerId);
           doc.text('Customer: ' + (customer?.name || ''), 14, 35);
         }
+        const summaries = invoicesToExport.map((invoice, i) => getInvoicePaymentSummary(details[i], invoice));
         const tableData = invoicesToExport.map((inv, i) => {
-          const detail = details[i];
-          const totalCN = this.getTotalCN(detail);
-          const netTotal = (inv.totalAmount || 0) - totalCN;
-          const balance = netTotal - (inv.paidAmount || 0);
-          return [
-            inv.docNo || inv.invoiceNumber || 'INV-' + inv.id,
-            inv.customerName || '',
-            new Date(inv.invoiceDate).toLocaleDateString(),
-            'RM ' + (inv.totalAmount || 0).toFixed(2),
-            totalCN > 0 ? 'RM ' + totalCN.toFixed(2) : '-',
-            'RM ' + netTotal.toFixed(2),
-            'RM ' + (inv.paidAmount || 0).toFixed(2),
-            'RM ' + balance.toFixed(2),
-            inv.status || 'Unpaid'
-          ];
+          const payment = summaries[i];
+          return [inv.docNo || inv.invoiceNumber || 'INV-' + inv.id, inv.customerName || '',
+            new Date(inv.invoiceDate).toLocaleDateString(), 'RM ' + payment.gross.toFixed(2),
+            payment.returns > 0 ? 'RM ' + payment.returns.toFixed(2) : '-',
+            payment.creditUsed > 0 ? 'RM ' + payment.creditUsed.toFixed(2) : '-',
+            'RM ' + payment.net.toFixed(2), payment.available ? 'RM ' + payment.paid.toFixed(2) : 'N/A',
+            payment.available ? 'RM ' + payment.balance.toFixed(2) : 'N/A', payment.status];
         });
         autoTable(doc, {
           startY: this.exportType === 'customer' ? 40 : 35,
-          head: [['Invoice No', 'Customer', 'Date', 'Total', 'CN', 'Net Total', 'Paid', 'Balance', 'Status']],
+          head: [['Invoice No', 'Customer', 'Date', 'Total', 'CN', 'Credit', 'Net Total', 'Paid', 'Balance Due', 'Status']],
           body: tableData,
           styles: { fontSize: 7 },
           headStyles: { fillColor: [26, 26, 26] },
@@ -168,9 +162,9 @@ export class PreferencesPage implements OnInit {
         });
         const totalAmount = invoicesToExport.reduce((sum, inv) => sum + (inv.totalAmount || 0), 0);
         const totalCNAll = details.reduce((sum, d) => sum + this.getTotalCN(d), 0);
-        const totalNetAll = totalAmount - totalCNAll;
-        const totalPaid = invoicesToExport.reduce((sum, inv) => sum + (inv.paidAmount || 0), 0);
-        const totalBalance = totalNetAll - totalPaid;
+        const totalNetAll = summaries.reduce((sum, payment) => sum + payment.net, 0);
+        const totalPaid = summaries.reduce((sum, payment) => sum + payment.paid, 0);
+        const totalBalance = summaries.reduce((sum, payment) => sum + payment.balance, 0);
         const finalY = (doc as any).lastAutoTable.finalY + 10;
         doc.setFont('helvetica', 'bold');
         doc.text('Summary:', 14, finalY);
@@ -194,8 +188,7 @@ export class PreferencesPage implements OnInit {
       next: (detail: any) => {
         const filteredCNs = this.getFilteredCNs(detail);
         const totalCN = filteredCNs.reduce((sum: number, cn: any) => sum + (cn.amount || 0), 0);
-        const netTotal = (invoice.totalAmount || 0) - totalCN;
-        const balance = netTotal - (invoice.paidAmount || 0);
+        const payment = getInvoicePaymentSummary(detail, invoice);
 
         const doc = new jsPDF();
         doc.setFontSize(18);
@@ -207,7 +200,7 @@ export class PreferencesPage implements OnInit {
         doc.text('Invoice No: ' + invoiceNum, 14, 30);
         doc.text('Customer: ' + invoice.customerName, 14, 37);
         doc.text('Date: ' + new Date(invoice.invoiceDate).toLocaleDateString(), 14, 44);
-        doc.text('Status: ' + invoice.status, 14, 51);
+        doc.text('Status: ' + payment.status, 14, 51);
 
         const itemRows: any[] = [];
         if (detail?.items && detail.items.length > 0) {
@@ -262,24 +255,7 @@ export class PreferencesPage implements OnInit {
         });
 
         const finalY = (doc as any).lastAutoTable?.finalY + 10 || 70;
-        doc.setFont('helvetica', 'bold');
-        doc.text('Total Amount:  RM ' + (invoice.totalAmount || 0).toFixed(2), 14, finalY);
-        if (totalCN > 0) {
-          doc.setTextColor(230, 126, 34);
-          doc.text('Total CN:      - RM ' + totalCN.toFixed(2), 14, finalY + 7);
-          doc.setTextColor(0, 0, 0);
-          doc.text('Net Total:     RM ' + netTotal.toFixed(2), 14, finalY + 14);
-          doc.setTextColor(39, 174, 96);
-          doc.text('Paid:          RM ' + (invoice.paidAmount || 0).toFixed(2), 14, finalY + 21);
-          doc.setTextColor(229, 115, 115);
-          doc.text('Balance:       RM ' + balance.toFixed(2), 14, finalY + 28);
-        } else {
-          doc.setTextColor(39, 174, 96);
-          doc.text('Paid:          RM ' + (invoice.paidAmount || 0).toFixed(2), 14, finalY + 7);
-          doc.setTextColor(229, 115, 115);
-          doc.text('Balance:       RM ' + balance.toFixed(2), 14, finalY + 14);
-        }
-        doc.setTextColor(0, 0, 0);
+        drawInvoicePaymentSummaryPdf(doc, payment, finalY);
         doc.save((invoice.docNo || invoice.invoiceNumber) + '.pdf');
         this.showToastMsg('PDF exported!');
       },

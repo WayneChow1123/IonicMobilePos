@@ -1,3 +1,5 @@
+import { firstValueFrom } from 'rxjs';
+import { getInvoicePaymentSummary, invoicePaymentSummaryHtml } from '../../utils/invoice-payment-summary';
 import { inject } from '@angular/core';
 import { ProfileSettingsService } from '../../services/profile-settings.service';
 import { AlertService } from '../../services/alert.service';
@@ -42,7 +44,8 @@ export class InvoicesPage implements OnInit, OnDestroy {
   private syncingSub?: any;
   customerProductPrices: any[] = [];
   loadedCustomerId: number = 0;
-  selectedCreditNoteId: number | null = null;
+  selectedCreditNoteId: any = null;
+  selectedCreditNoteIds: any[] = [];
   isLoading = false;
   isSubmitting = false;
   isDeleting = false;
@@ -176,18 +179,12 @@ export class InvoicesPage implements OnInit, OnDestroy {
     return Array(count).fill(0);
   }
 
-  getReceiptNetAmount(): number {
-    if (!this.selectedInvoice) return 0;
-    const net = (this.selectedInvoice.totalAmount || 0) - this.getTotalCN() - (this.selectedInvoice.creditUsed || 0);
-    return net > 0 ? Math.round((net + Number.EPSILON) * 100) / 100 : 0;
+  get receiptPaymentSummary() {
+    return getInvoicePaymentSummary(this.selectedInvoice, this.previewData);
   }
 
-  getReceiptBalance(): number {
-    if (!this.selectedInvoice) return 0;
-    const net = this.getReceiptNetAmount();
-    const bal = net - (this.selectedInvoice.paidAmount || 0);
-    return bal > 0 ? Math.round((bal + Number.EPSILON) * 100) / 100 : 0;
-  }
+  getReceiptNetAmount(): number { return this.receiptPaymentSummary.net; }
+  getReceiptBalance(): number { return this.receiptPaymentSummary.balance; }
 
   getInvoiceDisplayTotal(invoice: any): number {
     if (!invoice) return 0;
@@ -809,8 +806,8 @@ export class InvoicesPage implements OnInit, OnDestroy {
             if (Array.isArray(match.productPrices) && match.productPrices.length > 0) {
               this.customerProductPrices = match.productPrices;
             }
-            this.loadAvailableCredits(Number(this.form.customerId));
-            this.loadCustomerProductPrices(Number(this.form.customerId));
+            this.loadAvailableCredits(this.form.customerId);
+            this.loadCustomerProductPrices(this.form.customerId);
           }
         }
         if (this.invoices && this.invoices.length > 0) {
@@ -905,7 +902,7 @@ export class InvoicesPage implements OnInit, OnDestroy {
     return Array.from(groupedMap.values());
   }
 
-  loadAvailableCredits(customerId: number) {
+  loadAvailableCredits(customerId: any) {
     this.api.getAvailableCredits(customerId).subscribe({
       next: (res: any) => {
         const raw = Array.isArray(res) ? res : [];
@@ -1177,7 +1174,7 @@ export class InvoicesPage implements OnInit, OnDestroy {
     this.filterInvoices();
   }
 
-  loadCustomerProductPrices(customerId: number) {
+  loadCustomerProductPrices(customerId: any) {
     if (!customerId) return;
     this.loadedCustomerId = 0;
     this.api.getCustomerProductPrices(customerId).subscribe({
@@ -1207,13 +1204,14 @@ export class InvoicesPage implements OnInit, OnDestroy {
       this.selectedCustomerDetail = customer || null;
       this.form.useCreditBalance = false;
       this.selectedCreditNoteId = null;
+      this.selectedCreditNoteIds = [];
       this.availableCredits = [];
       const cachedPrices = customer?.productPrices || customer?.ProductPrices;
       if (Array.isArray(cachedPrices) && cachedPrices.length > 0) {
         this.customerProductPrices = cachedPrices;
       }
-      this.loadAvailableCredits(Number(this.form.customerId));
-      this.loadCustomerProductPrices(Number(this.form.customerId));
+      this.loadAvailableCredits(this.form.customerId);
+      this.loadCustomerProductPrices(this.form.customerId);
     }
   }
 
@@ -1369,6 +1367,7 @@ export class InvoicesPage implements OnInit, OnDestroy {
         form: this.form,
         selectedCustomerDetail: this.selectedCustomerDetail,
         selectedCreditNoteId: this.selectedCreditNoteId,
+        selectedCreditNoteIds: [...this.selectedCreditNoteIds],
         amountPaid: this.amountPaid,
         paymentMethod: this.paymentMethod,
         termType: this.termType,
@@ -1397,14 +1396,15 @@ export class InvoicesPage implements OnInit, OnDestroy {
       if (!draft || !draft.form) return false;
 
       this.form = draft.form;
-      this.selectedCreditNoteId = draft.selectedCreditNoteId || null;
+      this.selectedCreditNoteIds = Array.isArray(draft.selectedCreditNoteIds) ? draft.selectedCreditNoteIds : (draft.selectedCreditNoteId ? [draft.selectedCreditNoteId] : []);
+      this.selectedCreditNoteId = this.selectedCreditNoteIds[0] ?? null;
       this.amountPaid = draft.amountPaid || 0;
       this.paymentMethod = draft.paymentMethod || 'CASH';
       this.termType = draft.termType || 'CASH SALE';
       this.showInvoiceRemark = !!draft.showInvoiceRemark;
 
-      const targetCustomerId = Number(this.form.customerId);
-      if (targetCustomerId > 0) {
+      const targetCustomerId = this.form.customerId;
+      if (targetCustomerId) {
         const match = this.customers.find(c => c.id == targetCustomerId);
         this.selectedCustomerDetail = match || draft.selectedCustomerDetail || null;
         this.loadAvailableCredits(targetCustomerId);
@@ -1425,6 +1425,7 @@ export class InvoicesPage implements OnInit, OnDestroy {
     this.selectedInvoice = null;
     this.selectedCustomerDetail = null;
     this.selectedCreditNoteId = null;
+      this.selectedCreditNoteIds = [];
     this.availableCredits = [];
     this.customerProductPrices = [];
     this.termType = 'CASH SALE';
@@ -2144,6 +2145,7 @@ export class InvoicesPage implements OnInit, OnDestroy {
         offlineReferenceId: offlineId,
         useCreditBalance: useCredit,
         selectedCreditNoteId: this.selectedCreditNoteId,
+        selectedCreditNoteIds: [...this.selectedCreditNoteIds],
         totalAmount: roundedTotal,
         paidAmount: this.amountPaid,
         paymentMethod: this.paymentMethod,
@@ -2335,69 +2337,6 @@ export class InvoicesPage implements OnInit, OnDestroy {
     const isCash = (updatedTermType === 'CASH SALE' || updatedTermType === 'Cash');
     const updatedStatus = isCash ? 'Paid' : 'Unpaid';
 
-    if (this.selectedInvoice.isOffline) {
-      const calculatedTotal = (this.editForm.items || []).reduce((sum: number, it: any) => sum + ((Number(it.unitPrice) || 0) * (Number(it.quantity) || 1)), 0);
-      this.selectedInvoice.items = this.editForm.items;
-      this.selectedInvoice.remark = this.editForm.remark;
-      this.selectedInvoice.invoiceDate = this.editForm.invoiceDate;
-      this.selectedInvoice.invoiceNumber = updatedInvoiceNumber;
-      this.selectedInvoice.docNo = updatedInvoiceNumber;
-      this.selectedInvoice.termType = updatedTermType;
-      this.selectedInvoice.status = updatedStatus;
-      this.selectedInvoice.customerId = updatedCustomerId;
-      this.selectedInvoice.customerName = updatedCustomerName;
-      this.selectedInvoice.totalAmount = Math.round((calculatedTotal + Number.EPSILON) * 100) / 100;
-      if (isCash) {
-        this.selectedInvoice.paidAmount = this.selectedInvoice.totalAmount;
-        this.selectedInvoice.balance = 0;
-      } else {
-        this.selectedInvoice.paidAmount = 0;
-        this.selectedInvoice.balance = this.selectedInvoice.totalAmount;
-      }
-
-      const invInList = this.invoices.find(inv => inv.id === this.selectedInvoice.id);
-      if (invInList) {
-        invInList.customerId = updatedCustomerId;
-        invInList.customerName = updatedCustomerName;
-        invInList.invoiceNumber = updatedInvoiceNumber;
-        invInList.docNo = updatedInvoiceNumber;
-        invInList.termType = updatedTermType;
-        invInList.status = updatedStatus;
-        invInList.totalAmount = this.selectedInvoice.totalAmount;
-        invInList.paidAmount = this.selectedInvoice.paidAmount;
-        invInList.balance = this.selectedInvoice.balance;
-      }
-
-      this.offlineStorage.setCache('inv_detail_' + this.selectedInvoice.id, this.selectedInvoice);
-
-      this.offlineStorage.getQueueItemById(this.selectedInvoice.id).then(async (queueItem) => {
-        if (queueItem) {
-          queueItem.payload = {
-            ...queueItem.payload,
-            customerId: updatedCustomerId,
-            customerName: updatedCustomerName,
-            invoiceNumber: updatedInvoiceNumber,
-            docNo: updatedInvoiceNumber,
-            invoiceDate: this.editForm.invoiceDate,
-            items: this.editForm.items,
-            remark: this.editForm.remark,
-            termType: updatedTermType,
-            status: updatedStatus,
-            paidAmount: this.selectedInvoice.paidAmount,
-            totalAmount: this.selectedInvoice.totalAmount
-          };
-          await this.offlineStorage.updateQueueItem(queueItem);
-        }
-      });
-
-      this.isSubmitting = false;
-      this.showToastMsg('Offline invoice updated!');
-      this.isEditMode = false;
-      this.showEditItemModal = false;
-      this.loadInvoices();
-      this.cdr.detectChanges();
-      return;
-    }
 
     const payload = {
       ...this.editForm,
@@ -2405,6 +2344,8 @@ export class InvoicesPage implements OnInit, OnDestroy {
       invoiceDate: this.editForm.invoiceDate,
       termType: updatedTermType,
       status: updatedStatus,
+      totalAmount: this.editForm.items.reduce((sum: number, it: any) => sum + Number(it.quantity || 0) * Number(it.unitPrice || 0), 0),
+      paidAmount: isCash ? this.editForm.items.reduce((sum: number, it: any) => sum + Number(it.quantity || 0) * Number(it.unitPrice || 0), 0) : (this.selectedInvoice.paidAmount || 0),
       customerId: updatedCustomerId,
       customerName: updatedCustomerName
     };
@@ -2818,34 +2759,31 @@ export class InvoicesPage implements OnInit, OnDestroy {
     return 0;
   }
 
-  getCreditNoteId(cn: any): number | null {
-    const id = cn?.id ?? cn?.Id;
-    return id != null ? Number(id) : null;
+  getCreditNoteId(cn: any): any {
+    return cn?.id ?? cn?.Id ?? null;
+  }
+
+  isCreditSelected(cn: any): boolean {
+    const ids = cn.rawIds || [this.getCreditNoteId(cn)];
+    return ids.some((id: any) => this.selectedCreditNoteIds.some(selected => String(selected) === String(id)));
   }
 
   toggleCreditSelection(cn: any) {
-    const cnId = this.getCreditNoteId(cn);
-    if (cnId == null) return;
-    if (this.selectedCreditNoteId == cnId) {
-      this.selectedCreditNoteId = null;
-      this.form.useCreditBalance = false;
-      this.termType = 'CASH SALE';
-      this.onTermTypeChange();
+    if (!this.isCreditUsable(Number(cn.amount))) return;
+    const ids = cn.rawIds || [this.getCreditNoteId(cn)];
+    if (this.isCreditSelected(cn)) {
+      this.selectedCreditNoteIds = this.selectedCreditNoteIds.filter(selected => !ids.some((id: any) => String(id) === String(selected)));
     } else {
-      if (!this.isCreditUsable(cn.amount)) {
-        this.showToastMsg('Invoice total must be RM ' + cn.amount.toFixed(2) + ' or more to use this Credit Note');
-        return;
-      }
-      this.selectedCreditNoteId = cnId;
-      this.form.useCreditBalance = true;
-      this.onTermTypeChange();
+      for (const id of ids) if (id != null && !this.selectedCreditNoteIds.some(selected => String(selected) === String(id))) this.selectedCreditNoteIds.push(id);
     }
+    this.selectedCreditNoteId = this.selectedCreditNoteIds[0] ?? null;
+    this.form.useCreditBalance = this.selectedCreditNoteIds.length > 0;
+    this.onTermTypeChange();
   }
 
   getSelectedCreditAmount(): number {
-    if (!this.selectedCreditNoteId) return 0;
-    const cn = this.availableCredits.find(c => this.getCreditNoteId(c) == this.selectedCreditNoteId);
-    return cn ? Math.round((cn.amount + Number.EPSILON) * 100) / 100 : 0;
+    const sum = this.availableCredits.filter(cn => this.isCreditSelected(cn)).reduce((total, cn) => total + Number(cn.amount || 0), 0);
+    return Math.round(Math.min(this.getFormTotal(), sum) * 100) / 100;
   }
 
   getCustomerDiscount(): number {
@@ -2861,8 +2799,8 @@ export class InvoicesPage implements OnInit, OnDestroy {
 
   getCustomerSpecialPrice(productId: any): number | null {
     if (!this.customerProductPrices || this.customerProductPrices.length === 0) return null;
-    const pId = Number(productId);
-    const special = this.customerProductPrices.find((p: any) => Number(p.productId ?? p.ProductId) === pId);
+    const pId = String(productId);
+    const special = this.customerProductPrices.find((p: any) => String(p.productId ?? p.ProductId) === pId);
     if (!special) return null;
     const priceVal = special.specialPrice !== undefined ? special.specialPrice : special.SpecialPrice;
     return (priceVal != null && !isNaN(Number(priceVal))) ? Number(priceVal) : null;
@@ -2942,7 +2880,7 @@ export class InvoicesPage implements OnInit, OnDestroy {
   openCheckPreview() {
     if (!this.selectedInvoice) return;
     this.api.previewInvoice(this.selectedInvoice.id).subscribe({
-      next: (data: any) => { this.previewData = data; this.showCheckPreview = true; },
+      next: (data: any) => { this.previewData = data; if (data) this.selectedInvoice = { ...this.selectedInvoice, ...data }; this.showCheckPreview = true; },
       error: () => { this.previewData = null; this.showCheckPreview = true; }
     });
   }
@@ -2958,7 +2896,21 @@ export class InvoicesPage implements OnInit, OnDestroy {
     this.cdr.detectChanges();
   }
 
-  downloadReceipt() {
+  async downloadReceipt() {
+    if (!this.selectedInvoice) return;
+    const invoiceId = this.selectedInvoice.id;
+    try {
+      const latest = await firstValueFrom(this.api.getInvoiceDetails(invoiceId));
+      if (!this.selectedInvoice || String(this.selectedInvoice.id) !== String(invoiceId)) return;
+      if (latest) {
+        this.selectedInvoice = { ...this.selectedInvoice, ...latest };
+        this.previewData = { ...this.previewData, ...latest };
+      }
+    } catch { /* Keep available offline invoice data. */ }
+    if (!this.receiptPaymentSummary.available) {
+      this.alertService.toast('Payment details unavailable. Refresh this invoice before printing.', 'warning');
+      return;
+    }
     this.loadPrinterSettings();
 
     // 针对离线发票，若尚未加载过 previewData，则自动现场生成
@@ -3081,9 +3033,9 @@ export class InvoicesPage implements OnInit, OnDestroy {
     const returnCNs = cns.filter((cn: any) => !(cn.cnNumber || '').startsWith('CN-CHG'));
 
     const totalChange = changeCNs.reduce((sum: number, cn: any) => sum + (cn.amount || 0), 0);
-    const totalReturns = returnCNs.reduce((sum: number, cn: any) => sum + (cn.amount || 0), 0);
+    const totalReturns = this.receiptPaymentSummary.returns;
 
-    const returnsHtml = totalReturns > 0 ? `<div class="total-row cn-deduct"><span>RETURNS (CN)</span><span>- RM ${totalReturns.toFixed(2)}</span></div>` : '';
+    const returnsHtml = (totalReturns > 0 ? `<div class="total-row cn-deduct"><span>RETURNS (CN)</span><span>- RM ${totalReturns.toFixed(2)}</span></div>` : '') + (this.receiptPaymentSummary.creditUsed > 0 ? `<div class="total-row"><span>CREDIT USED</span><span>- RM ${this.receiptPaymentSummary.creditUsed.toFixed(2)}</span></div>` : '');
     const changeRowHtml = totalChange > 0 ? `<div class="total-row" style="color:#888;font-style:italic;"><span>CHANGE SAVED AS CREDIT</span><span>+ RM ${totalChange.toFixed(2)}</span></div>` : '';
 
     let cnListHtml = '';
@@ -3102,16 +3054,7 @@ export class InvoicesPage implements OnInit, OnDestroy {
     }
 
     const netAmount = this.getReceiptNetAmount();
-    const balance = this.getReceiptBalance();
-    const displayedPaid = (inv?.paidAmount || 0) + totalChange;
-    const paymentStatus = inv?.status === 'Paid' ? 'PAID' : inv?.status === 'Partial' ? 'PARTIALLY PAID' : 'UNPAID';
-
-    const paymentDetailHtml = `<div style="padding:8px 20px;border:1px dashed #ddd;border-top:none;border-radius:0 0 8px 8px;margin-bottom:16px;">
-        <div style="display:flex;justify-content:space-between;font-size:12px;font-weight:700;padding:3px 0;"><span>PAID AMOUNT</span><span>RM ${displayedPaid.toFixed(2)}</span></div>
-        ${changeRowHtml}
-        <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:800;padding:6px 0 3px;border-top:1px solid #eee;margin-top:4px;"><span>BALANCE</span><span>RM ${balance.toFixed(2)}</span></div>
-    </div>`;
-
+    const paymentDetailHtml = invoicePaymentSummaryHtml(this.receiptPaymentSummary);
     // 5. 期限日期条件化
     let termDateHtml = '';
     if (this.isOptionEnabled('Print Term Date')) {
@@ -3149,7 +3092,7 @@ export class InvoicesPage implements OnInit, OnDestroy {
     }
 
     const docNo = this.getDocNo(inv);
-    printWindow.document.write(`<!DOCTYPE html><html><head><title>Invoice ${docNo}</title>${styles}</head><body><div class="receipt"><span class="receipt-type">TAX INVOICE</span><div class="divider"></div>${companyHeaderHtml}<div style="margin-top:20px;"><div class="doc-row"><span class="doc-label">DOC NO</span><span class="doc-value">: ${docNo}</span></div>${dateHtml}</div>${customerBoxHtml}<div class="divider-thin"></div><div class="table-header"><span>DESCRIPTION</span><span>GST SUBTOTAL</span></div><div class="divider-thin"></div>${itemsHtml}<div class="divider-thin"></div><div class="total-row"><span>GROSS TOTAL</span><span>RM ${(inv?.totalAmount || 0).toFixed(2)}</span></div>${returnsHtml}${cnListHtml}<div class="net-bar"><span class="net-label">NET AMOUNT</span><span class="net-value">RM ${netAmount.toFixed(2)}</span></div><div style="display:flex;justify-content:space-between;padding:12px 20px;border:1px dashed #ddd;border-radius:8px;margin-bottom:0;"><span style="font-size:11px;font-weight:700;letter-spacing:2px;color:#888;">PAYMENT STATUS</span><span style="font-size:14px;font-weight:800;">${paymentStatus}</span></div>${paymentDetailHtml}${termDateHtml}${sigBoxHtml}${footerHtml}${emptyLinesHtml}</div></body></html>`);
+    printWindow.document.write(`<!DOCTYPE html><html><head><title>Invoice ${docNo}</title>${styles}</head><body><div class="receipt"><span class="receipt-type">TAX INVOICE</span><div class="divider"></div>${companyHeaderHtml}<div style="margin-top:20px;"><div class="doc-row"><span class="doc-label">DOC NO</span><span class="doc-value">: ${docNo}</span></div>${dateHtml}</div>${customerBoxHtml}<div class="divider-thin"></div><div class="table-header"><span>DESCRIPTION</span><span>GST SUBTOTAL</span></div><div class="divider-thin"></div>${itemsHtml}<div class="divider-thin"></div><div class="total-row"><span>GROSS TOTAL</span><span>RM ${this.receiptPaymentSummary.gross.toFixed(2)}</span></div>${returnsHtml}${cnListHtml}<div class="net-bar"><span class="net-label">NET AMOUNT</span><span class="net-value">RM ${netAmount.toFixed(2)}</span></div>${paymentDetailHtml}${termDateHtml}${sigBoxHtml}${footerHtml}${emptyLinesHtml}</div></body></html>`);
     printWindow.document.close();
     setTimeout(() => printWindow.print(), 500);
   }
@@ -3192,4 +3135,4 @@ export class InvoicesPage implements OnInit, OnDestroy {
       }
     }, 0);
   }
-} 
+}

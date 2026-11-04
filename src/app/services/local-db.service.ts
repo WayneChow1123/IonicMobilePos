@@ -16,6 +16,13 @@ export interface LocalOrder {
   orderDate: string;
   totalAmount: number;
   paidAmount: number;
+  creditUsed?: number;
+  useCreditBalance?: boolean;
+  selectedCreditNoteId?: number | string | null;
+  selectedCreditNoteIds?: (number | string)[] | null;
+  inputPaidAmount?: number;
+  offlineCreditReservations?: { cnId: any; customerId: any; amount: number }[];
+  offlineChangeCreditNoteId?: string;
   balance: number;
   termType?: string;
   paymentMethod?: string;
@@ -215,6 +222,38 @@ export class LocalDbService {
       sync_status: SyncStatus.SYNCED,
       last_sync_error: undefined,
       updated_at: Date.now()
+    });
+    this.notifyChange();
+  }
+
+  /** Keep the upload source identical to the edited offline invoice. */
+  public async updatePendingOrder(clientId: string, data: any): Promise<void> {
+    await this.db.transaction('rw', [this.db.orders, this.db.order_items], async () => {
+      const order = await this.db.orders.get(clientId);
+      if (!order || order.sync_status !== SyncStatus.PENDING) return;
+      const total = data.totalAmount ?? (Array.isArray(data.items) ? data.items.reduce(
+        (sum: number, it: any) => sum + Number(it.unitPrice || 0) * Number(it.quantity || 0), 0) : order.totalAmount);
+      await this.db.orders.update(clientId, {
+        customerId: data.customerId ?? order.customerId,
+        customerName: data.customerName ?? order.customerName,
+        orderNumber: data.invoiceNumber ?? order.orderNumber,
+        orderDate: data.invoiceDate ?? order.orderDate,
+        remark: data.remark ?? order.remark,
+        termType: data.termType ?? order.termType,
+        paymentMethod: data.paymentMethod ?? order.paymentMethod,
+        totalAmount: total,
+        paidAmount: data.paidAmount ?? order.paidAmount,
+        balance: Math.max(0, total - (data.paidAmount ?? order.paidAmount)),
+        updated_at: Date.now()
+      });
+      if (Array.isArray(data.items)) {
+        await this.db.order_items.where('orderClientId').equals(clientId).delete();
+        await this.db.order_items.bulkAdd(data.items.map((it: any) => ({
+          orderClientId: clientId, productId: it.productId, productName: it.productName,
+          quantity: it.quantity, unitPrice: it.unitPrice,
+          total: Number(it.quantity || 0) * Number(it.unitPrice || 0), remark: it.remark || ''
+        })));
+      }
     });
     this.notifyChange();
   }

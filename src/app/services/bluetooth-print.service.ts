@@ -1,3 +1,4 @@
+import { getInvoicePaymentSummary } from '../utils/invoice-payment-summary';
 import { inject } from '@angular/core';
 import { ProfileSettingsService } from './profile-settings.service';
 import { Injectable } from '@angular/core';
@@ -660,7 +661,7 @@ export class BluetoothPrintService {
     builder.appendText("-".repeat(width) + "\n");
 
     // 8. Financial Summary
-    builder.appendText(this.formatRow("GROSS TOTAL", `RM ${(inv?.totalAmount || 0).toFixed(2)}`, width) + "\n");
+    builder.appendText(this.formatRow("GROSS TOTAL", `RM ${getInvoicePaymentSummary(inv, pd).gross.toFixed(2)}`, width) + "\n");
     builder.appendText(this.formatRow("TAX TOTAL", `RM ${pd?.taxTotal || '0.00'}`, width) + "\n");
 
     // Credit Notes (CN) returns
@@ -668,36 +669,23 @@ export class BluetoothPrintService {
       if (!inv?.creditNotes) return [];
       return inv.creditNotes.filter((cn: any) => !(cn.cnNumber || '').startsWith('CN-CHG'));
     };
-    const getReceiptNetAmount = (): number => {
-      const gross = inv?.totalAmount || 0;
-      const totalReturns = getReceiptCreditNotes().reduce((sum: number, cn: any) => sum + (cn.amount || 0), 0);
-      const creditUsed = inv?.creditUsed || 0;
-      const net = gross - totalReturns - creditUsed;
-      return net > 0 ? net : 0;
-    };
-    const getReceiptBalance = (): number => {
-      const net = getReceiptNetAmount();
-      const paid = inv?.paidAmount || 0;
-      const bal = net - paid;
-      return bal > 0 ? bal : 0;
-    };
-
+    const payment = getInvoicePaymentSummary(inv, pd);
     const cns = getReceiptCreditNotes();
-    const totalReturns = cns.reduce((sum: number, cn: any) => sum + (cn.amount || 0), 0);
+    const totalReturns = payment.returns;
     if (totalReturns > 0) {
       builder.appendText(this.formatRow("RETURNS (CN)", `- RM ${totalReturns.toFixed(2)}`, width) + "\n");
     }
 
-    const creditUsed = inv?.creditUsed || inv?.CreditUsed || 0;
+    const creditUsed = payment.creditUsed;
     if (creditUsed > 0) {
       builder.appendText(this.formatRow("CREDIT USED", `- RM ${creditUsed.toFixed(2)}`, width) + "\n");
     }
 
     const changeCNs = (inv?.creditNotes || []).filter((cn: any) => (cn.cnNumber || '').startsWith('CN-CHG'));
-    const totalChange = changeCNs.reduce((sum: number, cn: any) => sum + (cn.amount || 0), 0);
+    const totalChange = payment.changeCredit;
 
     // Net Amount (BOLD + Double height with banner border matching Live Preview dark card)
-    const netAmount = getReceiptNetAmount();
+    const netAmount = payment.net;
     builder.appendText("=".repeat(width) + "\n");
     builder.append(CMD_BOLD_ON);
     builder.append(CMD_DOUBLE_HEIGHT);
@@ -706,22 +694,21 @@ export class BluetoothPrintService {
     builder.append(CMD_BOLD_OFF);
     builder.appendText("=".repeat(width) + "\n");
 
-    // Payment Details Box
-    const paymentStatus = inv?.status === 'Paid' ? 'PAID' : inv?.status === 'Partial' ? 'PARTIALLY PAID' : 'UNPAID';
-    builder.appendText(this.formatRow("PAYMENT STATUS", paymentStatus, width) + "\n");
-
+    // Payment status and balance due are always printed, independently of optional fields.
+    builder.append(CMD_BOLD_ON);
+    builder.appendText(this.centerText(payment.status, width) + "\n");
+    builder.append(CMD_BOLD_OFF);
     builder.appendText("+" + "-".repeat(width - 2) + "+\n");
-    const displayedPaid = (inv?.paidAmount || 0) + totalChange;
-    const paidLabel = "PAID AMOUNT (RECEIVED)";
-    builder.appendText(this.boxLine(this.formatRow(paidLabel, `RM ${displayedPaid.toFixed(2)}`, width - 4), width) + "\n");
-
-    if (totalChange > 0) {
-      builder.appendText(this.boxLine(this.formatRow("CHANGE AS CREDIT", `+ RM ${totalChange.toFixed(2)}`, width - 4), width) + "\n");
-    }
-
-    const balance = getReceiptBalance();
-    builder.appendText(this.boxLine(this.formatRow("BALANCE", `RM ${balance.toFixed(2)}`, width - 4), width) + "\n");
+    const amount = (value: number) => payment.available ? 'RM ' + value.toFixed(2) : 'NOT AVAILABLE';
+    builder.appendText(this.boxLine(this.formatRow("AMOUNT PAID", amount(payment.paid), width - 4), width) + "\n");
+    if (totalChange > 0) builder.appendText(this.boxLine(this.formatRow("CHANGE AS CREDIT", 'RM ' + totalChange.toFixed(2), width - 4), width) + "\n");
+    builder.append(CMD_BOLD_ON);
+    builder.append(CMD_DOUBLE_HEIGHT);
+    builder.appendText(this.boxLine(this.formatRow("BALANCE DUE", amount(payment.balance), width - 4), width) + "\n");
+    builder.append(CMD_NORMAL_SIZE);
+    builder.append(CMD_BOLD_OFF);
     builder.appendText("+" + "-".repeat(width - 2) + "+\n");
+    this.wrapText(payment.message, width).forEach(line => builder.appendText(line + "\n"));
 
     // Transaction CN breakdown details
     if (cns.length > 0) {

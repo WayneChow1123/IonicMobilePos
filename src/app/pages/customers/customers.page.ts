@@ -189,7 +189,7 @@ export class CustomersPage implements OnInit, OnDestroy {
   }
 
   loadCustomerSpecificData(customerId: any) {
-    const id = Number(customerId);
+    const id = String(customerId);
     const customerName = this.selectedCustomer?.name;
 
     // Helper to get ID from various possible field names
@@ -200,13 +200,13 @@ export class CustomersPage implements OnInit, OnDestroy {
     // 1. Invoices
     this.customerInvoices = this.allInvoices.filter(inv => {
       const cId = getCustId(inv);
-      return (cId && Number(cId) === id);
+      return (cId && String(cId) === id);
     });
 
     // 2. Payments
     this.customerPayments = this.allPayments.filter(p => {
       const pCustId = getCustId(p);
-      if (pCustId && Number(pCustId) === id) return true;
+      if (pCustId && String(pCustId) === id) return true;
 
       const pCustName = p.customerName || p.CustomerName || p.customer_name;
       if (customerName && pCustName === customerName) return true;
@@ -214,13 +214,13 @@ export class CustomersPage implements OnInit, OnDestroy {
       const pInvId = getInvId(p);
       if (pInvId) {
         const inv = this.allInvoices.find(i => i.id == pInvId || getInvId(i) == pInvId);
-        if (inv && Number(getCustId(inv)) === id) return true;
+        if (inv && String(getCustId(inv)) === id) return true;
       }
 
       const pInvNo = getInvNo(p);
       if (pInvNo) {
         const inv = this.allInvoices.find(i => i.invoiceNumber === pInvNo || getInvNo(i) === pInvNo);
-        if (inv && Number(getCustId(inv)) === id) return true;
+        if (inv && String(getCustId(inv)) === id) return true;
       }
       return false;
     });
@@ -228,7 +228,7 @@ export class CustomersPage implements OnInit, OnDestroy {
     // 3. Credit Notes
     this.customerCNs = this.allCNs.filter(cn => {
       const cId = getCustId(cn);
-      if (cId && Number(cId) === id) return true;
+      if (cId && String(cId) === id) return true;
 
       const cName = cn.customerName || cn.CustomerName || cn.customer_name;
       if (customerName && cName === customerName) return true;
@@ -236,13 +236,13 @@ export class CustomersPage implements OnInit, OnDestroy {
       const cInvId = getInvId(cn);
       if (cInvId) {
         const inv = this.allInvoices.find(i => i.id == cInvId || getInvId(i) == cInvId);
-        if (inv && Number(getCustId(inv)) === id) return true;
+        if (inv && String(getCustId(inv)) === id) return true;
       }
 
       const cInvNo = getInvNo(cn);
       if (cInvNo) {
         const inv = this.allInvoices.find(i => i.invoiceNumber === cInvNo || getInvNo(i) === cInvNo);
-        if (inv && Number(getCustId(inv)) === id) return true;
+        if (inv && String(getCustId(inv)) === id) return true;
       }
       return false;
     });
@@ -428,7 +428,7 @@ export class CustomersPage implements OnInit, OnDestroy {
       // Local mode (when creating customer)
       const existsIndex = this.customerPrices.findIndex(p => p.productId == this.newPriceForm.productId);
       const newPriceItem = {
-        productId: Number(this.newPriceForm.productId),
+        productId: this.newPriceForm.productId,
         productName: product ? product.name : 'Unknown Product',
         productCode: product ? product.productCode || product.code : '',
         originalPrice: originalPrice,
@@ -450,7 +450,7 @@ export class CustomersPage implements OnInit, OnDestroy {
     this.isSavingPrice = true;
 
     if (exists) {
-      this.api.updateCustomerProductPrice(this.selectedCustomer.id, Number(this.newPriceForm.productId), {
+      this.api.updateCustomerProductPrice(this.selectedCustomer.id, this.newPriceForm.productId, {
         specialPrice: Number(this.newPriceForm.specialPrice)
       }).subscribe({
         next: () => {
@@ -467,7 +467,7 @@ export class CustomersPage implements OnInit, OnDestroy {
       });
     } else {
       this.api.createCustomerProductPrice(this.selectedCustomer.id, {
-        productId: Number(this.newPriceForm.productId),
+        productId: this.newPriceForm.productId,
         specialPrice: Number(this.newPriceForm.specialPrice)
       }).subscribe({
         next: () => {

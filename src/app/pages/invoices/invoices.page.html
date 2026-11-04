@@ -275,22 +275,22 @@
         </div>
       </div>
       <div *ngIf="selectedCreditNoteId" style="margin: 0 16px 8px; padding: 10px 12px; background: #cfe2ff; border-radius: 10px; font-size: 12px; color: #5c85d6; font-weight: 600;">
-        Selected CN will be applied; remaining balance to be paid as cash
+        Choose one or more CNs. Only selected CNs will be applied.
       </div>
 
       <div *ngIf="availableCredits.length > 0 && showAvailableCredits" class="ni-credits-section">
         <div *ngFor="let cn of availableCredits" 
              class="ni-credit-card" 
-             [class.selected]="selectedCreditNoteId == getCreditNoteId(cn)" 
-             [class.preferred]="selectedCreditNoteId == getCreditNoteId(cn)"
+             [class.selected]="isCreditSelected(cn)"
+             [class.preferred]="isCreditSelected(cn)"
              [class.disabled]="!isCreditUsable(cn.amount)"
              (click)="toggleCreditSelection(cn)">
           <div class="ni-credit-info">
             <span class="ni-credit-num">{{ cn.cnNumber || cn.CNNumber || 'CN-' + getCreditNoteId(cn) }}</span>
             <span class="ni-credit-amt">RM {{ cn.amount | number:'1.2-2' }}</span>
           </div>
-          <div class="ni-credit-check" [class.selected]="selectedCreditNoteId == getCreditNoteId(cn)">
-            <ion-icon name="checkmark-outline" *ngIf="selectedCreditNoteId == getCreditNoteId(cn)"></ion-icon>
+          <div class="ni-credit-check" [class.selected]="isCreditSelected(cn)">
+            <ion-icon name="checkmark-outline" *ngIf="isCreditSelected(cn)"></ion-icon>
           </div>
         </div>
       </div>
@@ -886,17 +886,17 @@
 
         <div class="receipt-divider-thin" style="margin-top:16px;"></div>
         <div class="receipt-totals">
-          <div class="total-row"><span>GROSS TOTAL</span><span>RM {{ getInvoiceDisplayTotal(selectedInvoice) | number:'1.2-2' }}</span></div>
+          <div class="total-row"><span>GROSS TOTAL</span><span>RM {{ receiptPaymentSummary.gross | number:'1.2-2' }}</span></div>
           <div class="total-row"><span>TAX TOTAL</span><span>RM {{ previewData?.taxTotal || '0.00' }}</span></div>
           <!-- 退货行 (如果有) -->
-          <div *ngIf="getTotalCN() > 0" class="total-row cn-deduct">
+          <div *ngIf="receiptPaymentSummary.returns > 0" class="total-row cn-deduct">
             <span>RETURNS (CN)</span>
-            <span>- RM {{ getTotalCN() | number:'1.2-2' }}</span>
+            <span>- RM {{ receiptPaymentSummary.returns | number:'1.2-2' }}</span>
           </div>
           <!-- 信用抵扣行 (如果有) -->
-          <div *ngIf="selectedInvoice?.creditUsed > 0" class="total-row" style="color:#5c85d6;">
+          <div *ngIf="receiptPaymentSummary.creditUsed > 0" class="total-row" style="color:#5c85d6;">
             <span>CREDIT USED</span>
-            <span>- RM {{ selectedInvoice?.creditUsed | number:'1.2-2' }}</span>
+            <span>- RM {{ receiptPaymentSummary.creditUsed | number:'1.2-2' }}</span>
           </div>
         </div>
         <div *ngIf="getReceiptCreditNotes().length > 0" class="receipt-divider-thin"></div>
@@ -921,23 +921,25 @@
         </div>
         <div class="receipt-payment-status">
           <span class="payment-status-label">PAYMENT STATUS</span>
-          <span class="payment-status-value">{{ selectedInvoice?.status === 'Paid' ? 'PAID' : selectedInvoice?.status === 'Partial' ? 'PARTIALLY PAID' : 'UNPAID' }}</span>
+          <span class="payment-status-value">{{ receiptPaymentSummary.status }}</span>
         </div>
         <div class="receipt-payment-detail" style="border: 1px dashed #ddd; padding: 10px; border-radius: 8px;">
           <div class="payment-detail-row">
-            <span style="font-weight:700;">PAID AMOUNT (RECEIVED)</span>
-            <span style="font-weight:700;">RM {{ (selectedInvoice?.paidAmount + getChangeCN()) | number:'1.2-2' }}</span>
+            <span style="font-weight:700;">AMOUNT PAID</span>
+            <span style="font-weight:700;">RM {{ receiptPaymentSummary.paid | number:'1.2-2' }}</span>
           </div>
           <div *ngIf="getChangeCN() > 0" class="payment-detail-row" style="color:#888; font-style:italic;">
             <span>CHANGE SAVED AS CREDIT</span>
             <span>+ RM {{ getChangeCN() | number:'1.2-2' }}</span>
           </div>
           <div class="payment-detail-row balance" style="border-top: 1px solid #eee; margin-top: 5px; padding-top: 5px;">
-            <span style="font-weight:800;">BALANCE</span>
+            <span style="font-weight:800;">BALANCE DUE</span>
             <span style="font-weight:800;">RM {{ getReceiptBalance() | number:'1.2-2' }}</span>
           </div>
         </div>
         
+        <p class="receipt-balance-message">{{ receiptPaymentSummary.message }}</p>
+
         <!-- 付款期限条件化 -->
         <div class="receipt-due-box" *ngIf="isOptionEnabled('Print Term Date')">
           <span class="due-label">PAYMENT DUE</span>
