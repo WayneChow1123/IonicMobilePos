@@ -25,7 +25,7 @@
     <div class="cards-grid">
       <div class="card card-half card-yellow" (click)="backupFull()">
         <div class="card-content">
-          <span class="card-title">Backup<br>Database</span>
+          <span class="card-title">{{ isBackingUp ? 'Preparing Backup...' : backupDownload ? 'Retry Backup Download' : 'Backup Database' }}</span>
           <ion-icon name="server-outline" class="card-icon-bg"></ion-icon>
         </div>
       </div>
@@ -52,12 +52,12 @@
   <!-- EXPORT PAGE -->
   <div *ngIf="showExportModal" class="pref-container">
 
-    <div style="display:flex;align-items:center;margin-bottom:24px;">
+    <div class="export-header">
       <ion-button fill="clear" style="--color:#1a1a1a;--padding-start:0;font-size:15px;font-weight:600;"
         (click)="closeExportModal()">
         <ion-icon name="chevron-back-outline"></ion-icon> Back
       </ion-button>
-      <span style="font-size:17px;font-weight:700;color:#1a1a1a;margin-left:8px;">Export Bills</span>
+      <h1>Export Bills</h1>
     </div>
 
     <!-- TAB -->
@@ -81,12 +81,12 @@
     <div *ngIf="exportType==='all'">
       <div style="background:#fff;border-radius:16px;padding:14px 16px;margin-bottom:10px;text-align:center;">
         <ion-icon name="documents-outline" style="font-size:36px;color:#888;"></ion-icon>
-        <p style="font-size:14px;font-weight:600;color:#1a1a1a;margin:8px 0 4px;">Export All Invoices</p>
-        <p style="font-size:12px;color:#888;margin:0;">{{ invoices.length }} invoices will be exported</p>
+        <p style="font-size:14px;font-weight:600;color:#1a1a1a;margin:8px 0 4px;">Export All Invoices to Excel</p>
+        <p style="font-size:12px;color:#888;margin:0;">{{ invoices.length }} invoices will be exported as .xlsx</p>
       </div>
-      <button (click)="exportPDF()"
+      <button (click)="exportExcel()" [disabled]="isLoading"
         style="width:100%;background:#1a1a1a;color:#fff;border:none;border-radius:16px;padding:16px;font-size:15px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;">
-        EXPORT ALL ({{ invoices.length }})
+        {{ isLoading ? 'EXPORTING...' : 'EXPORT ALL (' + invoices.length + ') • EXCEL' }}
       </button>
     </div>
 
@@ -123,9 +123,9 @@
         <div *ngIf="filteredInvoices.length===0" style="text-align:center;padding:20px;color:#aaa;">
           <p>No invoices for this customer</p>
         </div>
-        <button *ngIf="filteredInvoices.length > 0" (click)="exportPDF()"
+        <button *ngIf="filteredInvoices.length > 0" (click)="exportExcel()" [disabled]="isLoading"
           style="width:100%;background:#1a1a1a;color:#fff;border:none;border-radius:16px;padding:16px;font-size:15px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;margin-top:8px;">
-          EXPORT ({{ filteredInvoices.length }} invoices)
+          {{ isLoading ? 'EXPORTING...' : 'EXPORT (' + filteredInvoices.length + ' invoices) • EXCEL' }}
         </button>
       </div>
     </div>
@@ -137,7 +137,7 @@
 
       <div *ngFor="let invoice of filteredInvoices"
         style="background:#fff;border-radius:16px;padding:12px 16px;margin-bottom:10px;cursor:pointer;"
-        (click)="selectedInvoiceId=invoice.id; exportSingle(invoice)">
+        (click)="selectedInvoiceId=invoice.id; exportExcel(invoice)">
         <div style="display:flex;justify-content:space-between;align-items:center;">
           <div>
             <div style="font-size:14px;font-weight:700;color:#1a1a1a;">{{ invoice.docNo || invoice.invoiceNumber }}</div>

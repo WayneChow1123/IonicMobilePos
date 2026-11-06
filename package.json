@@ -10,7 +10,7 @@
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
     "lint": "ng lint",
-    "test:offline": "ng test --watch=false --browsers=ChromeHeadless --include=src/app/services/offline-crud.spec.ts --include=src/app/services/profile-settings.spec.ts --progress=false --include=src/app/services/invoice-receipt.spec.ts"
+    "test:offline": "ng test --watch=false --browsers=ChromeHeadless --include=src/app/services/offline-crud.spec.ts --include=src/app/services/profile-settings.spec.ts --progress=false --include=src/app/services/invoice-receipt.spec.ts --include=src/app/services/export-backup.spec.ts"
   },
   "private": true,
   "dependencies": {
@@ -25,14 +25,17 @@
     "@capacitor/android": "8.3.1",
     "@capacitor/app": "8.1.0",
     "@capacitor/core": "8.3.1",
+    "@capacitor/filesystem": "^8.1.5",
     "@capacitor/haptics": "8.0.2",
     "@capacitor/keyboard": "8.0.3",
     "@capacitor/network": "^8.0.1",
+    "@capacitor/share": "^8.0.3",
     "@capacitor/status-bar": "8.0.2",
     "@ionic/angular": "^8.0.0",
     "cordova-plugin-android-permissions": "^1.1.5",
     "cordova-plugin-bluetooth-serial": "^0.4.7",
     "dexie": "^4.4.6",
+    "exceljs": "^4.4.0",
     "ionicons": "^7.0.0",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.7",

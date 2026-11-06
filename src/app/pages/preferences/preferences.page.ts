@@ -1,4 +1,4 @@
-import { getInvoicePaymentSummary, drawInvoicePaymentSummaryPdf } from '../../utils/invoice-payment-summary';
+import { FileExportService } from '../../services/file-export.service';
 import { inject } from '@angular/core';
 import { ProfileSettingsService } from '../../services/profile-settings.service';
 import { AlertService } from '../../services/alert.service';
@@ -11,10 +11,8 @@ import { CommonModule } from '@angular/common';
 import { IonicModule } from '@ionic/angular';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../services/api.service';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
-import { forkJoin, of } from 'rxjs';
-import { catchError } from 'rxjs/operators';
+import { firstValueFrom, from } from 'rxjs';
+import { map, mergeMap, toArray } from 'rxjs/operators';
 
 @Component({
   standalone: true,
@@ -25,6 +23,9 @@ import { catchError } from 'rxjs/operators';
 })
 export class PreferencesPage implements OnInit {
   readonly profileSettings = inject(ProfileSettingsService);
+  readonly fileExport = inject(FileExportService);
+  isBackingUp = false;
+  backupDownload: { id: string; fileName: string } | null = null;
   ionViewWillEnter() {
     this.showExportModal = false;
     this.cdr.detectChanges();
@@ -100,174 +101,66 @@ export class PreferencesPage implements OnInit {
     this.filteredInvoices = this.invoices.filter(inv => inv.customerId == this.selectedCustomerId);
   }
 
-  getTotalCN(details: any): number {
-    if (!details?.creditNotes) return 0;
-    return details.creditNotes
-      .filter((cn: any) => !cn.createdAfterPayment)
-      .reduce((sum: number, cn: any) => sum + (cn.amount || 0), 0);
-  }
-
-  getFilteredCNs(details: any): any[] {
-    if (!details?.creditNotes) return [];
-    return details.creditNotes.filter((cn: any) => !cn.createdAfterPayment && !(cn.cnNumber || cn.CNNumber || '').startsWith('CN-CHG'));
-  }
-
-  exportPDF() {
-    let invoicesToExport: any[] = [];
-    if (this.exportType === 'all') {
-      invoicesToExport = [...this.filteredInvoices];
-    } else if (this.exportType === 'customer') {
+  async exportExcel(singleInvoice?: any) {
+    if (this.isLoading) return;
+    let selected = singleInvoice ? [singleInvoice] : [...this.invoices];
+    if (!singleInvoice && this.exportType === 'customer') {
       if (!this.selectedCustomerId) { this.showToastMsg('Please select a customer'); return; }
-      invoicesToExport = this.invoices.filter(inv => inv.customerId == this.selectedCustomerId);
-    } else if (this.exportType === 'single') {
-      if (!this.selectedInvoiceId) { this.showToastMsg('Please select an invoice'); return; }
-      invoicesToExport = this.invoices.filter(inv => inv.id == this.selectedInvoiceId);
+      selected = selected.filter(inv => String(inv.customerId) === String(this.selectedCustomerId));
     }
-    if (invoicesToExport.length === 0) { this.showToastMsg('No invoices to export'); return; }
+    if (!singleInvoice && this.exportType === 'single') {
+      if (!this.selectedInvoiceId) { this.showToastMsg('Please select an invoice'); return; }
+      selected = selected.filter(inv => String(inv.id) === String(this.selectedInvoiceId));
+    }
+    if (!selected.length) { this.showToastMsg('No invoices to export'); return; }
     this.isLoading = true;
-    const detailRequests = invoicesToExport.map(inv =>
-      this.api.getInvoiceDetails(inv.id).pipe(catchError(() => of(null)))
-    );
-    forkJoin(detailRequests).subscribe({
-      next: (details: any[]) => {
-        this.isLoading = false;
-        const doc = new jsPDF();
-        doc.setFontSize(18);
-        doc.setFont('helvetica', 'bold');
-        doc.text('Invoice Report', 14, 20);
-        doc.setFontSize(10);
-        doc.setFont('helvetica', 'normal');
-        doc.text('Generated: ' + new Date().toLocaleDateString(), 14, 28);
-        if (this.exportType === 'customer' && this.selectedCustomerId) {
-          const customer = this.customers.find(c => c.id == this.selectedCustomerId);
-          doc.text('Customer: ' + (customer?.name || ''), 14, 35);
-        }
-        const summaries = invoicesToExport.map((invoice, i) => getInvoicePaymentSummary(details[i], invoice));
-        const tableData = invoicesToExport.map((inv, i) => {
-          const payment = summaries[i];
-          return [inv.docNo || inv.invoiceNumber || 'INV-' + inv.id, inv.customerName || '',
-            new Date(inv.invoiceDate).toLocaleDateString(), 'RM ' + payment.gross.toFixed(2),
-            payment.returns > 0 ? 'RM ' + payment.returns.toFixed(2) : '-',
-            payment.creditUsed > 0 ? 'RM ' + payment.creditUsed.toFixed(2) : '-',
-            'RM ' + payment.net.toFixed(2), payment.available ? 'RM ' + payment.paid.toFixed(2) : 'N/A',
-            payment.available ? 'RM ' + payment.balance.toFixed(2) : 'N/A', payment.status];
-        });
-        autoTable(doc, {
-          startY: this.exportType === 'customer' ? 40 : 35,
-          head: [['Invoice No', 'Customer', 'Date', 'Total', 'CN', 'Credit', 'Net Total', 'Paid', 'Balance Due', 'Status']],
-          body: tableData,
-          styles: { fontSize: 7 },
-          headStyles: { fillColor: [26, 26, 26] },
-          alternateRowStyles: { fillColor: [240, 235, 227] }
-        });
-        const totalAmount = invoicesToExport.reduce((sum, inv) => sum + (inv.totalAmount || 0), 0);
-        const totalCNAll = details.reduce((sum, d) => sum + this.getTotalCN(d), 0);
-        const totalNetAll = summaries.reduce((sum, payment) => sum + payment.net, 0);
-        const totalPaid = summaries.reduce((sum, payment) => sum + payment.paid, 0);
-        const totalBalance = summaries.reduce((sum, payment) => sum + payment.balance, 0);
-        const finalY = (doc as any).lastAutoTable.finalY + 10;
-        doc.setFont('helvetica', 'bold');
-        doc.text('Summary:', 14, finalY);
-        doc.setFont('helvetica', 'normal');
-        doc.text('Total Invoices: ' + invoicesToExport.length, 14, finalY + 6);
-        doc.text('Total Amount: RM ' + totalAmount.toFixed(2), 14, finalY + 12);
-        doc.text('Total CN: RM ' + totalCNAll.toFixed(2), 14, finalY + 18);
-        doc.text('Net Total: RM ' + totalNetAll.toFixed(2), 14, finalY + 24);
-        doc.text('Total Paid: RM ' + totalPaid.toFixed(2), 14, finalY + 30);
-        doc.text('Total Balance: RM ' + totalBalance.toFixed(2), 14, finalY + 36);
-        doc.save('invoice-report-' + new Date().toISOString().split('T')[0] + '.pdf');
-        this.showToastMsg('PDF exported successfully!');
-        this.closeExportModal();
-      },
-      error: () => { this.isLoading = false; this.showToastMsg('Failed to export'); }
-    });
+    try {
+      // Limit concurrent requests on large exports, preserving the selected order.
+      const loaded = await firstValueFrom(from(selected.map((invoice, index) => ({ invoice, index }))).pipe(
+        mergeMap(({ invoice, index }) => this.api.getInvoiceDetails(invoice.id).pipe(map(detail => {
+          if (!detail || !Array.isArray(detail.items)) throw new Error('Invoice details unavailable for ' + (invoice.invoiceNumber || invoice.id) + '. Connect to the network and try again.');
+          return { index, invoice: { ...invoice, ...detail } };
+        })), 6), toArray()));
+      loaded.sort((a, b) => a.index - b.index);
+      const { buildInvoiceWorkbook } = await import('../../utils/invoice-excel');
+      const workbook = buildInvoiceWorkbook(loaded.map(row => row.invoice), this.profileSettings.profile());
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([new Uint8Array(buffer)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const name = singleInvoice ? (singleInvoice.docNo || singleInvoice.invoiceNumber || 'invoice-' + singleInvoice.id) :
+        'invoice-report-' + new Date().toISOString().slice(0, 10);
+      await this.fileExport.save(blob, name + '.xlsx');
+      this.showToastMsg('Excel file ready. Save it from the download or share window.');
+    } catch (error: any) {
+      this.showToastMsg('Excel export failed: ' + (error?.message || 'Please try again.'));
+    } finally { this.isLoading = false; }
   }
 
-  exportSingle(invoice: any) {
-    this.api.getInvoiceDetails(invoice.id).subscribe({
-      next: (detail: any) => {
-        const filteredCNs = this.getFilteredCNs(detail);
-        const totalCN = filteredCNs.reduce((sum: number, cn: any) => sum + (cn.amount || 0), 0);
-        const payment = getInvoicePaymentSummary(detail, invoice);
-
-        const doc = new jsPDF();
-        doc.setFontSize(18);
-        doc.setFont('helvetica', 'bold');
-        doc.text('Invoice', 14, 20);
-        doc.setFontSize(10);
-        doc.setFont('helvetica', 'normal');
-        const invoiceNum = invoice.docNo || invoice.invoiceNumber;
-        doc.text('Invoice No: ' + invoiceNum, 14, 30);
-        doc.text('Customer: ' + invoice.customerName, 14, 37);
-        doc.text('Date: ' + new Date(invoice.invoiceDate).toLocaleDateString(), 14, 44);
-        doc.text('Status: ' + payment.status, 14, 51);
-
-        const itemRows: any[] = [];
-        if (detail?.items && detail.items.length > 0) {
-          detail.items.forEach((item: any) => {
-            itemRows.push([item.productName || '', item.quantity, 'RM ' + (item.unitPrice || 0).toFixed(2), 'RM ' + (item.total || 0).toFixed(2), '']);
-          });
-        }
-
-        // ? Credit Used ??????
-        if (detail?.creditUsed > 0) {
-          itemRows.push(['', '', '', '', '']);
-          itemRows.push([
-            'Credit Balance Used' + (detail.creditCNNumber ? ' (' + detail.creditCNNumber + ')' : ''),
-            '',
-            '',
-            '- RM ' + (detail.creditUsed || 0).toFixed(2),
-            ''
-          ]);
-        }
-
-        // ? CN ??????
-        if (filteredCNs.length > 0) {
-          itemRows.push(['', '', '', '', '']);
-          filteredCNs.forEach((cn: any) => {
-            itemRows.push([
-              'Credit Note: ' + cn.cnNumber,
-              '',
-              'Reason: ' + (cn.reason || ''),
-              '- RM ' + cn.amount.toFixed(2),
-              cn.createdAt ? new Date(cn.createdAt).toLocaleDateString() : ''
-            ]);
-          });
-        }
-
-        autoTable(doc, {
-          startY: 58,
-          head: [['Product / CN', 'Qty', 'Unit Price / Reason', 'Amount', 'Date']],
-          body: itemRows,
-          styles: { fontSize: 8 },
-          headStyles: { fillColor: [26, 26, 26] },
-          alternateRowStyles: { fillColor: [240, 235, 227] },
-          didParseCell: (data: any) => {
-            if (data.row.raw && data.row.raw[0] && String(data.row.raw[0]).startsWith('Credit Note:')) {
-              data.cell.styles.textColor = [230, 126, 34];
-              data.cell.styles.fontStyle = 'bold';
-            }
-            if (data.row.raw && data.row.raw[0] && String(data.row.raw[0]).startsWith('Credit Balance Used')) {
-              data.cell.styles.textColor = [39, 174, 96];
-              data.cell.styles.fontStyle = 'bold';
-            }
-          }
-        });
-
-        const finalY = (doc as any).lastAutoTable?.finalY + 10 || 70;
-        drawInvoicePaymentSummaryPdf(doc, payment, finalY);
-        doc.save((invoice.docNo || invoice.invoiceNumber) + '.pdf');
-        this.showToastMsg('PDF exported!');
-      },
-      error: () => { this.showToastMsg('Failed to export'); }
-    });
-  }
-
-  backupFull() {
-    this.api.getFullBackup().subscribe({
-      next: () => { this.showToastMsg('Backup successful!'); },
-      error: () => { this.showToastMsg('Backup failed!'); }
-    });
+  async backupFull() {
+    if (this.isBackingUp) return;
+    if (!this.api.isOnline()) { this.showToastMsg('Backup requires an internet connection.'); return; }
+    this.isBackingUp = true;
+    try {
+      // Keep a completed backup for download retry; do not create another SQL backup.
+      if (!this.backupDownload) {
+        const result: any = await firstValueFrom(this.api.getFullBackup());
+        if (!result?.backupId || !result?.fileName) throw new Error('The API did not return a backup file.');
+        this.backupDownload = { id: String(result.backupId), fileName: result.fileName };
+      }
+      const backup = this.backupDownload;
+      const blob = await firstValueFrom(this.api.downloadBackup(backup.id));
+      if (!blob.size) throw new Error('The backup file is empty.');
+      await this.fileExport.save(blob, backup.fileName);
+      this.backupDownload = null;
+      this.showToastMsg('Backup created. Save the .bak file from the download or share window.');
+    } catch (error: any) {
+      let body = error?.error;
+      if (body instanceof Blob) {
+        try { body = JSON.parse(await body.text()); } catch { body = null; }
+      }
+      const reason = body?.message || (typeof body === 'string' ? body : null) || error?.message || 'Please try again.';
+      const prefix = this.backupDownload ? 'Backup created, but download failed. Tap Backup to retry downloading. ' : 'Backup failed: ';
+      this.showToastMsg(prefix + (error?.status === 0 ? 'Cannot reach the API server.' : reason));
+    } finally { this.isBackingUp = false; }
   }
 
   showToastMsg(msg: string) { const isWarn = msg.toLowerCase().includes('please') || msg.toLowerCase().includes('must') || msg.toLowerCase().includes('cannot') || msg.toLowerCase().includes('required') || msg.toLowerCase().includes('no '); const isErr = msg.toLowerCase().includes('fail') || msg.toLowerCase().includes('error'); this.alertService.toast(msg, isErr ? 'error' : (isWarn ? 'warning' : 'success')); }

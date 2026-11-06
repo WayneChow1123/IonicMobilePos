@@ -68,9 +68,9 @@ export class ApiService {
     this.cachedProducts = null;
   }
 
-  getFullBackup(): Observable<any> { return this.http.get(this.baseUrl + '/api/backup/full'); }
+  getFullBackup(): Observable<any> { return this.http.get(this.baseUrl + '/api/backup/full').pipe(timeout(330000)); }
   getIncrementBackup(): Observable<any> { return this.http.get(this.baseUrl + '/api/backup/increment'); }
-  downloadBackup(id: string): Observable<any> { return this.http.get(this.baseUrl + '/api/backup/download/' + id); }
+  downloadBackup(id: string): Observable<Blob> { return this.http.get(this.baseUrl + '/api/backup/download/' + encodeURIComponent(id), { responseType: 'blob' }).pipe(timeout(330000)); }
 
   private operationOptions(operationId?: string): { headers: Record<string, string> } {
     if (operationId) this.offlineStorage.registerAttempt(operationId);
