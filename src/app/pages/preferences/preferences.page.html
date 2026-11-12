@@ -1,6 +1,6 @@
 <ion-content>
 
-  <div [hidden]="showExportModal" class="pref-container">
+  <div [hidden]="showExportModal || showImportModal" class="pref-container">
 
     <div class="top-bar">
       <ion-button fill="clear" class="back-btn" (click)="goBack()">
@@ -39,6 +39,10 @@
 
     <div class="section-title">System</div>
     <div class="system-list">
+      <button type="button" class="system-item" (click)="openImport()">
+        <span class="system-item-left"><ion-icon name="cloud-download-outline"></ion-icon><span>Import / Export Excel</span></span>
+        <ion-icon name="arrow-forward-outline"></ion-icon>
+      </button>
       <div class="system-item" (click)="goTo('pages/setting')">
         <div class="system-item-left">
           <ion-icon name="settings-outline"></ion-icon>
@@ -47,6 +51,50 @@
         <ion-icon name="arrow-forward-outline"></ion-icon>
       </div>
     </div>
+  </div>
+
+  <div *ngIf="showImportModal" class="pref-container import-panel">
+    <div class="export-header">
+      <ion-button fill="clear" class="back-btn" [disabled]="isImportBusy" (click)="showImportModal=false"><ion-icon name="chevron-back-outline"></ion-icon> Back</ion-button>
+      <h1>Import / Export</h1>
+    </div>
+    <div class="import-card">
+      <label id="import-kind-label">Import / Export Content</label>
+      <ion-select class="master-data-select" aria-labelledby="import-kind-label" [(ngModel)]="importKind" [disabled]="isImportBusy" interface="alert" [interfaceOptions]="{ header: 'Select Content', cssClass: 'master-data-select-modal' }" okText="Select" cancelText="Cancel" justify="space-between" toggleIcon="chevron-forward-outline" (ionChange)="resetImport()">
+        <ion-select-option value="products">Products</ion-select-option><ion-select-option value="customers">Customers</ion-select-option>
+      </ion-select>
+      <div class="master-export-block">
+        <h2>Export existing data</h2>
+        <p>Download your {{ importKind }} in the same format used for import. Offline exports include data stored on this device.</p>
+        <button type="button" class="primary-action" [disabled]="isImportBusy" (click)="exportMasterData()"><ion-icon name="cloud-upload-outline"></ion-icon>Export {{ importKind === 'products' ? 'Products' : 'Customers' }} Excel</button>
+      </div>
+      <div class="master-import-block">
+        <h2>Import from Excel</h2>
+        <p>Use an exported file or a blank template. Existing records are skipped; nothing is overwritten. New codes are generated automatically.</p>
+        <button type="button" class="secondary-action" [disabled]="isImportBusy" (click)="downloadImportTemplate()">Download Blank Template</button>
+        <label class="file-label" id="import-file-label">Excel file (.xlsx)</label>
+        <input #importFileInput id="import-file" class="native-file-input" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" [disabled]="isImportBusy" (change)="selectImportFile($event)" />
+        <button type="button" class="choose-file-action" aria-labelledby="import-file-label" aria-describedby="import-file-name" [disabled]="isImportBusy" (click)="importFileInput.click()"><ion-icon name="document-outline"></ion-icon>Choose Excel File</button>
+        <span id="import-file-name" class="chosen-file-name">{{ importFileName || 'No file selected' }}</span>
+        <p>Maximum 10 MB / 2,000 rows per import. Split larger exports before importing. Offline imports remain pending until API sync.</p>
+      </div>
+    </div>
+    <div *ngIf="importRows.length" class="import-card">
+      <strong>{{ importFileName }}</strong>
+      <p>{{ importReadyCount }} ready · {{ importDuplicateCount }} skipped · {{ importInvalidCount }} invalid</p>
+      <p *ngIf="importInvalidCount" class="import-error">Correct invalid rows in Excel and select the file again before importing.</p>
+      <div class="import-preview">
+        <table><thead><tr><th>Row</th><th>Name</th><th>Result</th></tr></thead>
+          <tbody><tr *ngFor="let row of importRows" [class.import-error]="row.state==='invalid' || row.state==='failed'">
+            <td>{{ row.row }}</td><td>{{ row.name }}</td><td>{{ row.message }}</td>
+          </tr></tbody>
+        </table>
+      </div>
+      <button type="button" [disabled]="isImportBusy || !importReadyCount || !!importInvalidCount" (click)="confirmImport()">
+        {{ isImportBusy ? 'Importing...' : 'Confirm Import (' + importReadyCount + ')' }}
+      </button>
+    </div>
+    <p aria-live="polite">{{ importMessage }}</p>
   </div>
 
   <!-- EXPORT PAGE -->
@@ -96,11 +144,9 @@
         <label
           style="font-size:11px;font-weight:700;letter-spacing:1px;color:#666;display:block;margin-bottom:8px;">SELECT
           CUSTOMER</label>
-        <select [(ngModel)]="selectedCustomerId" (change)="onCustomerChange()"
-          style="width:100%;border:none;border-bottom:1px solid rgba(0,0,0,0.1);outline:none;background:transparent;font-size:14px;font-weight:600;font-family:'DM Sans',sans-serif;color:#1a1a1a;padding:6px 0;">
-          <option value="">Select Customer</option>
-          <option *ngFor="let c of customers" [value]="c.id">{{ c.name }}</option>
-        </select>
+        <button type="button" class="export-customer-trigger" (click)="openExportCustomerSelector()" aria-haspopup="dialog">
+          <span>{{ selectedExportCustomerName }}</span><ion-icon name="chevron-down-outline"></ion-icon>
+        </button>
       </div>
 
       <div *ngIf="selectedCustomerId">
@@ -164,4 +210,21 @@
 
   </div>
 
+  <div *ngIf="showExportCustomerModal" class="export-customer-overlay" role="dialog" aria-modal="true" aria-labelledby="export-customer-title" (keydown.escape)="showExportCustomerModal=false">
+    <div class="export-customer-header">
+      <ion-button fill="clear" aria-label="Close customer selection" (click)="showExportCustomerModal=false"><ion-icon name="close-outline"></ion-icon></ion-button>
+      <span id="export-customer-title">Select Customer</span>
+    </div>
+    <div class="export-customer-search">
+      <ion-searchbar [ngModel]="exportCustomerSearch" (ionInput)="exportCustomerSearch=$event.detail.value || ''" placeholder="Search name or code..." aria-label="Search customers by name or code"></ion-searchbar>
+    </div>
+    <div class="export-customer-content">
+      <button type="button" *ngFor="let c of exportCustomerOptions" class="export-customer-item" [class.selected]="selectedCustomerId === '' + c.id" (click)="selectExportCustomer(c)">
+        <span class="export-customer-icon"><ion-icon name="person-outline"></ion-icon></span>
+        <span class="export-customer-info"><span class="export-customer-name">{{ c.name }}</span><span class="export-customer-code">{{ c.customerCode || c.code || 'NO CODE' }}</span></span>
+        <ion-icon name="chevron-forward-outline" class="export-customer-arrow"></ion-icon>
+      </button>
+      <p *ngIf="!exportCustomerOptions.length" class="export-customer-empty">No customers found</p>
+    </div>
+  </div>
 </ion-content>

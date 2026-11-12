@@ -1,3 +1,4 @@
+import { getInvoicePaymentStatus, getInvoicePaymentSummary } from '../../utils/invoice-payment-summary';
 import { inject } from '@angular/core';
 import { ProfileSettingsService } from '../../services/profile-settings.service';
 import { AlertService } from '../../services/alert.service';
@@ -806,9 +807,7 @@ export class BillingPage implements OnInit, OnDestroy {
           const paid = Number(inv.paidAmount ?? inv.PaidAmount ?? 0);
           const cred = Number(inv.creditUsed ?? inv.CreditUsed ?? 0);
           inv.balance = Math.max(0, total - paid - cred - cnSum);
-          if (inv.balance <= 0.01 && (paid > 0 || cred > 0 || cnSum > 0 || inv.status === 'Paid')) {
-            inv.status = 'Paid';
-          }
+          inv.status = getInvoicePaymentStatus(inv);
         }
       }
     } catch (e) {
@@ -828,20 +827,8 @@ export class BillingPage implements OnInit, OnDestroy {
           if (cid && cid !== '0' && String(invCid) !== cid) {
             return false;
           }
-          const term = inv.termType || inv.TermType;
-          const isCredit = (term === 'On Credit' || term === 'Net 30 Days');
-          if (isCredit && (!inv.payments || inv.payments.length === 0) && inv.status !== 'Paid') {
-            inv.status = 'Unpaid';
-            if (!inv.balance || Number(inv.balance) <= 0.01) {
-              const tot = Number(inv.totalAmount || inv.TotalAmount || 0);
-              const cred = Number(inv.creditUsed || inv.CreditUsed || 0);
-              const paid = Number(inv.paidAmount || inv.PaidAmount || 0);
-              const cn = Number(inv.cnTotal || inv.CNTotal || 0);
-              inv.balance = Math.max(0, tot - cred - paid - cn);
-              inv.paidAmount = paid;
-            }
-          }
-          const bal = inv.balance ?? inv.Balance ?? (Number(inv.totalAmount || 0) - Number(inv.paidAmount || 0) - Number(inv.CNTotal || inv.cnTotal || 0) - Number(inv.creditUsed || inv.CreditUsed || 0));
+          inv.status = getInvoicePaymentStatus(inv);
+          const bal = getInvoicePaymentSummary(inv).balance;
           return inv.status !== 'Paid' && Number(bal) > 0.01;
         });
         this.filterInvoicesForSelection();
@@ -856,20 +843,8 @@ export class BillingPage implements OnInit, OnDestroy {
           if (cid && cid !== '0' && String(invCid) !== cid) {
             return false;
           }
-          const term = inv.termType || inv.TermType;
-          const isCredit = (term === 'On Credit' || term === 'Net 30 Days');
-          if (isCredit && (!inv.payments || inv.payments.length === 0) && inv.status !== 'Paid') {
-            inv.status = 'Unpaid';
-            if (!inv.balance || Number(inv.balance) <= 0.01) {
-              const tot = Number(inv.totalAmount || inv.TotalAmount || 0);
-              const cred = Number(inv.creditUsed || inv.CreditUsed || 0);
-              const paid = Number(inv.paidAmount || inv.PaidAmount || 0);
-              const cn = Number(inv.cnTotal || inv.CNTotal || 0);
-              inv.balance = Math.max(0, tot - cred - paid - cn);
-              inv.paidAmount = paid;
-            }
-          }
-          const bal = inv.balance ?? inv.Balance ?? (Number(inv.totalAmount || 0) - Number(inv.paidAmount || 0) - Number(inv.CNTotal || inv.cnTotal || 0) - Number(inv.creditUsed || inv.CreditUsed || 0));
+          inv.status = getInvoicePaymentStatus(inv);
+          const bal = getInvoicePaymentSummary(inv).balance;
           return inv.status !== 'Paid' && Number(bal) > 0.01;
         });
         this.filterInvoicesForSelection();

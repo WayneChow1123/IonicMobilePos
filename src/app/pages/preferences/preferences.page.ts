@@ -13,6 +13,7 @@ import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../services/api.service';
 import { firstValueFrom, from } from 'rxjs';
 import { map, mergeMap, toArray } from 'rxjs/operators';
+import type { ImportKind, ImportRow } from '../../utils/master-data-excel';
 
 @Component({
   standalone: true,
@@ -26,8 +27,17 @@ export class PreferencesPage implements OnInit {
   readonly fileExport = inject(FileExportService);
   isBackingUp = false;
   backupDownload: { id: string; fileName: string } | null = null;
+  showImportModal = false;
+  importKind: ImportKind = 'products';
+  importRows: ImportRow[] = [];
+  importFileName = '';
+  isImportBusy = false;
+  importMessage = '';
   ionViewWillEnter() {
+    this.showExportCustomerModal = false;
+    if (!this.isImportBusy) this.showImportModal = false;
     this.showExportModal = false;
+    this.loadCustomers(); this.loadInvoices();
     this.cdr.detectChanges();
   }
 
@@ -40,6 +50,8 @@ export class PreferencesPage implements OnInit {
   invoices: any[] = [];
   filteredInvoices: any[] = [];
   selectedCustomerId = '';
+  showExportCustomerModal = false;
+  exportCustomerSearch = '';
   selectedInvoiceId = '';
   searchTerm = '';
 
@@ -88,7 +100,32 @@ export class PreferencesPage implements OnInit {
     this.showExportModal = true;
   }
 
-  closeExportModal() { this.showExportModal = false; }
+  closeExportModal() { this.showExportModal = false; this.showExportCustomerModal = false; }
+
+  get selectedExportCustomerName(): string {
+    const customer = this.customers.find(c => String(c.id) === String(this.selectedCustomerId));
+    return customer?.name || 'Select Customer';
+  }
+
+  get exportCustomerOptions(): any[] {
+    const term = this.exportCustomerSearch.trim().toLowerCase();
+    if (!term) return this.customers;
+    return this.customers.filter(c => String(c.name || '').toLowerCase().includes(term) ||
+      String(c.customerCode || c.code || '').toLowerCase().includes(term))
+      .sort((a, b) => Number(String(b.name || '').toLowerCase().startsWith(term)) - Number(String(a.name || '').toLowerCase().startsWith(term)) ||
+        String(a.name || '').localeCompare(String(b.name || '')));
+  }
+
+  openExportCustomerSelector() {
+    this.exportCustomerSearch = '';
+    this.showExportCustomerModal = true;
+  }
+
+  selectExportCustomer(customer: any) {
+    this.selectedCustomerId = String(customer.id);
+    this.onCustomerChange();
+    this.showExportCustomerModal = false;
+  }
 
   onExportTypeChange() {
     this.searchTerm = '';
@@ -99,6 +136,95 @@ export class PreferencesPage implements OnInit {
 
   onCustomerChange() {
     this.filteredInvoices = this.invoices.filter(inv => inv.customerId == this.selectedCustomerId);
+  }
+
+  openImport() {
+    this.showImportModal = true;
+    this.importRows = []; this.importFileName = ''; this.importMessage = '';
+  }
+
+  resetImport() { this.importRows = []; this.importFileName = ''; this.importMessage = ''; }
+  get importReadyCount() { return this.importRows.filter(row => row.state === 'ready' || row.state === 'failed').length; }
+  get importInvalidCount() { return this.importRows.filter(row => row.state === 'invalid').length; }
+  get importDuplicateCount() { return this.importRows.filter(row => row.state === 'duplicate').length; }
+
+  async downloadImportTemplate() {
+    if (this.isImportBusy) return;
+    this.isImportBusy = true;
+    try {
+      const { buildMasterTemplate } = await import('../../utils/master-data-excel');
+      const buffer = await buildMasterTemplate(this.importKind).xlsx.writeBuffer();
+      await this.fileExport.save(new Blob([new Uint8Array(buffer)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), this.importKind + '-import-template.xlsx');
+    } catch (error: any) { this.showToastMsg('Template download failed: ' + error.message); }
+    finally { this.isImportBusy = false; }
+  }
+
+  async exportMasterData() {
+    if (this.isImportBusy) return;
+    this.isImportBusy = true;
+    try {
+      const records = await firstValueFrom(this.importKind === 'products' ? this.api.getProducts(true) : this.api.getAllCustomers(true));
+      if (!Array.isArray(records) || !records.length) { this.showToastMsg('No ' + this.importKind + ' to export'); return; }
+      const { buildMasterExport } = await import('../../utils/master-data-excel');
+      const buffer = await buildMasterExport(this.importKind, records).xlsx.writeBuffer();
+      await this.fileExport.save(new Blob([new Uint8Array(buffer)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
+        this.importKind + '-' + new Date().toISOString().slice(0, 10) + '.xlsx');
+      this.showToastMsg('Export Excel File Successfully');
+    } catch (error: any) { this.showToastMsg('Excel export failed: ' + error.message); }
+    finally { this.isImportBusy = false; }
+  }
+
+  async selectImportFile(event: Event) {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file || this.isImportBusy) return;
+    this.resetImport();
+    if (!file.name.toLowerCase().endsWith('.xlsx') || file.size > 10 * 1024 * 1024) {
+      this.showToastMsg('Please select an .xlsx file smaller than 10 MB.'); return;
+    }
+    this.isImportBusy = true;
+    try {
+      const existing = await firstValueFrom(this.importKind === 'products' ? this.api.getProducts(true) : this.api.getAllCustomers(true));
+      const { readMasterExcel } = await import('../../utils/master-data-excel');
+      this.importRows = await readMasterExcel(await file.arrayBuffer(), this.importKind, Array.isArray(existing) ? existing : []);
+      this.importFileName = file.name;
+    } catch (error: any) { this.showToastMsg('Import preview failed: ' + error.message); }
+    finally { this.isImportBusy = false; }
+  }
+
+  async confirmImport() {
+    if (this.isImportBusy || !this.importReadyCount || this.importInvalidCount) return;
+    this.isImportBusy = true;
+    try {
+      const { isExistingMaster } = await import('../../utils/master-data-excel');
+      const existing = await firstValueFrom(this.importKind === 'products' ? this.api.getProducts(true) : this.api.getAllCustomers(true));
+      const known = Array.isArray(existing) ? [...existing] : [];
+      const pending = this.importRows.filter(row => row.state === 'ready' || row.state === 'failed');
+      for (let i = 0; i < pending.length; i++) {
+        const row = pending[i];
+        this.importMessage = `Importing ${i + 1} / ${pending.length}...`;
+        if (isExistingMaster(this.importKind, row.data, known)) {
+          row.state = 'duplicate'; row.message = 'Already exists — skipped'; continue;
+        }
+        try {
+          const result = await firstValueFrom(this.importKind === 'products' ? this.api.createProduct(row.data) : this.api.createCustomer(row.data));
+          row.state = result?.isOffline ? 'queued' : 'saved';
+          row.message = result?.isOffline ? 'Saved on device — pending API sync' : 'Saved to API';
+          known.push(row.data);
+        } catch (error: any) {
+          row.state = 'failed';
+          row.message = typeof error?.error === 'string' ? error.error : error?.error?.message || error.message || 'Import failed';
+        }
+      }
+      const saved = this.importRows.filter(row => row.state === 'saved').length;
+      const queued = this.importRows.filter(row => row.state === 'queued').length;
+      const failed = this.importRows.filter(row => row.state === 'failed').length;
+      this.importMessage = `${saved} saved to API, ${queued} pending sync, ${this.importDuplicateCount} skipped, ${failed} failed.`;
+      this.showToastMsg((failed ? 'Import completed with errors. ' : 'Import completed. ') + this.importMessage);
+      this.loadCustomers();
+    } catch (error: any) { this.showToastMsg('Import failed: ' + error.message); }
+    finally { this.isImportBusy = false; }
   }
 
   async exportExcel(singleInvoice?: any) {
@@ -129,7 +255,7 @@ export class PreferencesPage implements OnInit {
       const name = singleInvoice ? (singleInvoice.docNo || singleInvoice.invoiceNumber || 'invoice-' + singleInvoice.id) :
         'invoice-report-' + new Date().toISOString().slice(0, 10);
       await this.fileExport.save(blob, name + '.xlsx');
-      this.showToastMsg('Excel file ready. Save it from the download or share window.');
+      this.showToastMsg('Export Excel File Successfully');
     } catch (error: any) {
       this.showToastMsg('Excel export failed: ' + (error?.message || 'Please try again.'));
     } finally { this.isLoading = false; }

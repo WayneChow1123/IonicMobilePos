@@ -645,4 +645,16 @@ ion-modal.product-select-modal {
 .hide-scrollbar {
   scrollbar-width: none !important;
   -ms-overflow-style: none !important;
-}
+}
+
+ion-alert.master-data-select-modal {
+  --background: #fff;
+  --max-width: 340px;
+  .alert-wrapper { border-radius: 20px; }
+  .alert-title { color: #1a1a1a; font-size: 18px; font-weight: 700; }
+  .alert-radio-label, .alert-button { color: #1a1a1a; }
+  .alert-button { font-weight: 700; }
+  [aria-checked="true"] .alert-radio-label { color: #17365d; font-weight: 700; }
+  [aria-checked="true"] .alert-radio-icon { border-color: #17365d; }
+  .alert-radio-inner { background-color: #17365d; }
+}

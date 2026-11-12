@@ -53,5 +53,10 @@ There are no changes to invoice payment, credit or stock rules in this work.
 4. On a test server, tap Backup Database while online. Save the `.bak`, verify its size
    and validate restoration with a DBA on a separate test database. Test download failure
    and Retry Backup Download. Do not restore over the live database as a test.
-5. The live failure originally reported has no supplied server error text yet. Local SQL
-   verification does not establish the permissions or configuration of the live host.
+5. The latest live screenshot reports backup folder access denied. Live server filesystem
+   permissions still need to be corrected; a DLL or APK update cannot grant those rights.
+   See BACKUP_SERVER_PERMISSION_FIX.md in the API repository for host-specific steps.
+
+## Styling update — 2026-11-06
+
+All exported sheets now use native Excel tables, banded rows, column borders, a merged navy company banner and readable row heights. Invoice financial groups use teal/green headers; outstanding balances and payment statuses have distinct fills. Invoice Date and Term headers and values are centered. Dates, numeric values and totals calculations are unchanged. The 73 browser tests pass, including a write/read check for the native table, fills, borders and alignment. The API adds a backup failure stage and more precise application-identity permission messages; no live ACL changes were performed.

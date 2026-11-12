@@ -1,5 +1,5 @@
 import { firstValueFrom } from 'rxjs';
-import { getInvoicePaymentSummary, invoicePaymentSummaryHtml } from '../../utils/invoice-payment-summary';
+import { getInvoicePaymentStatus, getInvoicePaymentSummary, invoicePaymentSummaryHtml } from '../../utils/invoice-payment-summary';
 import { inject } from '@angular/core';
 import { ProfileSettingsService } from '../../services/profile-settings.service';
 import { AlertService } from '../../services/alert.service';
@@ -384,7 +384,7 @@ export class InvoicesPage implements OnInit, OnDestroy {
         const total = (p.totalAmount != null && Number(p.totalAmount) > 0) ? Number(p.totalAmount) : computedTotal;
         const paid = Number(p.paidAmount) || 0;
         const isCash = (p.termType === 'CASH SALE' || p.termType === 'Cash');
-        const status = isCash ? 'Paid' : (paid >= total ? 'Paid' : (paid > 0 ? 'Partial' : 'Offline Pending'));
+        const status = getInvoicePaymentStatus({ ...p, totalAmount: total, paidAmount: paid });
         return {
           id: q.id,
           invoiceNumber: p.invoiceNumber || ('OFFLINE-' + String(q.id).slice(-6)),
@@ -440,20 +440,7 @@ export class InvoicesPage implements OnInit, OnDestroy {
           const effectiveBal = Math.max(0, total - paid - cred - cn);
           const bal = effectiveBal;
 
-          let stat: string;
-          if (effectiveBal <= 0.01 && (paid > 0 || cred > 0 || cn > 0 || inv.status === 'Paid')) {
-            stat = 'Paid';
-          } else if (isCreditTerm) {
-            // 赊账 (On Credit / Net 30 Days)
-            if (paid > 0 || cred > 0) {
-              stat = 'Partial';
-            } else {
-              stat = 'Unpaid';
-            }
-          } else {
-            // Cash Sale
-            stat = (paid > 0 || cred > 0) ? 'Partial' : (inv.status || 'Paid');
-          }
+          const stat = getInvoicePaymentStatus({ ...inv, totalAmount: total, paidAmount: paid, creditUsed: cred, cnTotal: cn });
           return {
             ...inv,
             invoiceDate: getInvoiceNormalizedDate(inv),
@@ -675,9 +662,7 @@ export class InvoicesPage implements OnInit, OnDestroy {
           const paid = Number(inv.paidAmount ?? inv.PaidAmount ?? 0);
           const cred = Number(inv.creditUsed ?? inv.CreditUsed ?? 0);
           inv.balance = Math.max(0, total - paid - cred - cnSum);
-          if (inv.balance <= 0.01 && (paid > 0 || cred > 0 || cnSum > 0 || inv.status === 'Paid')) {
-            inv.status = 'Paid';
-          }
+          inv.status = getInvoicePaymentStatus(inv);
         }
       }
     } catch (e) {
@@ -765,9 +750,7 @@ export class InvoicesPage implements OnInit, OnDestroy {
         const paid = Number(inv.paidAmount ?? inv.PaidAmount ?? 0);
         const cred = Number(inv.creditUsed ?? inv.CreditUsed ?? 0);
         inv.balance = Math.max(0, total - paid - cred - cnSum);
-        if (inv.balance <= 0.01 && (paid > 0 || cred > 0 || cnSum > 0 || inv.status === 'Paid')) {
-          inv.status = 'Paid';
-        }
+        inv.status = getInvoicePaymentStatus(inv);
       }
     } catch (e) {
       console.warn('[Invoices] Error ensuring invoice credit notes:', e);
@@ -1506,7 +1489,7 @@ export class InvoicesPage implements OnInit, OnDestroy {
         invoiceDate: this.formatForDatetimeLocal(invoice.invoiceDate || this.getMYSDate()),
         remark: invoice.remark || '',
         termType: term,
-        status: invoice.status || (isCash ? 'Paid' : 'Unpaid'),
+        status: getInvoicePaymentStatus(invoice),
         items: rawOfflineItems.map((i: any) => ({
           productId: i.productId || 0,
           quantity: i.quantity || 1,
@@ -1572,7 +1555,7 @@ export class InvoicesPage implements OnInit, OnDestroy {
         invoiceDate: this.formatForDatetimeLocal(details.invoiceDate || this.getMYSDate()),
         remark: details.remark || '',
         termType: term,
-        status: details.status || invoice.status || (isCash ? 'Paid' : 'Unpaid'),
+        status: getInvoicePaymentStatus({ ...invoice, ...details }),
         items: hasValidItems
           ? rawFallbackItems.map((i: any) => ({
             productId: i.productId ?? i.ProductId ?? 0,
@@ -1650,18 +1633,9 @@ export class InvoicesPage implements OnInit, OnDestroy {
         const tot = Number(details.totalAmount ?? invoice.totalAmount ?? 0);
         const paid = Number(details.paidAmount ?? invoice.paidAmount ?? 0);
         const cred = Number(details.creditUsed ?? invoice.creditUsed ?? 0);
-        const effectiveBal = Math.max(0, tot - paid - cred);
-
-        let consistentStatus = details.status || invoice.status || (isCash ? 'Paid' : 'Unpaid');
-        if (isCreditTerm) {
-          if (effectiveBal <= 0.01 && (paid > 0 || cred > 0 || details.status === 'Paid')) {
-            consistentStatus = 'Paid';
-          } else if (paid > 0 || cred > 0) {
-            consistentStatus = 'Partial';
-          } else {
-            consistentStatus = 'Unpaid';
-          }
-        }
+        const paymentState = { ...invoice, ...details, totalAmount: tot, paidAmount: paid, creditUsed: cred };
+        const effectiveBal = getInvoicePaymentSummary(paymentState).balance;
+        const consistentStatus = getInvoicePaymentStatus(paymentState);
         if (this.selectedInvoice) {
           this.selectedInvoice.status = consistentStatus;
           this.selectedInvoice.balance = effectiveBal;
@@ -1769,17 +1743,17 @@ export class InvoicesPage implements OnInit, OnDestroy {
     this.cdr.detectChanges();
   }
 
+  get invoicePaymentStatus(): 'Paid' | 'Partial' | 'Unpaid' {
+    const selected = this.selectedInvoice || {};
+    const total = this.isEditMode && this.editForm?.items?.length
+      ? this.editForm.items.reduce((sum: number, item: any) => sum + Number(item.quantity || 0) * Number(item.unitPrice || 0), 0)
+      : selected.totalAmount;
+    return getInvoicePaymentStatus({ ...selected, totalAmount: total });
+  }
+
   setEditTermType(term: string) {
     this.editForm.termType = term;
-    if (term === 'CASH SALE' || term === 'Cash') {
-      this.editForm.status = 'Paid';
-    } else {
-      this.editForm.status = 'Unpaid';
-    }
-    if (this.selectedInvoice) {
-      this.selectedInvoice.termType = term;
-      this.selectedInvoice.status = this.editForm.status;
-    }
+    this.editForm.status = this.invoicePaymentStatus;
     this.cdr.detectChanges();
   }
 
@@ -2165,7 +2139,7 @@ export class InvoicesPage implements OnInit, OnDestroy {
           const invTotal = res?.totalAmount || roundedTotal;
           const paid = payload.paidAmount || 0;
           const isCash = (payload.termType === 'CASH SALE' || payload.termType === 'Cash');
-          const effectiveStatus = isCash ? 'Paid' : (paid >= invTotal ? 'Paid' : (paid > 0 ? 'Partial' : (res?.isOffline ? 'Offline Pending' : 'Unpaid')));
+          const effectiveStatus = getInvoicePaymentStatus({ totalAmount: invTotal, paidAmount: paid, creditUsed: res?.creditUsed || 0 });
 
           if (res?.isOffline) {
             this.showToastMsg('Invoice saved offline! (Queued for sync)');
@@ -2335,7 +2309,7 @@ export class InvoicesPage implements OnInit, OnDestroy {
     const updatedInvoiceNumber = (this.editForm.invoiceNumber || this.selectedInvoice.invoiceNumber || this.selectedInvoice.docNo || '').toString().trim();
     const updatedTermType = this.editForm.termType || this.selectedInvoice.termType || 'CASH SALE';
     const isCash = (updatedTermType === 'CASH SALE' || updatedTermType === 'Cash');
-    const updatedStatus = isCash ? 'Paid' : 'Unpaid';
+    const updatedStatus = this.invoicePaymentStatus;
 
 
     const payload = {
@@ -2345,7 +2319,7 @@ export class InvoicesPage implements OnInit, OnDestroy {
       termType: updatedTermType,
       status: updatedStatus,
       totalAmount: this.editForm.items.reduce((sum: number, it: any) => sum + Number(it.quantity || 0) * Number(it.unitPrice || 0), 0),
-      paidAmount: isCash ? this.editForm.items.reduce((sum: number, it: any) => sum + Number(it.quantity || 0) * Number(it.unitPrice || 0), 0) : (this.selectedInvoice.paidAmount || 0),
+      paidAmount: this.selectedInvoice.paidAmount || 0,
       customerId: updatedCustomerId,
       customerName: updatedCustomerName
     };
@@ -2383,12 +2357,12 @@ export class InvoicesPage implements OnInit, OnDestroy {
           if (res?.paidAmount !== undefined) {
             this.selectedInvoice.paidAmount = res.paidAmount;
           } else {
-            this.selectedInvoice.paidAmount = isCash ? this.selectedInvoice.totalAmount : 0;
+            this.selectedInvoice.paidAmount = payload.paidAmount;
           }
           if (res?.balance !== undefined) {
             this.selectedInvoice.balance = res.balance;
           } else {
-            this.selectedInvoice.balance = isCash ? 0 : this.selectedInvoice.totalAmount;
+            this.selectedInvoice.balance = getInvoicePaymentSummary(this.selectedInvoice).balance;
           }
           this.offlineStorage.setCache('inv_detail_' + this.selectedInvoice.id, this.selectedInvoice);
         }

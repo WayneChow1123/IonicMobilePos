@@ -36,10 +36,22 @@ describe('Excel bill export and backup', () => {
     expect(bills.getCell('C6').value instanceof Date).toBeTrue();
     expect(bills.getCell('I6').value).toBe(50);
     expect(bills.getCell('J6').value).toBe(50);
-    expect(bills.getCell('K6').value).toBe('PARTIALLY PAID');
+    expect(bills.getCell('K6').value).toBe('Partially Paid');
     expect((bills.getCell('J7').value as any).result).toBe(50);
     expect(restored.getWorksheet('Items')!.getCell('C6').value).toBe('00123');
     expect(restored.getWorksheet('Items')!.getCell('F6').value).toBe(100);
+    const table: any = bills.getTable('InvoiceRegister');
+    expect(table).toBeDefined();
+    expect(table.table.tableRef).toBe('A5:L6');
+    expect(table.table.style.showRowStripes).toBeTrue();
+    expect(bills.getCell('C5').alignment.horizontal).toBe('center');
+    expect(bills.getCell('D5').alignment.horizontal).toBe('center');
+    expect(bills.getCell('C6').alignment.horizontal).toBe('center');
+    expect(bills.getCell('D6').alignment.horizontal).toBe('center');
+    expect(bills.getCell('B6').border.right?.style).toBe('thin');
+    expect((bills.getCell('J6').fill as any).fgColor.argb).toBe('FFFFE7C2');
+    expect(bills.getCell('A1').isMerged).toBeTrue();
+    expect(restored.getWorksheet('Items')!.getTable('InvoiceItems')).toBeDefined();
   });
   it('separates returns from change credit and applied credit', () => {
     const workbook = buildInvoiceWorkbook([{ ...invoice, creditUsed: 10, creditNotes: [
@@ -63,6 +75,30 @@ describe('Excel bill export and backup', () => {
     await page.exportExcel();
     expect(page.api.getInvoiceDetails.calls.count()).toBe(1);
     expect(page.api.getInvoiceDetails).toHaveBeenCalledWith(1);
+  });
+  it('searches the export customer selector by name and code without case sensitivity', () => {
+    page.customers = [{ id: 1, name: 'Alpha Trading', customerCode: 'C001' }, { id: 2, name: 'Beta', code: 'C002' }];
+    page.exportCustomerSearch = '  ALPHA  ';
+    expect(page.exportCustomerOptions.map((c: any) => c.id)).toEqual([1]);
+    page.exportCustomerSearch = 'c002';
+    expect(page.exportCustomerOptions.map((c: any) => c.id)).toEqual([2]);
+    page.exportCustomerSearch = 'missing';
+    expect(page.exportCustomerOptions).toEqual([]);
+    page.openExportCustomerSelector();
+    expect(page.exportCustomerSearch).toBe('');
+    expect(page.exportCustomerOptions.length).toBe(2);
+  });
+  it('selects the customer and keeps every invoice for that customer in the export', async () => {
+    page.customers = [{ id: 1, name: 'Alpha' }];
+    page.invoices = [invoice, { ...invoice, id: 2 }, { ...invoice, id: 3, customerId: 9 }];
+    page.exportType = 'customer';
+    page.selectExportCustomer(page.customers[0]);
+    expect(page.selectedExportCustomerName).toBe('Alpha');
+    expect(page.filteredInvoices.map((inv: any) => inv.id)).toEqual([1, 2]);
+    expect(page.showExportCustomerModal).toBeFalse();
+    await page.exportExcel();
+    expect(page.api.getInvoiceDetails.calls.count()).toBe(2);
+    expect(page.api.getInvoiceDetails).not.toHaveBeenCalledWith(3);
   });
   it('exports a single invoice using the same Excel flow', async () => {
     await page.exportExcel(invoice);
@@ -131,6 +167,20 @@ describe('Excel bill export and backup', () => {
     expect(title.textContent).toBe('Export Bills');
     expect(box.width).toBeGreaterThan(200);
     expect(Math.abs((box.left + box.width / 2) - (label.left + label.width / 2))).toBeLessThan(1);
+    fixture.componentInstance.showExportModal = false;
+    fixture.componentInstance.showImportModal = true;
+    fixture.detectChanges();
+    const panel = fixture.nativeElement.querySelector('.import-panel');
+    expect(getComputedStyle(panel.querySelector('.back-btn')).getPropertyValue('--color').trim()).toBe('#1a1a1a');
+    expect(panel.querySelector('.back-btn ion-icon').getAttribute('name')).toBe('chevron-back-outline');
+    expect(panel.querySelector('ion-select').interface).toBe('alert');
+    expect(panel.querySelector('ion-select').okText).toBe('Select');
+    expect(getComputedStyle(panel.querySelector('.native-file-input')).display).toBe('none');
+    expect(panel.querySelector('.choose-file-action').textContent).toContain('Choose Excel File');
+    expect(panel.querySelector('.primary-action').textContent).toContain('Export Products Excel');
+    fixture.componentInstance.importKind = 'customers';
+    fixture.detectChanges();
+    expect(panel.querySelector('.primary-action').textContent).toContain('Export Customers Excel');
     fixture.destroy();
   });
 });

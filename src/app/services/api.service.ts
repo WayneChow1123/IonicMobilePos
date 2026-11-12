@@ -1,3 +1,4 @@
+import { getInvoicePaymentStatus, getInvoicePaymentSummary } from '../utils/invoice-payment-summary';
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Observable, of, from, throwError, firstValueFrom } from 'rxjs';
@@ -684,9 +685,9 @@ export class ApiService {
   }
 
   createCustomer(data: any): Observable<any> {
-    const operationId = this.offlineStorage.generateId();
+    const operationId = data?._offlineOperationId || this.offlineStorage.generateId();
     if (data) data._offlineOperationId = operationId;
-    const saveOfflineCustomer = () => {
+    const saveOfflineCustomer = async () => {
       const offlineId = 'cust_off_' + this.offlineStorage.generateId();
       const newCustomer = {
         id: offlineId,
@@ -710,33 +711,25 @@ export class ApiService {
         createdAt: new Date().toISOString()
       };
 
-      this.offlineStorage.getCache<any[]>('customers').then(cached => {
-        const list = cached || [];
-        this.offlineStorage.setCache('customers', [newCustomer, ...list]);
-      });
+      const cached = await this.offlineStorage.getCache<any[]>('customers') || [];
+      await this.offlineStorage.setCache('customers', [newCustomer, ...cached]);
 
       if (this.cachedCustomers) {
         this.cachedCustomers = [newCustomer, ...this.cachedCustomers];
       }
 
-      return from(
-        this.offlineStorage.enqueue('CREATE_CUSTOMER', data, offlineId).then(() => ({
-          message: 'Customer created offline (Queued for sync)',
-          id: offlineId,
-          data: newCustomer,
-          isOffline: true
-        }))
-      );
+      await this.offlineStorage.enqueue('CREATE_CUSTOMER', data, offlineId);
+      return { message: 'Customer created offline (Queued for sync)', id: offlineId, data: newCustomer, isOffline: true };
     };
 
     if (!this.isOnline()) {
-      return saveOfflineCustomer();
+      return from(saveOfflineCustomer());
     }
 
     return this.http.post(this.baseUrl + '/Customer/CreateCustomers/createcustomers', data, this.operationOptions(operationId)).pipe(
       timeout(4000),
       tap(() => this.clearCustomerCache()),
-      catchError(() => saveOfflineCustomer())
+      catchError(error => this.isConnectionError(error) ? from(saveOfflineCustomer()) : throwError(() => error))
     );
   }
   getAllCustomers(forceRefresh = false): Observable<any> {
@@ -1556,16 +1549,16 @@ export class ApiService {
     const ov = overrides[String(inv.id)];
     if (ov) {
       if (ov.termType) inv.termType = ov.termType;
-      if (ov.status) inv.status = ov.status;
+
       if (ov.invoiceNumber) {
         inv.invoiceNumber = ov.invoiceNumber;
         inv.docNo = ov.invoiceNumber;
       }
       if (ov.customerId !== undefined) inv.customerId = ov.customerId;
       if (ov.customerName !== undefined) inv.customerName = ov.customerName;
-      if (ov.paidAmount !== undefined) inv.paidAmount = ov.paidAmount;
-      if (ov.balance !== undefined) inv.balance = ov.balance;
-      if (ov.totalAmount !== undefined) inv.totalAmount = ov.totalAmount;
+
+
+      if (ov.totalAmount !== undefined && inv.totalAmount == null) inv.totalAmount = ov.totalAmount;
     }
 
     try {
@@ -1589,31 +1582,10 @@ export class ApiService {
       inv.customerName = inv.CustomerName || inv.customer?.name || '';
     }
 
-    const term = inv.termType || inv.TermType;
-    const isCreditTerm = (term === 'On Credit' || term === 'Net 30 Days');
-    if (isCreditTerm) {
-      const hasActualPayments = Array.isArray(inv.payments) && inv.payments.length > 0;
-      const tot = Number(inv.totalAmount ?? inv.TotalAmount ?? 0);
-      const cred = Number(inv.creditUsed ?? inv.CreditUsed ?? 0);
-      const paid = ov?.paidAmount !== undefined ? Number(ov.paidAmount) : Number(inv.paidAmount || 0);
-      const effBal = Math.max(0, tot - cred - paid - Number(inv.cnTotal ?? inv.CNTotal ?? 0));
-
-      if (effBal <= 0.01 && (cred > 0 || paid > 0 || inv.status === 'Paid')) {
-        inv.status = 'Paid';
-        inv.balance = 0;
-      } else if (!hasActualPayments && (ov?.status !== 'Paid')) {
-        inv.status = (cred > 0 || paid > 0) ? 'Partial' : 'Unpaid';
-        if (ov?.paidAmount !== undefined) {
-          inv.paidAmount = ov.paidAmount;
-        } else {
-          inv.paidAmount = paid;
-        }
-        if (ov?.balance !== undefined) {
-          inv.balance = ov.balance;
-        } else {
-          inv.balance = effBal;
-        }
-      }
+    // Legacy display overrides must never overwrite current payment amounts.
+    if (getInvoicePaymentSummary(inv).available) {
+      inv.status = getInvoicePaymentStatus(inv);
+      inv.balance = getInvoicePaymentSummary(inv).balance;
     }
   }
 
@@ -1984,17 +1956,16 @@ export class ApiService {
   updateInvoice(id: any, data: any): Observable<any> {
     const operationId = this.offlineStorage.generateId();
     data = { ...data, _offlineOperationId: operationId };
-    const apply = async (offline: boolean) => {
+    const apply = async (offline: boolean, server?: any) => {
       const list = await this.offlineStorage.getCache<any[]>('invoices_list') || [];
       const detail = await this.offlineStorage.getCache<any>('inv_detail_' + id);
       const previous = detail || list.find(i => String(i.id) === String(id)) || {};
-      const merged = { ...previous, ...data, id };
+      const merged = { ...previous, ...data, ...(server || {}), id };
       if (Array.isArray(data.items)) merged.totalAmount = Math.round(data.items.reduce(
         (sum: number, it: any) => sum + Number(it.quantity || 0) * Number(it.unitPrice || 0), 0) * 100) / 100;
-      const cash = ['CASH SALE', 'Cash', 'Cash Sale'].includes(merged.termType);
-      merged.paidAmount = cash ? merged.totalAmount : Number(data.paidAmount ?? previous.paidAmount ?? 0);
-      merged.balance = Math.max(0, Number(merged.totalAmount || 0) - merged.paidAmount - Number(merged.creditUsed || 0) - Number(merged.cnTotal || 0));
-      merged.status = merged.balance <= 0.01 ? 'Paid' : merged.paidAmount + Number(merged.creditUsed || 0) > 0 ? 'Partial' : 'Unpaid';
+      merged.paidAmount = Number(server?.paidAmount ?? previous.paidAmount ?? data.paidAmount ?? 0);
+      merged.balance = getInvoicePaymentSummary(merged).balance;
+      merged.status = getInvoicePaymentStatus(merged);
       merged.docNo = merged.invoiceNumber || previous.docNo;
       if (offline) {
         const pending = await this.offlineStorage.getQueueItemById(String(id));
@@ -2010,11 +1981,11 @@ export class ApiService {
       delete overrides[String(id)];
       localStorage.setItem(this.INV_DATA_OVERRIDES_KEY, JSON.stringify(overrides));
       this.clearCustomerCache();
-      return { invoiceId: id, isOffline: offline, message: offline ? 'Invoice updated on this device' : 'Invoice updated' };
+      return { invoiceId: id, totalAmount: merged.totalAmount, paidAmount: merged.paidAmount, balance: merged.balance, status: merged.status, termType: merged.termType, isOffline: offline, message: offline ? 'Invoice updated on this device' : 'Invoice updated' };
     };
     if (!this.isOnline() || !Number.isSafeInteger(Number(id))) return from(apply(true));
     return this.http.patch(this.baseUrl + '/Invoice/UpdateInvoice/invoices/' + id, data, this.operationOptions(operationId)).pipe(
-      timeout(10000), switchMap(() => from(apply(false))),
+      timeout(10000), switchMap(server => from(apply(false, server))),
       catchError(error => this.isConnectionError(error) ? from(apply(true)) : throwError(() => error)));
   }
 
@@ -2482,7 +2453,7 @@ export class ApiService {
     const operationId = this.offlineStorage.generateId();
     const isOfflinePayment = String(id).startsWith('pay_');
 
-    const executeOfflineDelete = async () => {
+    const executeOfflineDelete = async (queueDelete = true) => {
       const cached = await this.offlineStorage.getCache<any[]>('payments_list') || [];
       const targetPayment = cached.find(p => String(p.id) === String(id));
       const deletedAmount = Number(targetPayment?.amount ?? 0);
@@ -2527,7 +2498,7 @@ export class ApiService {
 
         // 2. Remove payment detail cache
         await this.offlineStorage.removeCache('payment_detail_' + id);
-      } else {
+      } else if (queueDelete) {
         // Online payment deleted while offline: queue delete task for sync
         await this.offlineStorage.enqueue('DELETE_PAYMENT', { _offlineOperationId: operationId, paymentId: id }, 'del_pay_' + id);
       }
@@ -2546,19 +2517,16 @@ export class ApiService {
         if (inv) {
           inv.paidAmount = Math.max(0, (Number(inv.paidAmount) || 0) - deletedAmount);
           inv.balance = Math.max(0, (Number(inv.totalAmount) || 0) - (Number(inv.creditUsed) || 0) - (Number(inv.cnTotal) || 0) - inv.paidAmount);
+          inv.status = getInvoicePaymentStatus(inv);
           const detail = await this.offlineStorage.getCache<any>('inv_detail_' + inv.id);
           if (detail) await this.offlineStorage.setCache('inv_detail_' + inv.id, { ...detail, ...inv });
-          if (inv.paidAmount <= 0.01) {
-            inv.status = 'Unpaid';
-          } else {
-            inv.status = 'Partial';
-          }
           await this.offlineStorage.setCache('invoices_list', cachedInvoices);
         }
       }
 
       await this.offlineStorage.refreshQueueCount();
-      return { success: true, isOffline: true, message: 'Payment deleted offline' };
+      this.clearCustomerCache();
+      return { success: true, isOffline: queueDelete, message: queueDelete ? 'Payment deleted offline' : 'Payment deleted' };
     };
 
     if (!this.isOnline() || isOfflinePayment) {
@@ -2567,7 +2535,7 @@ export class ApiService {
 
     return this.http.delete(this.baseUrl + '/Payment/DeletePayment/payments/' + id, { ...{ responseType: 'text' }, ...this.operationOptions(operationId) }).pipe(
       timeout(4000),
-      tap(() => this.clearCustomerCache()),
+      switchMap(() => from(executeOfflineDelete(false))),
       catchError((err: any) => this.isConnectionError(err) ? from(executeOfflineDelete()) : throwError(() => err))
     );
   }
@@ -2667,7 +2635,7 @@ export class ApiService {
   }
 
   createProduct(data: any): Observable<any> {
-    const operationId = this.offlineStorage.generateId();
+    const operationId = data?._offlineOperationId || this.offlineStorage.generateId();
     if (data) data._offlineOperationId = operationId;
     const saveOfflineProduct = async () => {
       const offlineId = 'prod_off_' + this.offlineStorage.generateId();

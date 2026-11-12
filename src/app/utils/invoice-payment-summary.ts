@@ -13,6 +13,12 @@ export interface InvoicePaymentSummary {
   available: boolean;
 }
 
+export function getInvoicePaymentStatus(invoice: any): 'Paid' | 'Partial' | 'Unpaid' {
+  const summary = getInvoicePaymentSummary(invoice);
+  return summary.balance === 0 && summary.available ? 'Paid'
+    : summary.paid > 0 || summary.creditUsed > 0 ? 'Partial' : 'Unpaid';
+}
+
 /** One monetary calculation for preview, HTML/PDF and ESC/POS receipts. */
 export function getInvoicePaymentSummary(invoice: any, fallback?: any): InvoicePaymentSummary {
   const pick = (...keys: string[]): any => {

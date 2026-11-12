@@ -51,6 +51,43 @@ describe('Offline CRUD and reconnect regression coverage', () => {
 
   async function runQueue() { return (sync as any).syncOfflineTasks(true); }
 
+  it('does not let old local invoice overrides restore a deleted payment', () => {
+    localStorage.setItem('invoice_data_overrides', JSON.stringify({ 3: { paidAmount: 100, status: 'Paid', balance: 0 } }));
+    const invoice: any = { id: 3, totalAmount: 100, paidAmount: 0, status: 'Unpaid', termType: 'On Credit' };
+    api.applyInvoiceOverrideToItem(invoice);
+    expect(invoice.paidAmount).toBe(0);
+    expect(invoice.status).toBe('Unpaid');
+    expect(invoice.balance).toBe(100);
+  });
+
+  it('updates invoice list and detail immediately after deleting an online payment without queuing another delete', async () => {
+    (api.isOnline as jasmine.Spy).and.returnValue(true);
+    http.delete.and.returnValue(of('Delete Success'));
+    await storage.setCache('payments_list', [{ id: 9, invoiceId: 3, amount: 100 }]);
+    await storage.setCache('invoices_list', [{ id: 3, totalAmount: 100, paidAmount: 100, status: 'Paid' }]);
+    await storage.setCache('inv_detail_3', { id: 3, totalAmount: 100, paidAmount: 100, status: 'Paid', items: [] });
+    await firstValueFrom(api.deletePayment(9));
+    expect((await storage.getCache<any[]>('invoices_list'))![0].status).toBe('Unpaid');
+    expect((await storage.getCache<any>('inv_detail_3')).status).toBe('Unpaid');
+    expect((await storage.getCache<any>('inv_detail_3')).balance).toBe(100);
+    expect((await storage.getPendingQueue()).length).toBe(0);
+  });
+
+  it('changing invoice terms offline preserves actual paid amount instead of inventing a cash payment', async () => {
+    await storage.setCache('invoices_list', [{ id: 3, totalAmount: 100, paidAmount: 40, status: 'Partial' }]);
+    const result = await firstValueFrom(api.updateInvoice(3, { termType: 'CASH SALE', items: [{ productId: 2, quantity: 1, unitPrice: 100 }] }));
+    expect(result.paidAmount).toBe(40);
+    expect(result.status).toBe('Partial');
+    expect(result.balance).toBe(60);
+  });
+
+  it('does not turn a rejected customer import into a successful offline record', async () => {
+    (api.isOnline as jasmine.Spy).and.returnValue(true);
+    http.post.and.returnValue(throwError(() => new HttpErrorResponse({ status: 400 })));
+    await expectAsync(firstValueFrom(api.createCustomer({ name: 'Invalid customer' }))).toBeRejected();
+    expect((await storage.getPendingQueue()).length).toBe(0);
+  });
+
   it('cancels a new UUID invoice without leaving an upload or local order', async () => {
     const created = await createInvoice();
     expect(created.invoiceId).toMatch(/^[\da-f-]{36}$/i);

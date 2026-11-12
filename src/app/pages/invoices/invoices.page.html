@@ -541,9 +541,9 @@
       <div class="inv-meta-group">
         <div class="inv-meta-header">
           <span class="inv-meta-label">INVOICE NUMBER</span>
-          <span class="meta-status-chip" [class.paid]="(editForm.termType === 'CASH SALE' || selectedInvoice?.status === 'Paid') && editForm.termType !== 'On Credit' && editForm.termType !== 'Net 30 Days'" [class.unpaid]="editForm.termType === 'On Credit' || editForm.termType === 'Net 30 Days' || selectedInvoice?.status === 'Unpaid'">
-            <ion-icon [name]="(editForm.termType === 'CASH SALE' || selectedInvoice?.status === 'Paid') && editForm.termType !== 'On Credit' && editForm.termType !== 'Net 30 Days' ? 'checkmark-circle' : 'time'"></ion-icon>
-            {{ (editForm.termType === 'CASH SALE' || selectedInvoice?.status === 'Paid') && editForm.termType !== 'On Credit' && editForm.termType !== 'Net 30 Days' ? 'PAID' : 'UNPAID' }}
+          <span class="meta-status-chip" [class.paid]="invoicePaymentStatus === 'Paid'" [class.unpaid]="invoicePaymentStatus !== 'Paid'">
+            <ion-icon [name]="invoicePaymentStatus === 'Paid' ? 'checkmark-circle' : 'time'"></ion-icon>
+            {{ invoicePaymentStatus | uppercase }}
           </span>
         </div>
         
@@ -609,9 +609,9 @@
       <div class="inv-meta-group" style="margin-top: 14px;">
         <div class="inv-meta-header">
           <span class="inv-meta-label">TERM TYPE</span>
-          <span class="term-status-preview" [class.paid]="editForm.termType === 'CASH SALE'" [class.unpaid]="editForm.termType !== 'CASH SALE'">
-            <ion-icon [name]="editForm.termType === 'CASH SALE' ? 'checkmark-circle' : 'time'"></ion-icon>
-            Status: {{ editForm.termType === 'CASH SALE' ? 'PAID' : 'UNPAID' }}
+          <span class="term-status-preview" [class.paid]="invoicePaymentStatus === 'Paid'" [class.unpaid]="invoicePaymentStatus !== 'Paid'">
+            <ion-icon [name]="invoicePaymentStatus === 'Paid' ? 'checkmark-circle' : 'time'"></ion-icon>
+            Status: {{ invoicePaymentStatus | uppercase }}
           </span>
         </div>
 
@@ -622,8 +622,8 @@
             <span>{{ editForm.termType || 'CASH SALE' }}</span>
           </div>
           <div class="term-type-desc">
-            <span *ngIf="editForm.termType === 'CASH SALE'" class="term-desc-cash">Cash Sale (Paid)</span>
-            <span *ngIf="editForm.termType === 'On Credit' || editForm.termType === 'Net 30 Days'" class="term-desc-credit">On Credit (Unpaid)</span>
+            <span *ngIf="editForm.termType === 'CASH SALE'" class="term-desc-cash">Cash Sale</span>
+            <span *ngIf="editForm.termType === 'On Credit' || editForm.termType === 'Net 30 Days'" class="term-desc-credit">On Credit</span>
           </div>
         </div>
 
@@ -647,11 +647,11 @@
           <!-- Compact status hint -->
           <div *ngIf="editForm.termType === 'CASH SALE'" class="term-compact-hint cash">
             <ion-icon name="checkmark-circle"></ion-icon>
-            <span>Marked as <strong>PAID</strong> (Settled in full with cash)</span>
+            <span>Payment status: <strong>{{ invoicePaymentStatus | uppercase }}</strong>. Changing terms does not record a payment.</span>
           </div>
           <div *ngIf="editForm.termType === 'On Credit' || editForm.termType === 'Net 30 Days'" class="term-compact-hint credit">
             <ion-icon name="alert-circle"></ion-icon>
-            <span>Marked as <strong>UNPAID</strong> • Will appear in <strong>New Payment</strong></span>
+            <span>Payment status: <strong>{{ invoicePaymentStatus | uppercase }}</strong>. Outstanding amounts appear in <strong>New Payment</strong>.</span>
           </div>
         </div>
       </div>

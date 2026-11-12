@@ -8,6 +8,33 @@ ion-content {
   margin: 0 auto;
 }
 
+.import-panel {
+  padding-top: calc(16px + env(safe-area-inset-top, 0px));
+}
+
+.export-customer-trigger { width: 100%; border: 1px solid #ddd; background: #f0ebe3; border-radius: 12px; padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; gap: 12px; color: #1a1a1a; font: inherit; font-size: 14px; cursor: pointer; text-align: left; }
+.export-customer-trigger ion-icon { flex-shrink: 0; font-size: 16px; }
+.export-customer-overlay { position: fixed; inset: 0; background: #f0ebe3; z-index: 2000; display: flex; flex-direction: column; }
+.export-customer-header {
+  position: relative; display: flex; justify-content: center; align-items: center; background: #fff; border-bottom: 1px solid #eef2f7;
+  padding: calc(max(env(safe-area-inset-top, 0px), 32px) + 12px) 60px 12px; min-height: 52px;
+  span { font-size: 16px; font-weight: 800; color: #1a1a1a; }
+  ion-button { position: absolute; left: 14px; --color: #1a1a1a; font-size: 24px; margin: 0; --padding-start: 4px; --padding-end: 4px; }
+}
+.export-customer-search { padding: 12px 20px; background: #fff; border-bottom: 1px solid #eee; ion-searchbar { --background: #f5f5f5; --border-radius: 12px; --box-shadow: none; padding: 0; } }
+.export-customer-content { flex: 1; overflow-y: auto; padding: 16px 20px calc(16px + env(safe-area-inset-bottom, 0px)); }
+.export-customer-item {
+  width: 100%; background: #fff; border-radius: 16px; padding: 14px 16px; margin-bottom: 10px; display: flex; align-items: center; gap: 12px; cursor: pointer; border: 1px solid #eef2f7; box-shadow: 0 2px 8px rgba(0,0,0,.03); font: inherit; text-align: left;
+  &.selected { border-color: #6c5ce7; background: #f8f7ff; }
+  &:active { transform: scale(.98); }
+}
+.export-customer-icon { width: 40px; height: 40px; flex-shrink: 0; background: #f0ebe3; border-radius: 12px; display: flex; align-items: center; justify-content: center; ion-icon { font-size: 20px; color: #888; } }
+.export-customer-info { flex: 1; min-width: 0; }
+.export-customer-name { display: block; font-size: 14px; font-weight: 700; color: #1a1a1a; overflow-wrap: anywhere; }
+.export-customer-code { display: block; font-size: 11px; color: #888; margin-top: 2px; letter-spacing: .5px; }
+.export-customer-arrow { font-size: 18px; color: #ddd; flex-shrink: 0; }
+.export-customer-empty { text-align: center; padding: 50px 20px; color: #888; }
+
 .export-header {
   display: grid;
   grid-template-columns: 80px minmax(0, 1fr) 80px;
@@ -24,6 +51,34 @@ ion-content {
 }
 
 button:disabled { opacity: 0.55; cursor: wait; }
+.back-btn { --color: #1a1a1a; --padding-start: 0; font-size: 15px; font-weight: 600; }
+
+.system-list button.system-item { width: 100%; font: inherit; text-align: left; }
+.import-card {
+  background: white; padding: 20px; border-radius: 16px; margin-bottom: 16px;
+  label { display: block; font-weight: 700; margin-bottom: 8px; }
+  select, input { width: 100%; margin-bottom: 12px; color: #1a1a1a; }
+  select { padding: 12px; border: 1px solid #ddd; border-radius: 8px; background: #fff; }
+  p { font-size: 13px; line-height: 1.6; color: #596475; }
+  button { width: 100%; background: #17365d; color: white; border: 0; border-radius: 10px; padding: 14px; font-weight: 700; margin-top: 10px; }
+  .file-label { margin-top: 20px; }
+  .master-data-select { width: 100%; border: 1px solid #eef2f7; border-radius: 16px; background: #fff; min-height: 56px; padding: 0 20px; font-size: 14px; font-weight: 800; --highlight-height: 0; --highlight-color-focused: transparent; --highlight-color-valid: transparent; --border-width: 0; --placeholder-color: #1a1a1a; }
+  .master-data-select::part(icon) { color: #ddd; font-size: 18px; opacity: 1; }
+  h2 { font-size: 15px; font-weight: 700; margin: 22px 0 4px; }
+  .master-import-block { border-top: 1px solid #e9edf2; margin-top: 24px; }
+  button { display: flex; justify-content: center; align-items: center; gap: 9px; min-height: 46px; font-family: inherit; }
+  button ion-icon { font-size: 19px; flex-shrink: 0; }
+  button.primary-action { background: #1a1a1a; }
+  button.secondary-action { background: #f2f4f7; color: #1a1a1a; border: 1px solid #e1e5ea; }
+  button.choose-file-action { background: #edf3fc; color: #17365d; border: 1px dashed #94accb; }
+  .native-file-input { display: none; }
+  .chosen-file-name { display: block; font-size: 12px; color: #596475; margin-top: 9px; overflow-wrap: anywhere; }
+}
+.import-preview { max-height: 360px; overflow: auto; margin: 16px 0; }
+.import-preview table { width: 100%; border-collapse: collapse; font-size: 12px; text-align: left; }
+.import-preview th { background: #eaf1f8; position: sticky; top: 0; }
+.import-preview td, .import-preview th { border: 1px solid #d5dfea; padding: 8px; overflow-wrap: anywhere; }
+.import-error, .import-card p.import-error { color: #b22e35; }
 
 .top-bar {
   display: flex;
