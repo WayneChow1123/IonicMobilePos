@@ -286,7 +286,7 @@ export class SyncService {
         if (type === 'product') await this.localDb.updateProductIdInOrderItems(task.id, id);
         if (type === 'customer') await this.localDb.updateCustomerIdInOrders(task.id, id);
         this.api.clearAllCache();
-        await this.offlineStorage.removeQueueItem(task.id);
+        await this.offlineStorage.completeQueueItem(task.id);
         successCount++;
       } catch (error: any) {
         failCount++;
@@ -371,7 +371,7 @@ export class SyncService {
               try { await firstValueFrom(this.api.deleteDirect(baseUrl + '/Category/DeleteCategory/deletecategory/' + id, task.operationId)); }
               catch (err: any) { if (err?.status !== 404) throw err; }
             }
-            await this.offlineStorage.removeQueueItem(task.id);
+            await this.offlineStorage.completeQueueItem(task.id);
             successCount++;
           } else if (task.type === 'USE_CN') {
             const invoiceId = await this.resolveId('invoice', task.payload.requestedInvoiceId || task.payload.invoiceId);
@@ -379,7 +379,7 @@ export class SyncService {
             await firstValueFrom(this.api.patchDirect(baseUrl + '/Credit/UseCreditNote/invoices/' + invoiceId + '/credit-notes/' + cnId + '/use', task.payload.requestBody || {
               expectedInvoiceId: invoiceId, expectedAmount: task.payload.amount
             }, task.operationId));
-            await this.offlineStorage.removeQueueItem(task.id);
+            await this.offlineStorage.completeQueueItem(task.id);
             successCount++;
           } else if (task.type === 'UPDATE_PRODUCT') {
             const pid = task.payload?.id || String(task.id).replace('upd_prod_', '');
@@ -392,7 +392,7 @@ export class SyncService {
               matched.isModified = false;
               await this.offlineStorage.setCache('products', cachedProducts);
             }
-            await this.offlineStorage.removeQueueItem(task.id);
+            await this.offlineStorage.completeQueueItem(task.id);
             successCount++;
           } else if (task.type === 'DELETE_PRODUCT') {
             const pid = task.payload?.id || String(task.id).replace('del_prod_', '');
@@ -402,7 +402,7 @@ export class SyncService {
             } catch (err: any) {
               if (err?.status !== 404) throw err;
             }
-            await this.offlineStorage.removeQueueItem(task.id);
+            await this.offlineStorage.completeQueueItem(task.id);
             successCount++;
           } else if (task.type === 'ACTIVATE_PRODUCT') {
             const pid = task.payload?.id || String(task.id).replace('act_prod_', '');
@@ -414,7 +414,7 @@ export class SyncService {
               matched.isModified = false;
               await this.offlineStorage.setCache('products', cachedProducts);
             }
-            await this.offlineStorage.removeQueueItem(task.id);
+            await this.offlineStorage.completeQueueItem(task.id);
             successCount++;
           } else if (task.type === 'DEACTIVATE_PRODUCT') {
             const pid = task.payload?.id || String(task.id).replace('deact_prod_', '');
@@ -426,7 +426,7 @@ export class SyncService {
               matched.isModified = false;
               await this.offlineStorage.setCache('products', cachedProducts);
             }
-            await this.offlineStorage.removeQueueItem(task.id);
+            await this.offlineStorage.completeQueueItem(task.id);
             successCount++;
           } else if (task.type === 'ADD_STOCK') {
             const pid = task.payload?.id || String(task.id).replace('stock_prod_', '').split('_')[0];
@@ -439,39 +439,39 @@ export class SyncService {
               matched.isModified = false;
               await this.offlineStorage.setCache('products', cachedProducts);
             }
-            await this.offlineStorage.removeQueueItem(task.id);
+            await this.offlineStorage.completeQueueItem(task.id);
             successCount++;
           } else if (task.type === 'CREATE_CUSTOMER_PRICE') {
             const cid = task.payload?.customerId;
             const url = `${baseUrl}/Customer/CreateCustomerProductPrice/customers/${cid}/product-prices`;
             await firstValueFrom(this.api.postDirect(url, task.payload?.data || task.payload, task.operationId));
-            await this.offlineStorage.removeQueueItem(task.id);
+            await this.offlineStorage.completeQueueItem(task.id);
             successCount++;
           } else if (task.type === 'UPDATE_CUSTOMER_PRICE') {
             const cid = task.payload?.customerId;
             const pid = task.payload?.productId;
             const url = `${baseUrl}/Customer/UpdateCustomerProductPrice/customers/${cid}/product-prices/${pid}`;
             await firstValueFrom(this.api.patchDirect(url, task.payload?.data || task.payload, task.operationId));
-            await this.offlineStorage.removeQueueItem(task.id);
+            await this.offlineStorage.completeQueueItem(task.id);
             successCount++;
           } else if (task.type === 'DELETE_CUSTOMER_PRICE') {
             const cid = task.payload?.customerId;
             const pid = task.payload?.productId;
             const url = `${baseUrl}/Customer/DeleteCustomerProductPrice/customers/${cid}/product-prices/${pid}`;
             await firstValueFrom(this.api.deleteDirect(url, task.operationId));
-            await this.offlineStorage.removeQueueItem(task.id);
+            await this.offlineStorage.completeQueueItem(task.id);
             successCount++;
           } else if (task.type === 'UPDATE_CUSTOMER') {
             const cid = task.payload?.id;
             const url = `${baseUrl}/Customer/EditCustomer/editcustomers/${cid}`;
             await firstValueFrom(this.api.putDirect(url, task.payload?.data || task.payload, task.operationId));
-            await this.offlineStorage.removeQueueItem(task.id);
+            await this.offlineStorage.completeQueueItem(task.id);
             successCount++;
           } else if (task.type === 'DELETE_CUSTOMER') {
             const cid = task.payload?.id;
             const url = `${baseUrl}/Customer/DeleteCustomer/deletecustomer/${cid}`;
             await firstValueFrom(this.api.deleteDirect(url, task.operationId));
-            await this.offlineStorage.removeQueueItem(task.id);
+            await this.offlineStorage.completeQueueItem(task.id);
             successCount++;
           } else if (task.type === 'CREATE_INVOICE') {
             // 如果发票使用的是离线 customerId，先从已同步客户中查找映射
@@ -515,7 +515,7 @@ export class SyncService {
                 await this.offlineStorage.setCache('invoices_list', cachedInvs);
               }
             }
-            await this.offlineStorage.removeQueueItem(task.id);
+            await this.offlineStorage.completeQueueItem(task.id);
             successCount++;
           } else if (task.type === 'UPDATE_INVOICE') {
             console.log('[SyncService] Processing UPDATE_INVOICE:', task.id, task.payload);
@@ -571,7 +571,7 @@ export class SyncService {
               delete overrides[invId];
               localStorage.setItem('invoice_customer_overrides', JSON.stringify(overrides));
             } catch { }
-            await this.offlineStorage.removeQueueItem(task.id);
+            await this.offlineStorage.completeQueueItem(task.id);
             successCount++;
           } else if (task.type === 'DELETE_INVOICE') {
             try {
@@ -588,7 +588,7 @@ export class SyncService {
             } catch (err: any) {
               if (err?.status !== 404) throw err;
             }
-            await this.offlineStorage.removeQueueItem(task.id);
+            await this.offlineStorage.completeQueueItem(task.id);
             successCount++;
           } else if (task.type === 'CREATE_CN' || task.type === 'CREATE_GLOBAL_CN') {
             const data = { ...task.payload.data };
@@ -604,12 +604,12 @@ export class SyncService {
               response = await firstValueFrom(this.api.postDirect(baseUrl + '/Credit/CreateGlobalCreditNote/customers/' + customerId + '/credit-notes-global', data, task.operationId));
             }
             await this.offlineStorage.mapServerId('cn', task.id, response?.cnId || response?.data?.id || response?.id);
-            await this.offlineStorage.removeQueueItem(task.id);
+            await this.offlineStorage.completeQueueItem(task.id);
             successCount++;
           } else if (task.type === 'UPDATE_CN') {
             const url = `${baseUrl}/Credit/UpdateCreditNote/credit-notes/${task.payload.cnId}`;
             await firstValueFrom(this.api.putDirect(url, task.payload.data, task.operationId));
-            await this.offlineStorage.removeQueueItem(task.id);
+            await this.offlineStorage.completeQueueItem(task.id);
             successCount++;
           } else if (task.type === 'DELETE_CN') {
             const url = `${baseUrl}/Credit/DeleteCreditNote/invoices/${task.payload.invoiceId}/credit-notes/${task.payload.cnId}`;
@@ -618,7 +618,7 @@ export class SyncService {
             } catch (err: any) {
               if (err?.status !== 404) throw err;
             }
-            await this.offlineStorage.removeQueueItem(task.id);
+            await this.offlineStorage.completeQueueItem(task.id);
             successCount++;
           } else if (task.type === 'CREATE_BULK_PAYMENT') {
             const url = `${baseUrl}/Payment/CreateBulkPayment/bulk-payments`;
@@ -638,7 +638,7 @@ export class SyncService {
             if (task.payload.changeCreditNoteId) {
               await this.offlineStorage.mapServerId('cn', task.payload.changeCreditNoteId, response?.changeCreditNoteId);
             }
-            await this.offlineStorage.removeQueueItem(task.id);
+            await this.offlineStorage.completeQueueItem(task.id);
             successCount++;
           } else if (task.type === 'DELETE_PAYMENT') {
             const url = `${baseUrl}/Payment/DeletePayment/payments/${task.payload.paymentId}`;
@@ -647,7 +647,7 @@ export class SyncService {
             } catch (err: any) {
               if (err?.status !== 404) throw err;
             }
-            await this.offlineStorage.removeQueueItem(task.id);
+            await this.offlineStorage.completeQueueItem(task.id);
             successCount++;
           } else {
             throw new Error('Unsupported sync task: ' + task.type);
@@ -656,11 +656,15 @@ export class SyncService {
           console.warn('[SyncService] Failed to sync task:', task.id, task.type, e);
           failCount++;
           const errType = this.classifyError(e);
+          task.lastError = e?.error?.message || (typeof e?.error === 'string' ? e.error : e?.message) || 'Unable to sync';
+          lastError = task.lastError;
           if (errType === 'AUTH_ERROR') {
+            await this.offlineStorage.updateQueueItem(task);
             this.authErrorSubject.next('Session expired or unauthorized. Please re-login.');
             break;
           }
           if (errType === 'NETWORK_ERROR') {
+            await this.offlineStorage.updateQueueItem(task);
             break;
           }
           task.retryCount = (task.retryCount || 0) + 1;

@@ -1,0 +1,36 @@
+  <div class="offline-log-overlay" role="dialog" aria-modal="true" aria-labelledby="offline-log-title" (keydown.escape)="close.emit()">
+    <div class="offline-log-header">
+      <ion-button fill="clear" aria-label="Close offline activity" (click)="close.emit()"><ion-icon name="close-outline"></ion-icon></ion-button>
+      <h2 id="offline-log-title">Offline Activity</h2>
+    </div>
+    <div class="offline-log-toolbar">
+      <p>Changes on this device. Auto sync remains enabled when online.</p>
+      <div class="offline-log-actions">
+        <span>{{ pendingCount }} pending tasks {{ syncing ? '· Syncing...' : '' }}</span>
+        <button type="button" (click)="syncNow.emit()" [disabled]="syncing || !pendingCount">{{ syncing ? 'Syncing...' : 'Sync Now' }}</button>
+      </div>
+      <div class="offline-log-filters">
+        <button type="button" [class.active]="filter==='all'" (click)="filter='all'">All</button>
+        <button type="button" [class.active]="filter==='pending'" (click)="filter='pending'">Pending</button>
+        <button type="button" [class.active]="filter==='synced'" (click)="filter='synced'">Synced</button>
+        <button type="button" [class.active]="filter==='failed'" (click)="filter='failed'">Failed</button>
+      </div>
+    </div>
+    <div class="offline-log-content">
+      <p *ngIf="error" class="offline-log-error">{{ error }}</p>
+      <article *ngFor="let row of visibleActivities" class="offline-log-card">
+        <div class="offline-log-card-heading"><strong>{{ offlineActivityTitle(row.type) }}</strong><span class="offline-log-status" [attr.data-status]="row.status">{{ offlineActivityStatus(row.status) }}</span></div>
+        <div class="offline-log-reference">{{ activityReference(row) }}</div>
+        <div *ngIf="row.customer" class="offline-log-customer">{{ row.customer }}</div>
+        <time>{{ row.createdAt | date:'dd/MM/yyyy HH:mm:ss' }}</time>
+        <div class="offline-log-details"><div *ngFor="let detail of row.details.slice(0, 2)">{{ detail }}</div></div>
+        <details *ngIf="row.details.length > 2"><summary>View all details</summary><div *ngFor="let detail of row.details.slice(2)" class="offline-log-detail">{{ detail }}</div></details>
+        <p *ngIf="row.error" class="offline-log-error">{{ row.error }}</p>
+        <p *ngIf="row.status==='cancelled'" class="offline-log-note">This pending task was removed or superseded on this device.</p>
+        <p *ngIf="row.status==='local'" class="offline-log-note">Applied locally; no separate server request was needed.</p>
+        <div *ngIf="row.finishedAt" class="offline-log-finished">{{ row.status==='synced' ? 'Synced' : 'Completed' }}: {{ row.finishedAt | date:'dd/MM/yyyy HH:mm:ss' }}</div>
+      </article>
+      <p *ngIf="!visibleActivities.length && !error" class="offline-log-empty">No offline activity in this view.</p>
+      <p class="offline-log-note">This device retains pending actions and the latest 1,000 completed records. Edits may sync together using the latest values. Older completed actions from previous app versions cannot be reconstructed here.</p>
+    </div>
+  </div>

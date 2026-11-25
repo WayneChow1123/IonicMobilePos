@@ -32,7 +32,7 @@
           [(ngModel)]="profileDraft.address" required maxlength="200"></ion-input>
         <ion-input label="Address Line 2 / City / Postcode" labelPlacement="stacked" name="city"
           [(ngModel)]="profileDraft.city" required maxlength="200"></ion-input>
-        <p class="profile-note">Company details are shared through API. Offline changes wait for synchronization.</p>
+        <p class="profile-note">An internet connection is required. Company details are saved to the API database and displayed after API confirmation.</p>
         <ion-button type="submit" [disabled]="isSavingProfile || profileSettings.syncStatus() === 'conflict' || profileForm.invalid || !profileDraft.appName.trim() || !profileDraft.companyName.trim() || !profileDraft.address.trim() || !profileDraft.city.trim()">{{ isSavingProfile ? 'Saving...' : 'Save Profile' }}</ion-button>
         <ion-button type="button" fill="outline" [disabled]="isSavingProfile" (click)="editingProfile = false">Cancel</ion-button>
       </form>

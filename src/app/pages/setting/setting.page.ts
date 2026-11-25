@@ -35,7 +35,7 @@ export class SettingPage {
     try {
       const synced = await this.profileSettings.save(this.profileDraft, this.profileEditVersion);
       this.editingProfile = false;
-      this.alertService.toast(synced ? 'Profile saved to API successfully!' : 'Profile saved on device. Waiting to sync with API.', synced ? 'success' : 'warning');
+      this.alertService.toast('Profile saved to API successfully!', 'success');
     } catch (error: any) {
       this.alertService.toast(error?.message || 'Unable to save company profile.', 'error');
     } finally {
@@ -49,10 +49,10 @@ export class SettingPage {
     return {
       loading: 'Loading company profile from API...',
       synced: 'Saved to API. Shared across your devices.',
-      pending: 'Pending API sync. Other devices will update after syncing.',
+      pending: 'Waiting for API confirmation. Displaying the last confirmed company details.',
       offline: 'Offline: showing the last profile available on this device.',
-      conflict: 'Another device changed this profile. Reload before editing.',
-      'local-only': 'Not saved to API yet. Edit and Save to publish these company details.',
+      conflict: 'The API profile differs from this device. Check the message below before reloading.',
+      'local-only': 'No company details configured on API. Connect and save your company details.',
       error: 'Unable to load or save the company profile through API.'
     }[status];
   }

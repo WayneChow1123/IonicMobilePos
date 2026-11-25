@@ -28,6 +28,35 @@ ion-content {
     font-size: 22px;
 }
 
+.offline-log-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 36px;
+    padding: 8px 10px;
+    border: 1px solid #e5cc8d;
+    border-radius: 12px;
+    background: #fff0c8;
+    color: #775214;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
+    cursor: pointer;
+
+    ion-icon { font-size: 17px; }
+}
+
+.offline-log-count {
+    min-width: 20px;
+    padding: 2px 5px;
+    border-radius: 10px;
+    background: #775214;
+    color: #fff;
+    text-align: center;
+    font-size: 11px;
+}
+
 .app-main-title-box {
     display: flex;
     align-items: center;

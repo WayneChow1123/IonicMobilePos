@@ -119,17 +119,14 @@ export class ProductsPage implements OnInit, OnDestroy {
     } else if (res.failCount > 0) {
       this.alertService.confirm(
         'Sync Failed',
-        `Server temporarily returned an error while syncing ${res.failCount} task(s). Your offline data is safely preserved. Clear from queue only if you want to permanently discard it.`,
+        `Server temporarily returned an error while syncing ${res.failCount} task(s). Your offline data is preserved. You can retry now or keep it pending.`,
         'Retry Sync',
-        'Clear Queue'
+        'Keep Pending'
       ).then(retry => {
         if (retry) {
           this.manualSync();
         } else {
-          this.offlineStorage.clearQueue().then(() => {
-            this.showToastMsg('Queue cleared.');
-            this.loadProducts();
-          });
+          this.showToastMsg('Offline changes kept pending.');
         }
       });
     } else {

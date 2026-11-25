@@ -7,10 +7,11 @@
         <ion-icon name="chevron-back-outline"></ion-icon> Back
       </ion-button>
       <div style="display:flex;align-items:center;gap:6px;">
-        <ion-button *ngIf="pendingOfflineCount > 0" fill="outline" size="small" (click)="manualSync()" [disabled]="isSyncing" style="--border-radius:12px;font-size:11px;font-weight:700;height:30px;--color:#d35400;--border-color:#e67e22;">
-          <ion-icon [name]="isSyncing ? 'sync-outline' : 'cloud-upload-outline'" slot="start" [class.spin-animation]="isSyncing"></ion-icon>
-          {{ isSyncing ? 'Syncing...' : 'Sync (' + pendingOfflineCount + ')' }}
-        </ion-button>
+        <button type="button" class="offline-log-button" (click)="openOfflineActivity()" aria-haspopup="dialog" aria-label="Open offline activity log">
+          <ion-icon [name]="isSyncing ? 'sync-outline' : 'list-outline'"></ion-icon>
+          <span>Offline Log</span>
+          <span *ngIf="pendingOfflineCount > 0" class="offline-log-count">{{ pendingOfflineCount }}</span>
+        </button>
         <ion-button fill="clear" class="more-btn">
           <ion-icon name="ellipsis-vertical-outline"></ion-icon>
         </ion-button>
@@ -1504,4 +1505,5 @@
     </div>
   </div>
 
+  <app-offline-activity *ngIf="showOfflineActivity" [activities]="offlineActivities" [pendingCount]="pendingOfflineCount" [syncing]="isSyncing" [error]="offlineActivityError" (close)="showOfflineActivity=false" (syncNow)="syncOfflineChanges()"></app-offline-activity>
 </ion-content>

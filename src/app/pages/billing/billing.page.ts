@@ -1,3 +1,4 @@
+import { OfflineActivityComponent } from '../../components/offline-activity/offline-activity.component';
 import { getInvoicePaymentStatus, getInvoicePaymentSummary } from '../../utils/invoice-payment-summary';
 import { inject } from '@angular/core';
 import { ProfileSettingsService } from '../../services/profile-settings.service';
@@ -16,18 +17,23 @@ import { ApiService } from '../../services/api.service';
 import { AppComponent } from '../../app.component';
 import { BluetoothPrintService } from '../../services/bluetooth-print.service';
 import { formatDocNo, updateInvoiceDocNos } from '../../utils/invoice-helper';
-import { OfflineStorageService } from '../../services/offline-storage.service';
+import { OfflineStorageService, OfflineActivity } from '../../services/offline-storage.service';
 import { SyncService } from '../../services/sync.service';
 
 @Component({
   standalone: true,
-  imports: [CommonModule, IonicModule, FormsModule],
+  imports: [CommonModule, IonicModule, FormsModule, OfflineActivityComponent],
   selector: 'app-billing',
   templateUrl: './billing.page.html',
   styleUrls: ['./billing.page.scss'],
 })
 export class BillingPage implements OnInit, OnDestroy {
   readonly profileSettings = inject(ProfileSettingsService);
+  showOfflineActivity = false;
+  offlineActivities: OfflineActivity[] = [];
+  offlineActivityError = '';
+  private activityRead = 0;
+  private activitySub?: Subscription;
   pendingOfflineCount: number = 0;
   isSyncing: boolean = false;
   private queueCountSub?: Subscription;
@@ -151,6 +157,7 @@ export class BillingPage implements OnInit, OnDestroy {
   isDeletingPayment = false;
   isDeletingCN = false;
   private lastPaymentSubmissionTime = 0;
+  private paymentAttempt?: { fingerprint: string; operationId: string };
   private lastCNSubmissionTime = 0;
   deleteCNButtons = [
     { text: 'Cancel', role: 'cancel' },
@@ -449,9 +456,51 @@ export class BillingPage implements OnInit, OnDestroy {
 
   ngOnDestroy() {
     this.unregisterBackButton();
+    this.activitySub?.unsubscribe();
     this.queueCountSub?.unsubscribe();
     this.syncingSub?.unsubscribe();
     this.syncSub?.unsubscribe();
+  }
+
+  async refreshPendingLocalCount() {
+    const queue = await this.offlineStorage.getPendingQueue();
+    const localInvoices = await this.api.getDevicePendingInvoices();
+    this.pendingOfflineCount = queue.length + localInvoices.filter(invoice => !queue.some(task => task.type === 'CREATE_INVOICE' && task.id === invoice.id)).length;
+    this.cdr.detectChanges();
+  }
+
+  async openOfflineActivity() {
+    this.showOfflineActivity = true;
+    await this.refreshOfflineActivity();
+  }
+
+  async refreshOfflineActivity() {
+    const request = ++this.activityRead;
+    try {
+      const [rows, localInvoices, queue] = await Promise.all([
+        this.offlineStorage.getOfflineActivities(), this.api.getDevicePendingInvoices(), this.offlineStorage.getPendingQueue()
+      ]);
+      const unqueued = localInvoices.filter(invoice => !queue.some(task => task.type === 'CREATE_INVOICE' && task.id === invoice.id));
+      for (const invoice of unqueued) rows.push({ id: 'local-order-' + invoice.id, taskId: invoice.id,
+        type: 'CREATE_INVOICE', createdAt: invoice.createdAt || Date.now(), status: 'pending', reference: invoice.invoiceNumber,
+        customer: invoice.customerName, details: ['Saved in local orders; no upload task found.', 'Amount: RM ' + Number(invoice.totalAmount || 0).toFixed(2)] });
+      this.pendingOfflineCount = queue.length + unqueued.length;
+      if (request !== this.activityRead) return;
+      this.offlineActivities = rows;
+      this.offlineActivityError = '';
+    } catch { this.offlineActivityError = 'Unable to load offline activity. Your pending operations have not been changed.'; }
+    this.cdr.detectChanges();
+  }
+
+  async syncOfflineChanges() {
+    if (this.isSyncing) return;
+    if (!this.api.isOnline()) { this.alertService.toast('You are offline. Changes remain pending.', 'warning'); return; }
+    try {
+      const result = await this.syncService.syncPendingOrders(true);
+      if (result.failCount) this.alertService.alert('Sync Incomplete', result.lastError || 'Some operations remain pending.');
+      else this.alertService.toast(result.successCount ? 'Offline changes synced successfully.' : 'No pending changes.', 'success');
+    } catch { this.alertService.toast('Sync failed. Local changes remain pending.', 'error'); }
+    finally { await this.refreshOfflineActivity(); }
   }
 
   async manualSync() {
@@ -492,9 +541,14 @@ export class BillingPage implements OnInit, OnDestroy {
 
     this.queueCountSub = this.offlineStorage.queueCount$.subscribe(count => {
       this.pendingOfflineCount = count;
+      if (this.showOfflineActivity) this.refreshOfflineActivity();
+      if (!count) this.refreshPendingLocalCount();
       this.cdr.detectChanges();
     });
 
+    this.activitySub = this.offlineStorage.activityChanges$.subscribe(() => {
+      if (this.showOfflineActivity) this.refreshOfflineActivity();
+    });
     this.syncingSub = this.syncService.isSyncing$.subscribe(syncing => {
       this.isSyncing = syncing;
       this.cdr.detectChanges();
@@ -2252,7 +2306,7 @@ export class BillingPage implements OnInit, OnDestroy {
     const payments = [];
 
     // Sort invoices oldest first based on invoiceDate
-    const sortedInvoices = [...this.selectedInvoicesList].sort((a, b) => {
+    const sortedInvoices = [...new Map(this.selectedInvoicesList.map(inv => [String(inv.serverId || inv.id), inv])).values()].sort((a, b) => {
       const dateA = new Date(a.invoiceDate || 0).getTime();
       const dateB = new Date(b.invoiceDate || 0).getTime();
       return dateA - dateB;
@@ -2285,6 +2339,10 @@ export class BillingPage implements OnInit, OnDestroy {
       payments: payments
     };
 
+    const fingerprint = JSON.stringify(payload);
+    if (this.paymentAttempt?.fingerprint !== fingerprint) this.paymentAttempt = { fingerprint, operationId: this.offlineStorage.generateId() };
+    (payload as any)._offlineOperationId = this.paymentAttempt.operationId;
+
     const excess = this.getPaymentChange();
     const successMsg = excess > 0.01
       ? `Payment recorded! Excess RM ${excess.toFixed(2)} converted to Credit Note.`
@@ -2301,6 +2359,7 @@ export class BillingPage implements OnInit, OnDestroy {
       next: (res: any) => {
         this.isSubmittingPayment = false;
         this.cdr.detectChanges();
+        this.paymentAttempt = undefined;
         if (res?.isOffline) {
           const offlineSuccess = excess > 0.01
             ? `Payment saved offline! Excess RM ${excess.toFixed(2)} converted to offline CN.`
@@ -2322,7 +2381,15 @@ export class BillingPage implements OnInit, OnDestroy {
         this.isSubmittingPayment = false;
         this.cdr.detectChanges();
         const errBody = err.error;
-        this.showToastMsg('Failed: ' + (errBody?.message || errBody || err.message || 'error'));
+        const message = errBody?.message || errBody || err.message || 'error';
+        if (/already fully paid/i.test(String(message)) || errBody?.code === 'INVOICE_ALREADY_PAID') {
+          this.loadPayments();
+          this.loadAllInvoices();
+          this.loadInvoicesByCustomer(this.paymentForm.customerId);
+          this.selectedInvoicesList = [];
+          this.paymentForm.invoiceIds = [];
+          this.alertService.alert('Invoice balance changed', 'The API reports this invoice is already fully paid. This attempt did not create another payment. Check Payment Report to confirm the earlier payment before trying again.');
+        } else this.showToastMsg('Failed: ' + message);
       }
     });
   }
@@ -2968,6 +3035,11 @@ export class BillingPage implements OnInit, OnDestroy {
   }
 
   handleHardwareBack() {
+    if (this.showOfflineActivity) {
+      this.showOfflineActivity = false;
+      this.cdr.detectChanges();
+      return;
+    }
     if (Swal.isVisible()) {
       Swal.close();
       return;

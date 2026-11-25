@@ -5,6 +5,10 @@ import { OfflineStorageService } from './offline-storage.service';
 import { LocalDbService } from './local-db.service';
 import { SyncService } from './sync.service';
 import { InvoicesPage } from '../pages/invoices/invoices.page';
+import { ProductsPage } from '../pages/products/products.page';
+import { CustomersPage } from '../pages/customers/customers.page';
+import { BillingPage } from '../pages/billing/billing.page';
+import { mergeInvoiceRecords } from '../utils/invoice-identity';
 
 // Runs in Karma's isolated Chrome profile using real IndexedDB and Dexie.
 // HttpClient is stubbed; these tests never access the production API.
@@ -50,6 +54,238 @@ describe('Offline CRUD and reconnect regression coverage', () => {
   }
 
   async function runQueue() { return (sync as any).syncOfflineTasks(true); }
+
+  it('reuses the payment operation ID when the same submission is retried', async () => {
+    (api.isOnline as jasmine.Spy).and.returnValue(true);
+    const payload: any = { customerId: 1, method: 'CASH', payments: [{ invoiceId: 123, amount: 10 }] };
+    http.post.and.returnValue(throwError(() => new HttpErrorResponse({ status: 400, error: 'Retry test' })));
+    await expectAsync(firstValueFrom(api.createBulkPayment(payload))).toBeRejected();
+    const firstId = (http.post.calls.mostRecent().args[2] as any).headers['X-Offline-Operation-Id'];
+    http.post.and.returnValue(of({ payments: [{ paymentId: 456, invoiceId: 123 }] }));
+    await firstValueFrom(api.createBulkPayment(payload));
+    expect((http.post.calls.mostRecent().args[2] as any).headers['X-Offline-Operation-Id']).toBe(firstId);
+    expect(await storage.getPendingQueue()).toEqual([]);
+  });
+
+  it('refreshes invoice choices and explains an already-paid conflict without claiming payment success', () => {
+    const page: any = Object.create(BillingPage.prototype);
+    Object.assign(page, { isSubmittingPayment: false, lastPaymentSubmissionTime: 0,
+      paymentForm: { customerId: 1, amount: 10, method: 'CASH', invoiceIds: [123] },
+      selectedInvoicesList: [{ id: 123, balance: 10 }], customers: [], offlineStorage: storage,
+      api: { createBulkPayment: () => throwError(() => new HttpErrorResponse({ status: 400, error: 'Invoice INV-123 already fully paid' })) },
+      cdr: { detectChanges: () => {} }, alertService: { alert: jasmine.createSpy('alert') },
+      getPaymentAmountValidationError: () => null, getPaymentChange: () => 0,
+      showToastMsg: jasmine.createSpy('toast'), loadPayments: jasmine.createSpy('loadPayments'),
+      loadAllInvoices: jasmine.createSpy('loadAllInvoices'), loadInvoicesByCustomer: jasmine.createSpy('loadInvoicesByCustomer') });
+    page.savePayment();
+    expect(page.alertService.alert).toHaveBeenCalled();
+    expect(page.showToastMsg).not.toHaveBeenCalled();
+    expect(page.loadInvoicesByCustomer).toHaveBeenCalledWith(1);
+    expect(page.paymentForm.invoiceIds).toEqual([]);
+    expect(page.isSubmittingPayment).toBeFalse();
+  });
+
+  it('records payment amounts and invoice names without exposing the internal group ID', async () => {
+    await storage.setCache('customers', [{ id: 1, name: 'Test customer' }]);
+    await storage.recordQueueActivity('CREATE_BULK_PAYMENT', {
+      data: { customerId: 1, method: 'CASH', payments: [{ invoiceId: 2, amount: 5.2 }, { invoiceId: 3, amount: 10 }] },
+      createdPayments: [{ invoiceId: 2, invoiceNumber: 'INV-A', amount: 5.2 }, { invoiceId: 3, invoiceNumber: 'INV-B', amount: 10 }]
+    }, 'pay_bulk_internal');
+    const row = (await storage.getOfflineActivities())[0];
+    expect(row.reference).toBe('Payment received');
+    expect(row.customer).toBe('Test customer');
+    expect(row.details).toContain('Total paid: RM 15.20');
+    expect(row.details).toContain('Payment method: CASH');
+    expect(row.details).toContain('Invoice INV-A: RM 5.20');
+    expect(row.details).toContain('Invoice INV-B: RM 10.00');
+    expect(row.taskId).toBe('pay_bulk_internal');
+  });
+
+  it('shows a pending local invoice when both list cache and upload queue entry are missing', async () => {
+    const created = await createInvoice(100);
+    await storage.removeCache('invoices_list');
+    await storage.removeCache('inv_detail_' + created.invoiceId);
+    spyOn(storage, 'getPendingQueue').and.resolveTo([]);
+    const invoices = await firstValueFrom(api.getInvoices());
+    expect(invoices.length).toBe(1);
+    expect(invoices[0].id).toBe(created.invoiceId);
+    expect(invoices[0].items[0].unitPrice).toBe(100);
+    expect(invoices[0].localPending).toBeTrue();
+    expect((await local.getOrderByClientId(created.invoiceId))!.sync_status).toBe(0);
+    expect(http.post).not.toHaveBeenCalled();
+  });
+
+  it('does not let a server refresh hide an unqueued local pending order', async () => {
+    const created = await createInvoice();
+    await storage.removeCache('invoices_list');
+    spyOn(storage, 'getPendingQueue').and.resolveTo([]);
+    (api.isOnline as jasmine.Spy).and.returnValue(true);
+    http.get.and.returnValue(of([]));
+    expect((await firstValueFrom(api.getInvoices())).some((invoice: any) => invoice.id === created.invoiceId)).toBeTrue();
+    expect(http.post).not.toHaveBeenCalled();
+  });
+
+  it('keeps separate invoices with the same editable number, but merges a confirmed identity mapping', () => {
+    expect(mergeInvoiceRecords([{ id: 1, invoiceNumber: 'SAME' }], [{ id: 'uuid', invoiceNumber: 'SAME' }]).length).toBe(2);
+    expect(mergeInvoiceRecords([{ id: 1, invoiceNumber: 'SAME' }], [{ id: 'uuid', serverId: 1, invoiceNumber: 'SAME' }]).length).toBe(1);
+  });
+
+  it('does not resurrect synced local archives after the current server list is empty', async () => {
+    const created = await createInvoice();
+    await local.markAsSynced(created.invoiceId, 77);
+    await storage.completeQueueItem(created.invoiceId);
+    await storage.removeCache('invoices_list');
+    (api.isOnline as jasmine.Spy).and.returnValue(true);
+    http.get.and.returnValue(of([]));
+    expect(await firstValueFrom(api.getInvoices())).toEqual([]);
+  });
+
+  it('records create, coalesced edit and local cancellation without needing an upload', async () => {
+    const created = await createInvoice(100);
+    await firstValueFrom(api.updateInvoice(created.invoiceId, { items: [{ productId: 2, quantity: 2, unitPrice: 100 }] }));
+    let activity = await storage.getOfflineActivities();
+    expect(activity.filter(row => row.type === 'CREATE_INVOICE').length).toBe(1);
+    expect(activity.filter(row => row.type === 'UPDATE_INVOICE').length).toBe(1);
+    expect(activity.find(row => row.type === 'CREATE_INVOICE')!.details.join(' ')).toContain('1 × RM 100.00');
+    expect(activity.find(row => row.type === 'UPDATE_INVOICE')!.details.join(' ')).toContain('2 × RM 100.00');
+    expect(activity.find(row => row.type === 'UPDATE_INVOICE')!.details.join(' ')).toContain('Amount: RM 200.00');
+    await firstValueFrom(api.deleteInvoice(created.invoiceId));
+    activity = await storage.getOfflineActivities();
+    expect(activity.filter(row => row.status === 'cancelled').length).toBe(2);
+    expect(activity.some(row => row.type === 'DELETE_INVOICE' && row.status === 'local')).toBeTrue();
+    expect(await storage.getPendingQueue()).toEqual([]);
+    expect((await new OfflineStorageService().getOfflineActivities()).length).toBe(3);
+  });
+
+  it('retains synced history and never changes old history when a task ID is reused', async () => {
+    await storage.enqueue('UPDATE_INVOICE', { invoiceId: 3, data: { remark: 'First edit' } }, 'upd_inv_3');
+    await storage.completeQueueItem('upd_inv_3');
+    await storage.enqueue('UPDATE_INVOICE', { invoiceId: 3, data: { remark: 'Second edit' } }, 'upd_inv_3');
+    let activity = await storage.getOfflineActivities();
+    expect(activity.filter(row => row.status === 'synced').length).toBe(1);
+    expect(activity.filter(row => row.status === 'pending').length).toBe(1);
+    await storage.completeQueueItem('upd_inv_3');
+    activity = await storage.getOfflineActivities();
+    expect(activity.filter(row => row.status === 'synced').length).toBe(2);
+    expect(activity.filter(row => row.status === 'pending').length).toBe(0);
+  });
+
+  it('serializes concurrent history writes without losing operations', async () => {
+    await Promise.all(Array.from({ length: 8 }, (_, index) => storage.enqueue('CREATE_PRODUCT', { name: 'Product ' + index }, 'product-' + index)));
+    expect((await storage.getOfflineActivities()).length).toBe(8);
+    await Promise.all((await storage.getPendingQueue()).map(task => storage.completeQueueItem(task.id)));
+    const rows = await new OfflineStorageService().getOfflineActivities();
+    expect(rows.length).toBe(8);
+    expect(rows.every(row => row.status === 'synced')).toBeTrue();
+  });
+
+  it('does not show a stale pending entry if auto-sync finishes before activity metadata loads', async () => {
+    const original = storage.recordQueueActivity.bind(storage);
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    let first = true;
+    spyOn(storage, 'recordQueueActivity').and.callFake(async (...args: Parameters<typeof original>) => {
+      if (first) { first = false; await gate; }
+      return original(...args);
+    });
+    const pending = storage.enqueue('CREATE_PRODUCT', { name: 'Fast sync' }, 'fast');
+    while (!await storage.getQueueItemById('fast')) await new Promise(resolve => setTimeout(resolve, 0));
+    await storage.completeQueueItem('fast');
+    release(); await pending;
+    const rows = await storage.getOfflineActivities();
+    expect(rows.every(row => row.status === 'synced')).toBeTrue();
+    expect(rows.length).toBe(1);
+  });
+
+  it('opens offline activity without triggering sync and keeps offline manual requests pending', async () => {
+    await createInvoice();
+    const page: any = Object.create(BillingPage.prototype);
+    const syncRequest = jasmine.createSpy();
+    Object.assign(page, { activityRead: 0, offlineStorage: storage, cdr: { detectChanges() {} },
+      api: { isOnline: () => false, getDevicePendingInvoices: () => api.getDevicePendingInvoices() },
+      syncService: { syncPendingOrders: syncRequest }, alertService: { toast: jasmine.createSpy() } });
+    await page.openOfflineActivity();
+    expect(page.offlineActivities.length).toBe(1);
+    expect(syncRequest).not.toHaveBeenCalled();
+    await page.syncOfflineChanges();
+    expect(syncRequest).not.toHaveBeenCalled();
+    expect((await storage.getPendingQueue()).length).toBe(1);
+  });
+
+  it('shows failed sync errors and archives older queued records after successful replay', async () => {
+    const task = await storage.enqueue('CREATE_INVOICE', { invoiceNumber: 'OLD-INV', items: [] }, 'older');
+    await storage.removeCache('offline_activity_history');
+    task.status = 'failed'; task.lastError = 'Server validation failed';
+    await storage.updateQueueItem(task);
+    const pending = await storage.getOfflineActivities();
+    expect(pending[0].status).toBe('failed');
+    expect(pending[0].error).toBe('Server validation failed');
+    await storage.completeQueueItem(task.id);
+    const completed = await storage.getOfflineActivities();
+    expect(completed[0].status).toBe('synced');
+    expect(completed[0].reference).toBe('OLD-INV');
+  });
+
+  it('archives automatic sync success instead of losing the activity when the queue clears', async () => {
+    await createInvoice();
+    http.post.and.returnValue(of({ invoiceId: 77 }));
+    await runQueue();
+    const activity = await storage.getOfflineActivities();
+    expect(await storage.getPendingQueue()).toEqual([]);
+    expect(activity[0].status).toBe('synced');
+    expect(activity[0].reference).toBe('INV-TEST');
+    expect(activity[0].finishedAt).toBeTruthy();
+  });
+
+  it('keeps invoice operations when a customer/product sync failure prompt is dismissed', async () => {
+    const created = await createInvoice();
+    for (const prototype of [ProductsPage.prototype, CustomersPage.prototype]) {
+      const page: any = Object.create(prototype);
+      Object.assign(page, { isSyncing: false, offlineStorage: storage, showToastMsg: () => {},
+        syncService: { syncPendingOrders: async () => ({ failCount: 1, successCount: 0 }), syncPendingInvoices: async () => ({ failCount: 1, successCount: 0 }) },
+        alertService: { confirm: async () => false } });
+      await page.manualSync();
+      await Promise.resolve();
+      expect(await storage.getQueueItemById(created.invoiceId)).toBeTruthy();
+    }
+  });
+
+  it('rejects an online success response without a valid invoice identity', async () => {
+    (api.isOnline as jasmine.Spy).and.returnValue(true);
+    for (const response of [{ message: 'OK' }, { invoiceId: 0 }, { invoiceId: -1 }, { invoiceId: 'invalid' }]) {
+      http.post.and.returnValue(of(response));
+      await expectAsync(createInvoice()).toBeRejectedWithError(/not confirmed/);
+    }
+    expect((await storage.getPendingQueue()).length).toBe(0);
+  });
+
+  it('retains the offline upload if a success response has no valid invoice ID', async () => {
+    const created = await createInvoice();
+    http.post.and.returnValue(of({ message: 'OK' }));
+    await runQueue();
+    expect(await storage.getQueueItemById(created.invoiceId)).toBeTruthy();
+    expect((await local.getOrderByClientId(created.invoiceId))!.serverId).toBeFalsy();
+  });
+
+  it('preserves a draft invoice identity through a failed submission and retry', () => {
+    const page: any = Object.create(InvoicesPage.prototype);
+    const create = jasmine.createSpy('createInvoice').and.returnValue(throwError(() => new Error('not confirmed')));
+    Object.assign(page, { isSubmitting: false, isEditing: false,
+      form: { customerId: 1, items: [{ productId: 2, quantity: 1, unitPrice: 100 }] },
+      termType: 'On Credit', amountPaid: 0, paymentMethod: 'CASH', selectedCreditNoteIds: [], selectedCreditNoteId: null,
+      offlineStorage: storage, api: { createInvoice: create }, cdr: { detectChanges() {} },
+      saveInvoiceDraft: jasmine.createSpy(), handleInvoiceError: () => { page.isSubmitting = false; } });
+    spyOn(page, 'getMYSDate').and.returnValue('2026-11-11T10:00:00');
+    spyOn(page, 'getNetTotal').and.returnValue(100);
+    spyOn(page, 'isStockInsufficient').and.returnValue(false);
+    page.saveInvoice(); page.saveInvoice();
+    expect(create.calls.count()).toBe(2);
+    const first = create.calls.argsFor(0)[0], second = create.calls.argsFor(1)[0];
+    expect(first.offlineReferenceId).toBeTruthy();
+    expect(second.offlineReferenceId).toBe(first.offlineReferenceId);
+    expect(second.invoiceNumber).toBe(first.invoiceNumber);
+    expect(page.saveInvoiceDraft.calls.count()).toBe(2);
+  });
 
   it('does not let old local invoice overrides restore a deleted payment', () => {
     localStorage.setItem('invoice_data_overrides', JSON.stringify({ 3: { paidAmount: 100, status: 'Paid', balance: 0 } }));

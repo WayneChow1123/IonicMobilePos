@@ -759,6 +759,10 @@ export class InvoicesPage implements OnInit, OnDestroy {
 
   async manualSync() {
     if (this.isSyncing) return;
+    if (!this.api.isOnline()) {
+      this.showToastMsg('You are offline. Changes remain pending until a connection is available.');
+      return;
+    }
     this.showToastMsg('Syncing offline invoices...');
     const res = await this.syncService.syncPendingInvoices(true);
     if (res.successCount > 0) {
@@ -2098,8 +2102,12 @@ export class InvoicesPage implements OnInit, OnDestroy {
       this.isSubmitting = true;
       this.cdr.detectChanges();
 
-      const offlineDocNo = this.offlineStorage.generateInvoiceNumber();
-      const offlineId = this.offlineStorage.generateId();
+      // Retain the identity through uncertain responses and draft restoration.
+      const offlineDocNo = this.form.invoiceNumber || this.offlineStorage.generateInvoiceNumber();
+      const offlineId = this.form.offlineReferenceId || this.offlineStorage.generateId();
+      this.form.invoiceNumber = offlineDocNo;
+      this.form.offlineReferenceId = offlineId;
+      this.saveInvoiceDraft();
 
       const calculatedTotal = (this.form.items || []).reduce((sum: number, it: any) => sum + ((Number(it.unitPrice) || 0) * (Number(it.quantity) || 1)), 0);
       const roundedTotal = Math.round((calculatedTotal + Number.EPSILON) * 100) / 100;
@@ -2212,7 +2220,7 @@ export class InvoicesPage implements OnInit, OnDestroy {
           }
 
           // Online 开单成功流程
-          this.showToastMsg('Invoice created!');
+          this.showToastMsg(res?.isDuplicate ? 'Invoice already exists. Loading the saved invoice.' : 'Invoice created!');
           const createdInvoiceId = res?.invoiceId || res?.id;
           this.loadInvoices();
           this.loadCustomers();

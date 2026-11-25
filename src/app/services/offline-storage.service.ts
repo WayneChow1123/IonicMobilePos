@@ -21,6 +21,20 @@ export interface CacheEntry<T = any> {
   updatedAt: number;
 }
 
+export interface OfflineActivity {
+  id: string;
+  taskId: string;
+  operationId?: string;
+  type: string;
+  createdAt: number;
+  finishedAt?: number;
+  status: 'pending' | 'failed' | 'synced' | 'cancelled' | 'local';
+  reference: string;
+  customer: string;
+  details: string[];
+  error?: string;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -44,6 +58,105 @@ export class OfflineStorageService {
   private dbPromise: Promise<IDBDatabase> | null = null;
   private queueCountSubject = new BehaviorSubject<number>(0);
   public queueCount$: Observable<number> = this.queueCountSubject.asObservable();
+  readonly activityChanges$ = new BehaviorSubject<number>(0);
+  private activityWrite: Promise<void> = Promise.resolve();
+
+  private changeActivity(update: (rows: OfflineActivity[]) => OfflineActivity[]): Promise<void> {
+    const write = this.activityWrite.then(async () => {
+      const rows = update(await this.getCache<OfflineActivity[]>('offline_activity_history') || []);
+      // Retain all unfinished operations, plus the latest 1000 finished entries.
+      const active = rows.filter(row => row.status === 'pending' || row.status === 'failed');
+      const finished = rows.filter(row => row.status !== 'pending' && row.status !== 'failed')
+        .sort((a, b) => b.createdAt - a.createdAt).slice(0, 1000);
+      await this.setCache('offline_activity_history', [...active, ...finished]);
+      this.activityChanges$.next(this.activityChanges$.value + 1);
+    });
+    this.activityWrite = write.catch(() => {});
+    return write;
+  }
+
+  async recordQueueActivity(type: string, payload: any, taskId = '', status: OfflineActivity['status'] = 'pending', createdAt = Date.now(), operationIdOverride?: string): Promise<void> {
+    const task = taskId ? await this.getQueueItemById(taskId) : null;
+    const operationId = operationIdOverride || task?.operationId;
+    const data = payload?.data || payload || {};
+    const invoiceId = payload?.invoiceId || data.invoiceId || (type.includes('INVOICE') ? payload?.id : null);
+    const invoices = await this.getCache<any[]>('invoices_list') || [];
+    const invoice = invoices.find(row => String(row.id) === String(invoiceId || taskId));
+    const customers = await this.getCache<any[]>('customers') || [];
+    const customerId = payload?.customerId || data.customerId || invoice?.customerId;
+    const customer = customers.find(row => String(row.id) === String(customerId));
+    const entity = type.includes('PRODUCT') ? 'products' : type.includes('CUSTOMER') ? 'customers' : type.includes('CATEGORY') ? 'categories' :
+      type.includes('PAYMENT') ? 'payments_list' : type.includes('CN') ? 'credit_notes_list' : '';
+    const entities = entity ? await this.getCache<any[]>(entity) || [] : [];
+    const targetId = payload?.id || payload?.paymentId || payload?.cnId || taskId;
+    const target = entities.find(row => String(row.id) === String(targetId));
+    let reference = data.invoiceNumber || data.orderNumber || invoice?.invoiceNumber || invoice?.docNo ||
+      data.name || data.categoryName || target?.name || target?.categoryName || target?.cnNumber || target?.invoiceNumber || String(targetId || invoiceId || '');
+    const details: string[] = [];
+    for (const [field, label] of [['termType', 'Term'], ['term', 'Term'], ['remark', 'Remark'], ['name', 'Name'], ['categoryName', 'Category'],
+      ['price', 'Price'], ['stock', 'Stock'], ['quantity', 'Quantity'], ['specialPrice', 'Special price'], ['phone', 'Phone'],
+      ['email', 'Email'], ['address', 'Address'], ['description', 'Description'], ['discountPercent', 'Discount %'], ['isActive', 'Active']] as const) {
+      if (data[field] != null && data[field] !== '') details.push(`${label}: ${data[field]}`);
+    }
+    if (Array.isArray(data.items)) {
+      const products = await this.getCache<any[]>('products') || [];
+      for (const item of data.items.slice(0, 20)) {
+        const product = products.find(row => String(row.id) === String(item.productId));
+        details.push(`${item.productName || product?.name || 'Product #' + item.productId}: ${item.quantity} × RM ${Number(item.unitPrice || 0).toFixed(2)}`);
+      }
+      if (data.items.length > 20) details.push(`+ ${data.items.length - 20} more items`);
+    }
+    const itemsTotal = Array.isArray(data.items) ? data.items.reduce((sum: number, item: any) => sum + Number(item.quantity || 0) * Number(item.unitPrice || 0), 0) : undefined;
+    const total = data.totalAmount ?? data.amount ?? itemsTotal ?? target?.amount ?? invoice?.totalAmount;
+    if (total != null) details.push('Amount: RM ' + Number(total).toFixed(2));
+    if (type === 'CREATE_BULK_PAYMENT') {
+      reference = 'Payment received';
+      const payments = payload?.createdPayments?.length ? payload.createdPayments : data.payments || [];
+      const paidTotal = payments.reduce((sum: number, payment: any) => sum + Number(payment.amount || 0), 0);
+      details.push('Total paid: RM ' + paidTotal.toFixed(2));
+      if (data.method || data.paymentMethod) details.push('Payment method: ' + (data.method || data.paymentMethod));
+      for (const payment of payments) {
+        const inv = invoices.find(row => String(row.id) === String(payment.invoiceId));
+        details.push(`Invoice ${payment.invoiceNumber || inv?.invoiceNumber || inv?.docNo || '(saved offline)'}: RM ${Number(payment.amount || 0).toFixed(2)}`);
+      }
+    }
+    const entry: OfflineActivity = { id: this.generateId(), taskId, operationId, type, createdAt, status, reference,
+      customer: data.customerName || customer?.name || invoice?.customerName || '', details };
+    await this.changeActivity(rows => {
+      // A fast auto-sync may finish while descriptive cache lookups are in progress.
+      const completed = rows.filter(row => row.taskId === taskId && (!operationId || row.operationId === operationId) &&
+        row.status !== 'pending' && row.status !== 'failed').sort((a, b) => (b.finishedAt || 0) - (a.finishedAt || 0))[0];
+      if (status === 'pending' && taskId && (operationId || !task) && completed) {
+        entry.status = completed.status; entry.finishedAt = completed.finishedAt;
+        if (operationIdOverride && completed.operationId === operationIdOverride && completed.type === type) {
+          return rows.map(row => row.id === completed.id ? { ...entry, id: row.id, createdAt: row.createdAt } : row);
+        }
+      }
+      return [...rows, entry];
+    });
+  }
+
+  async getOfflineActivities(): Promise<OfflineActivity[]> {
+    await this.activityWrite;
+    const history = await this.getCache<OfflineActivity[]>('offline_activity_history') || [];
+    const queue = await this.getAllQueue();
+    const result = history.map(row => {
+      const pending = queue.find(task => task.id === row.taskId);
+      return pending && (row.status === 'pending' || row.status === 'failed')
+        ? { ...row, status: pending.status === 'failed' || pending.lastError ? 'failed' as const : 'pending' as const, error: pending.lastError }
+        : row;
+    });
+    // Existing queued actions remain visible even if created by an older APK.
+    for (const task of queue) if (!result.some(row => row.taskId === task.id && (row.status === 'pending' || row.status === 'failed'))) {
+      const data = task.payload?.data || task.payload || {};
+      result.push({ id: 'existing-' + task.id, taskId: task.id, type: task.type, createdAt: task.createdAt,
+        status: task.status === 'failed' || task.lastError ? 'failed' : 'pending', reference: data.invoiceNumber || data.name || String(task.payload?.invoiceId || task.id),
+        customer: data.customerName || '', details: ['Existing pending operation'], error: task.lastError });
+    }
+    return result.sort((a, b) => b.createdAt - a.createdAt);
+  }
+
+  async completeQueueItem(id: string): Promise<void> { return this.removeQueueItem(id, 'synced'); }
 
   constructor() {
     this.refreshQueueCount();
@@ -155,7 +268,7 @@ export class OfflineStorageService {
       storedKeys.forEach(key => keys.add(String(key)));
     } catch { /* localStorage and in-memory keys remain available */ }
     for (const key of keys) {
-      if (key === 'server_id_map') continue;
+      if (key === 'server_id_map' || key === 'offline_activity_history') continue;
       const detailPrefix = { invoice: 'inv_detail_', customer: 'customer_detail_', cn: 'cn_detail_', product: '', category: '', payment: 'payment_detail_' }[type];
       const ownIds = key === entityCache || (type === 'cn' && key.startsWith('available_credits_')) || (!!detailPrefix && key === detailPrefix + oldId);
       const data = replace(await this.getCache(key), ownIds);
@@ -247,6 +360,7 @@ export class OfflineStorageService {
       this.saveToLocalStorageFallback(item);
     }
 
+    await this.recordQueueActivity(type, payload, item.id, 'pending', item.createdAt, item.operationId);
     await this.refreshQueueCount();
     return item;
   }
@@ -328,7 +442,16 @@ export class OfflineStorageService {
   /**
    * 任务同步成功后从队列中移除
    */
-  public async removeQueueItem(id: string): Promise<void> {
+  public async removeQueueItem(id: string, outcome: 'synced' | 'cancelled' = 'cancelled'): Promise<void> {
+    const task = await this.getQueueItemById(id);
+    if (task) {
+      const history = await this.getCache<OfflineActivity[]>('offline_activity_history') || [];
+      if (!history.some(row => row.taskId === id && row.operationId === task.operationId && (row.status === 'pending' || row.status === 'failed'))) {
+        await this.recordQueueActivity(task.type, task.payload, id, 'pending', task.createdAt, task.operationId);
+      }
+      await this.changeActivity(rows => rows.map(row => row.taskId === id && (row.status === 'pending' || row.status === 'failed')
+        ? { ...row, status: outcome, finishedAt: Date.now(), error: undefined } : row));
+    }
     try {
       const db = await this.getDB();
       await new Promise<void>((resolve, reject) => {
@@ -351,19 +474,8 @@ export class OfflineStorageService {
    * 清空待处理队列
    */
   public async clearQueue(): Promise<void> {
-    try {
-      const db = await this.getDB();
-      await new Promise<void>((resolve, reject) => {
-        const tx = db.transaction(this.STORE_QUEUE, 'readwrite');
-        const store = tx.objectStore(this.STORE_QUEUE);
-        const req = store.clear();
-        tx.oncomplete = () => resolve();
-        tx.onabort = () => reject(tx.error || new Error('Offline transaction aborted'));
-        req.onerror = () => reject(req.error);
-      });
-    } catch {
-      localStorage.removeItem('td_offline_sync_queue');
-    }
+    // Only remove the snapshot requested by the caller; do not wipe new concurrent tasks.
+    for (const task of await this.getAllQueue()) await this.removeQueueItem(task.id);
     await this.refreshQueueCount();
   }
 

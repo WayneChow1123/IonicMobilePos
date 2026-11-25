@@ -1,0 +1,33 @@
+.offline-log-overlay { position: fixed; inset: 0; z-index: 3000; background: #f0ebe3; display: flex; flex-direction: column; color: #1a1a1a; }
+.offline-log-header { position: relative; background: white; padding: calc(max(env(safe-area-inset-top, 0px), 32px) + 12px) 60px 14px; border-bottom: 1px solid #eef2f7; text-align: center;
+  h2 { margin: 0; font-size: 17px; font-weight: 800; }
+  ion-button { position: absolute; left: 12px; bottom: 2px; --color: #1a1a1a; font-size: 24px; }
+}
+.offline-log-toolbar { background: white; padding: 12px 20px; border-bottom: 1px solid #e7e7e7;
+  p { margin: 0 0 12px; color: #6d7581; font-size: 12px; line-height: 1.5; }
+}
+.offline-log-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 13px; font-weight: 700;
+  button { background: #1a1a1a; color: white; border: 0; border-radius: 10px; padding: 10px 14px; font: inherit; }
+  button:disabled { opacity: .45; }
+}
+.offline-log-filters { display: flex; gap: 8px; margin-top: 14px; overflow-x: auto;
+  button { border: 0; background: #f0ebe3; padding: 8px 14px; border-radius: 50px; color: #1a1a1a; font-weight: 700; }
+  button.active { background: #1a1a1a; color: white; }
+}
+.offline-log-content { flex: 1; min-height: 0; overflow-y: auto; padding: 16px 20px calc(24px + env(safe-area-inset-bottom, 0px)); }
+.offline-log-card { background: white; border: 1px solid #e9edf2; border-radius: 16px; padding: 16px; margin-bottom: 12px; font-size: 13px; overflow-wrap: anywhere;
+  time { display: block; color: #89909a; font-size: 11px; margin: 8px 0; }
+  details { margin-top: 10px; color: #596475; }
+  summary { cursor: pointer; font-weight: 700; }
+}
+.offline-log-card-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+.offline-log-status { padding: 4px 8px; border-radius: 20px; font-size: 10px; font-weight: 800; background: #fff0d4; color: #9d5800;
+  &[data-status='synced'] { background: #dff2e8; color: #237546; }
+  &[data-status='failed'] { background: #fce3e3; color: #b22e35; }
+  &[data-status='cancelled'], &[data-status='local'] { background: #eef0f3; color: #626b79; }
+}
+.offline-log-reference { margin-top: 10px; font-size: 14px; font-weight: 800; }
+.offline-log-customer, .offline-log-details, .offline-log-detail { color: #596475; margin-top: 6px; line-height: 1.5; }
+.offline-log-error { color: #b22e35; font-size: 12px; line-height: 1.5; }
+.offline-log-note, .offline-log-finished { color: #89909a; font-size: 11px; line-height: 1.5; }
+.offline-log-empty { text-align: center; color: #89909a; padding: 40px 0; }
